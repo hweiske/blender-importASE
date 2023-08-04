@@ -281,7 +281,7 @@ def setup_materials(atoms,colorbonds=False,color=0.2):
             if atom_type in color_dict:
                 COL=list(color_dict[atom_type]) + [1]
             else:
-                COL=list(colors.jmol_colors[atom_n[n]])  [1]
+                COL=list(colors.jmol_colors[atom_n[n]]) + [1]
 #            bpy.data.materials[str(atom_type)].diffuse_color = COL
             sa.inputs[0].default_value=COL
             if colorbonds == False:
