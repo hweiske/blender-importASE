@@ -38,7 +38,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     )
     scale: bpy.props.FloatProperty(
         name="Scale",
-        description="scaling th atoms",
+        description="scaling the atoms",
         default=1.0,
         min=0.0,
         soft_max=10,
@@ -51,7 +51,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     color: bpy.props.FloatProperty(
         name="color",
         description="color for gray bonds in BW-scale",
-        default=0.2,
+        default=0.6,
         min=0.0,
         max=1.0,
     )
