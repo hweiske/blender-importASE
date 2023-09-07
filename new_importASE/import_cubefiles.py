@@ -5,6 +5,7 @@ import pyopenvdb as vdb
 import os
 from os import path
 from .setup_nodetree import visualize_edensity_node_group,newShader
+from .utils import toggle
 def cube2vol(filename,filepath=os.environ.get('HOME')):
     with open(filename, 'r') as f:
         atoms=read_cube(f,read_data=True, verbose=True)
@@ -21,7 +22,7 @@ def cube2vol(filename,filepath=os.environ.get('HOME')):
     TMPFILE=filename.split('.')[-2]+'_density.vdb'
     vdb.write(TMPFILE,GRID)
     VOL=bpy.ops.object.volume_import(filepath=TMPFILE,location=ORIGIN)
-    os.remove(TMPFILE)
+#    os.remove(TMPFILE)
     #bpy.data.objects[TMPFILE.split('.')[-2].split('/')[-1]].select_set(True)
 #    for n,color in enumerate([[1,0,0,1],[0,0,1,1]]):
 #        if n == 0:
@@ -43,5 +44,6 @@ def cube2vol(filename,filepath=os.environ.get('HOME')):
     bpy.context.active_object.data.materials.append(mat)
     bpy.context.object.modifiers["GeometryNodes"]["Input_9"] = bpy.data.materials["+ material"]
     bpy.context.object.modifiers["GeometryNodes"]["Input_10"] = bpy.data.materials["- material"]
+    toggle(bpy.context.object,SET=False)
     return(atoms['atoms'])
 

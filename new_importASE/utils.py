@@ -74,3 +74,11 @@ def setup_materials(atoms,colorbonds=False,color=0.2):
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT') 
     return None 
+def toggle(obj,SET=True):
+        obj.hide_render = SET
+        obj.hide_viewport = SET  # Optional: hide in the viewport as well
+        for child in obj.children:
+                child.hide_render = SET
+                child.hide_viewport = SET  # Optional: hide in the viewport as well
+        return(None)
+
