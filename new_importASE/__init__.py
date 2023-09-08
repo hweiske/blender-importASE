@@ -10,7 +10,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (1, 1),
+    "version": (1, 11),
     "blender": (3, 60, 0),
     "location": "File > Import",
     "category": "Import-Export",
