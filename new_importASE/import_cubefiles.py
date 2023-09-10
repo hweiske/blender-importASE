@@ -9,14 +9,18 @@ from .utils import toggle
 def cube2vol(filename,filepath=os.environ.get('HOME')):
     with open(filename, 'r') as f:
         atoms=read_cube(f,read_data=True, verbose=True)
-    SX=atoms['spacing'][0][0]
-    SY=atoms['spacing'][1][1]
-    SZ=atoms['spacing'][2][2]
-    ORIGIN=atoms['origin']
+        ORIGIN=atoms['origin']
     VOLUME= atoms['data']  # Replace this with your own 3D NumPy array
     GRID=vdb.FloatGrid()
     GRID.copyFromArray(VOLUME.astype(float))
-    GRID.transform=vdb.createLinearTransform([[SX,0,0,0],[0,SY,0,0],[0,0,SZ,0],[0,0,0,1]])
+    #SPACING=np.array(atoms['spacing']).T
+    SPACING=atoms['spacing']
+    SX=list(SPACING[0])+[0.]
+    SY=list(SPACING[1])+[0.]
+    SZ=list(SPACING[2])+[0.]
+#    GRID.transform=vdb.createLinearTransform(np.array([SX,SY,SZ,[0,0,0,1]]).reshape((4,4)))
+    GRID.transform=vdb.createLinearTransform([[SX[0],SX[1],SX[2],SX[3]],[SY[0],SY[1],SY[2],SY[3]],[SZ[0],SZ[1],SZ[2],SZ[3]],[0,0,0,1]])
+
     GRID.gridClass = vdb.GridClass.FOG_VOLUME
     GRID.name='density'
     TMPFILE=filename.split('.')[-2]+'_density.vdb'
