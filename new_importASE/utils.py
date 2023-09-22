@@ -21,7 +21,7 @@ def group_atoms(atoms):
 def setup_materials(atoms,colorbonds=False,color=0.6):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_uv_sphere_add(location=(0,0,0),segments = 16 ,ring_count = 16)
-    bpy.ops.object.shade_smooth()
+    bpy.ops.object.shade_auto_smooth()
     sphere = bpy.context.object
     sphere.name = 'ref_sphere'
     bpy.data.objects['ref_sphere'].select_set(True)
@@ -99,7 +99,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
         'Ag'    : 1,
         'Al': 1,
         }
-    specular_dict={'H'     :02,
+    specular_dict={'H'     :0.2,
         'C'     :0,
         'Si'    :0.5,
         'Ge'    :0.5,
