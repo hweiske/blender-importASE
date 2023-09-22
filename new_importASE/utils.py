@@ -21,7 +21,7 @@ def group_atoms(atoms):
 def setup_materials(atoms,colorbonds=False,color=0.6):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_uv_sphere_add(location=(0,0,0),segments = 16 ,ring_count = 16)
-    bpy.ops.object.shade_auto_smooth()
+    bpy.ops.object.shade_smooth(use_auto_smooth=True)
     sphere = bpy.context.object
     sphere.name = 'ref_sphere'
     bpy.data.objects['ref_sphere'].select_set(True)
@@ -73,7 +73,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
         'Au'    :0.4,
         'Fe'    :0.5,
         'Ag'    :0.4,
-        'Al': 0.4;
+        'Al': 0.4
         }
     metal_dict={  'H'     :0,
         'C'     :0.5,
@@ -183,17 +183,17 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
                 rough=roughness_dict[atom_type]
             else:
                 rough=default_roughness
-            if atom_type
-                
-#            bpy.data.materials[str(atom_type)].diffuse_color = COL
+            if atom_type in specular_dict:
+                specular = specular_dict[atom_type]
+            else:
+                specular = 0.5
             sa.inputs[0].default_value=COL
             sa.inputs[7].default_value=specular
             sa.inputs[9].default_value=rough
             sa.inputs[6].default_value=metal
             if colorbonds == False:
- #               bpy.data.materials[f'{atom_type}-bond'].diffuse_color = [color,color,color,1]
                 sb.inputs[0].default_value=[color,color,color,1]
-                sb.inputs[7].default_value=0
+                sb.inputs[7].default_value=0.3
                 sb.inputs[9].default_value=0.5
                 sb.inputs[6].default_value=0
             else:
@@ -201,10 +201,6 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
                 sb.inputs[7].default_value=specular
                 sb.inputs[9].default_value=0.7
                 sb.inputs[6].default_value=0.2
-  #              bpy.data.materials[f'{atom_type}-bond'].diffuse_color = COL
-    #        bpy.data.materials[str(atom_type)].metallic = 0.2
-   #         bpy.data.materials[f'{atom_type}-bond'].metallic = 0.2
-
     bpy.data.objects['ref_sphere'].select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT') 
