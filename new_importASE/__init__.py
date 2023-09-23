@@ -2,7 +2,7 @@
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Tassem El-Sayed"]
-__version__ = "1.1.0"
+__version__ = "1.2"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -10,7 +10,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (1, 11),
+    "version": (1, 2),
     "blender": (3, 60, 0),
     "location": "File > Import",
     "category": "Import-Export",
@@ -54,6 +54,11 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         description="Color the bonds according to the surrounding atoms",
         default=False,
             )
+    fixbonds: bpy.props.BoolProperty(
+        name='Use Longbonds',
+        description="Mitigates lines in the middle of bonds where individual bonds meet",
+        default=False,
+    )
     color: bpy.props.FloatProperty(
         name="color",
         description="color for gray bonds in BW-scale",
@@ -108,6 +113,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                 row.prop(self, "supercell1", index=i * 3 + j, emboss=False, slider=True)
         layout.prop(self,"scale")
         layout.prop(self,'colorbonds')
+        layout.prop(self, 'fixbonds')
         layout.prop(self,'representation')
         layout.prop(self,'color')
         layout.prop(self,'unit_cell')
@@ -115,7 +121,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self,'read_density')
     def execute(self, context):
         for file in self.files:
-            filepath = join(self.directory,file.name)
+            filepath = join(self.directory, file.name)
             matrix = np.array(self.supercell1).reshape((3, 3))
             default=[1, 0, 0, 0,1,0, 0,0,1]
             SUPERCELL=False
@@ -123,11 +129,11 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                 if i != default[n]:
                     SUPERCELL=True
                 break
-            import_ase_molecule(filepath,file.name,matrix,
-                                color=self.color,colorbonds=self.colorbonds,scale=self.scale,
-                                unit_cell=self.unit_cell,representation=self.representation,
+            import_ase_molecule(filepath, file.name, matrix,
+                                color=self.color, colorbonds=self.colorbonds, fixbonds=self.fixbonds, scale=self.scale,
+                                unit_cell=self.unit_cell, representation=self.representation,
                                 separate_collections=self.separate_collections,
-                                read_density=self.read_density,SUPERCELL=SUPERCELL)
+                                read_density=self.read_density, SUPERCELL=SUPERCELL)
         return {"FINISHED"}
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self) 
