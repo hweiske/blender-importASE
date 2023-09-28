@@ -20,7 +20,6 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fixbonds=F
                         ):
     atoms = ase.io.read(filepath)
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
-    shift_cell = True
     cell = atoms.cell
     shift_vector = 0.5 * cell[0] + 0.5 * cell[1] + 0.5 * cell[2]
     if shift_cell:
