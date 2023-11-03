@@ -56,7 +56,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         description="Color the bonds according to the surrounding atoms",
         default=False,
     )
-    fixbonds: bpy.props.BoolProperty(
+    fix_bonds: bpy.props.BoolProperty(
         name='Use Longbonds',
         description="Mitigates lines in the middle of bonds where individual bonds meet",
         default=False,
@@ -122,7 +122,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                 row.prop(self, "supercell1", index=i * 3 + j, emboss=False, slider=True)
         layout.prop(self, "scale")
         layout.prop(self, 'colorbonds')
-        layout.prop(self, 'fixbonds')
+        layout.prop(self, 'fix_bonds')
         layout.prop(self, 'representation')
         layout.prop(self, 'color')
         layout.prop(self, 'unit_cell')
@@ -141,7 +141,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                     SUPERCELL = True
                 break
             import_ase_molecule(filepath, file.name, matrix,
-                                color=self.color, colorbonds=self.colorbonds, fixbonds=self.fixbonds, scale=self.scale,
+                                color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
                                 unit_cell=self.unit_cell, representation=self.representation,
                                 separate_collections=self.separate_collections,
                                 read_density=self.read_density, SUPERCELL=SUPERCELL, shift_cell=self.zero_cell)
