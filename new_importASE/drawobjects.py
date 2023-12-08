@@ -115,7 +115,12 @@ def draw_bonds_new(atoms):
                 neighbor_position = atoms.positions[neighbor] + offset.dot(atoms.cell)
                 pos = atom.position
                 # Hier liegt das problem: die Zelle ist nicht 1x1x1
-                is_same_unit_cell = is_inside_cell(neighbor_position, cell)
+                print(f'PBC: {atoms.pbc}')
+                if atoms.pbc.all() == True:
+                    print(atoms.pbc, 'need to check for unit cell')
+                    is_same_unit_cell = is_inside_cell(neighbor_position, cell)
+                else:
+                    is_same_unit_cell = True
                 if is_same_unit_cell:
                     # print("Longbond")
                     # Draw one complex bond between the atoms, assign two materials if necessary

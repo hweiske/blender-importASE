@@ -13,10 +13,10 @@ from .utils import setup_materials, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
 
 
-def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fixbonds=False, color=0.2, scale=1,
+def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks", separate_collections=False,
-                        read_density=True, SUPERCELL=True, shift_cell=False
+                        read_density=True, SUPERCELL=True, shift_cell=False, **kwargs
                         ):
     atoms = ase.io.read(filepath)
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
@@ -43,7 +43,7 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fixbonds=F
             bpy.context.scene.collection.children.link(my_coll)
             layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
             bpy.context.view_layer.active_layer_collection = layer_collection
-        if fixbonds:
+        if fix_bonds:
             draw_bonds_new(atoms)
         else:
             draw_bonds(atoms)
