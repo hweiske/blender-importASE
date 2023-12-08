@@ -12,7 +12,7 @@ def cube2vol(filename, filepath=os.environ.get('HOME')):
     with open(filename, 'r') as f:
         atoms = read_cube(f, read_data=True, verbose=True)
         ORIGIN = atoms['origin']
-    VOLUME = atoms['data']  # Replace this with your own 3D NumPy array
+    VOLUME = atoms['data']
     GRID = vdb.FloatGrid()
     GRID.copyFromArray(VOLUME.astype(float))
     # SPACING=np.array(atoms['spacing']).T

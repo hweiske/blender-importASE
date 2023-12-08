@@ -33,8 +33,8 @@ def visualize_edensity_node_group(): #from node2python
 
     #visualize_edensity outputs
     #output Geometry
-    visualize_edensity.outputs.new('NodeSocketGeometry', "Geometry")
-    visualize_edensity.outputs[0].attribute_domain = 'POINT'
+    #visualize_edensity.outputs.new('NodeSocketGeometry', "Geometry")
+    #visualize_edensity.outputs[0].attribute_domain = 'POINT'
 
 
     #node Group Output
@@ -277,65 +277,76 @@ def visualize_edensity_node_group(): #from node2python
 
     #visualize_edensity inputs
     #input Geometry
-    visualize_edensity.inputs.new('NodeSocketGeometry', "Geometry")
-    visualize_edensity.inputs[0].attribute_domain = 'POINT'
-
+    #visualize_edensity.inputs.new('NodeSocketGeometry', "Geometry")
+    #visualize_edensity.inputs[0].attribute_domain = 'POINT'
+    visualize_edensity.interface.new_socket('Geometry',in_out='OUTPUT',socket_type='NodeSocketGeometry')
+    visualize_edensity.interface.new_socket('Geometry',in_out='INPUT',socket_type='NodeSocketGeometry')
+    visualize_edensity.interface.new_socket('isovalue',in_out='INPUT',socket_type='NodeSocketFloat')
+    visualize_edensity.interface.new_socket('cutoff X',in_out='INPUT',socket_type='NodeSocketFloat')
+    visualize_edensity.interface.new_socket('cutoff Y',in_out='INPUT',socket_type='NodeSocketFloat')
+    visualize_edensity.interface.new_socket('cutoff Z',in_out='INPUT',socket_type='NodeSocketFloat')
+    visualize_edensity.interface.new_socket('cutoff -X',in_out='INPUT',socket_type='NodeSocketFloat')
+    visualize_edensity.interface.new_socket('cutoff -Y',in_out='INPUT',socket_type='NodeSocketFloat')
+    visualize_edensity.interface.new_socket('cutoff -Z',in_out='INPUT',socket_type='NodeSocketFloat')
+    visualize_edensity.interface.new_socket('+ material',in_out='INPUT',socket_type='NodeSocketMaterial')
+    visualize_edensity.interface.new_socket('- material',in_out='INPUT',socket_type='NodeSocketMaterial')
     #input isovalue
-    visualize_edensity.inputs.new('NodeSocketFloat', "isovalue")
-    visualize_edensity.inputs[1].default_value = 0.05
-    visualize_edensity.inputs[1].min_value = 0
-    visualize_edensity.inputs[1].max_value = 100
-    visualize_edensity.inputs[1].attribute_domain = 'POINT'
+
+    #visualize_edensity.inputs.new('NodeSocketFloat', "isovalue")
+    #visualize_edensity.inputs[1].default_value = 0.05
+    #visualize_edensity.inputs[1].min_value = 0
+    #visualize_edensity.inputs[1].max_value = 100
+    #visualize_edensity.inputs[1].attribute_domain = 'POINT'
 
     #input cutoff X
-    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff X")
-    visualize_edensity.inputs[2].default_value = 0.0
-    visualize_edensity.inputs[2].min_value = 0.0
-    visualize_edensity.inputs[2].max_value = 10000.0
-    visualize_edensity.inputs[2].attribute_domain = 'POINT'
+    #visualize_edensity.inputs.new('NodeSocketFloat', "cutoff X")
+    #visualize_edensity.inputs[2].default_value = 0.0
+    #visualize_edensity.inputs[2].min_value = 0.0
+    #visualize_edensity.inputs[2].max_value = 10000.0
+    #visualize_edensity.inputs[2].attribute_domain = 'POINT'
 
     #input cutoff Y
-    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff Y")
-    visualize_edensity.inputs[3].default_value = 0.0
-    visualize_edensity.inputs[3].min_value = 0.0
-    visualize_edensity.inputs[3].max_value = 100.0
-    visualize_edensity.inputs[3].attribute_domain = 'POINT'
+#    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff Y")
+#    visualize_edensity.inputs[3].default_value = 0.0
+#    visualize_edensity.inputs[3].min_value = 0.0
+#    visualize_edensity.inputs[3].max_value = 100.0
+#    visualize_edensity.inputs[3].attribute_domain = 'POINT'
 
     #input cutoff Z
-    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff Z")
-    visualize_edensity.inputs[4].default_value = 0.0
-    visualize_edensity.inputs[4].min_value = 0.0
-    visualize_edensity.inputs[4].max_value = 100.0
-    visualize_edensity.inputs[4].attribute_domain = 'POINT'
+#    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff Z")
+#    visualize_edensity.inputs[4].default_value = 0.0
+#    visualize_edensity.inputs[4].min_value = 0.0
+#    visualize_edensity.inputs[4].max_value = 100.0
+#    visualize_edensity.inputs[4].attribute_domain = 'POINT'
 
     #input cutoff -X
-    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff -X")
-    visualize_edensity.inputs[5].default_value = 0.0
-    visualize_edensity.inputs[5].min_value = 0.0
-    visualize_edensity.inputs[5].max_value = 1000.0
-    visualize_edensity.inputs[5].attribute_domain = 'POINT'
+#    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff -X")
+#    visualize_edensity.inputs[5].default_value = 0.0
+#    visualize_edensity.inputs[5].min_value = 0.0
+#    visualize_edensity.inputs[5].max_value = 1000.0
+#    visualize_edensity.inputs[5].attribute_domain = 'POINT'
 
     #input cutoff -Y
-    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff -Y")
-    visualize_edensity.inputs[6].default_value = 0.0
-    visualize_edensity.inputs[6].min_value = 0.0
-    visualize_edensity.inputs[6].max_value = 10000.0
-    visualize_edensity.inputs[6].attribute_domain = 'POINT'
+#    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff -Y")
+#    visualize_edensity.inputs[6].default_value = 0.0
+#    visualize_edensity.inputs[6].min_value = 0.0
+#    visualize_edensity.inputs[6].max_value = 10000.0
+#    visualize_edensity.inputs[6].attribute_domain = 'POINT'
 
     #input cutoff -Z
-    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff -Z")
-    visualize_edensity.inputs[7].default_value = 0.0
-    visualize_edensity.inputs[7].min_value = 0.0
-    visualize_edensity.inputs[7].max_value = 10000.0
-    visualize_edensity.inputs[7].attribute_domain = 'POINT'
+#    visualize_edensity.inputs.new('NodeSocketFloat', "cutoff -Z")
+#    visualize_edensity.inputs[7].default_value = 0.0
+#    visualize_edensity.inputs[7].min_value = 0.0
+#    visualize_edensity.inputs[7].max_value = 10000.0
+#    visualize_edensity.inputs[7].attribute_domain = 'POINT'
 
     #input material +
-    visualize_edensity.inputs.new('NodeSocketMaterial', "material +")
-    visualize_edensity.inputs[8].attribute_domain = 'POINT'
+#    visualize_edensity.inputs.new('NodeSocketMaterial', "material +")
+#    visualize_edensity.inputs[8].attribute_domain = 'POINT'
 
     #input material -
-    visualize_edensity.inputs.new('NodeSocketMaterial', "material -")
-    visualize_edensity.inputs[9].attribute_domain = 'POINT'
+#    visualize_edensity.inputs.new('NodeSocketMaterial', "material -")
+#    visualize_edensity.inputs[9].attribute_domain = 'POINT'
 
 
     #node Group Input

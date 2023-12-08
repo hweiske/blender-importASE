@@ -59,7 +59,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     fixbonds: bpy.props.BoolProperty(
         name='Use Longbonds',
         description="Mitigates lines in the middle of bonds where individual bonds meet",
-        default=False,
+        default=True,
     )
     color: bpy.props.FloatProperty(
         name="color",

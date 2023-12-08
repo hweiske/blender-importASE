@@ -27,7 +27,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     bpy.data.objects['ref_sphere'].select_set(True)
 
     color_dict={  
-        'H'     :(      0.75,0.75,0.75          ),
+        'H'     :(      1,1,1          ),
         'C'     :(      0.05, 0.05, 0.05        ),
         'Si'    :(      0.001, 0.093, 0.314     ),
         'Ge'    :(      0.024,0.22,0.22         ),
