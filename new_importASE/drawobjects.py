@@ -13,6 +13,7 @@ import ase.neighborlist
 
 def draw_atoms(atoms, scale=1, representation="Balls'n'Sticks"):
     cnt = 0
+    list_of_atoms=[]
     # bpy.ops.surface.primitive_nurbs_surface_sphere_add(radius=1, enter_editmode=False, align='WORLD', location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
     bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 0), segments=16, ring_count=16)
     bpy.ops.object.shade_smooth(use_auto_smooth=True)
@@ -36,14 +37,21 @@ def draw_atoms(atoms, scale=1, representation="Balls'n'Sticks"):
         bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
             bpy.data.materials[atom.symbol])
         cnt += 1
+        #full_object_name = bpy.utils.object.full_name(ob)
+        #print(full_object_name)
+        #list_of_atoms.append(full_object_name)
+        print(ob)
+        list_of_atoms.append(ob)
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_sphere'].select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
-    return None
+    
+    return list_of_atoms
 
 
 def draw_bonds(atoms):
+    list_of_bonds=[]
     nl = ase.neighborlist.NeighborList([covalent_radii[atomic_number] * 0.9 for atomic_number in atoms.numbers],
                                        self_interaction=False, bothways=True)
     nl.update(atoms)
@@ -82,17 +90,19 @@ def draw_bonds(atoms):
                     theta = np.arccos(displacement[2] / distance)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
+                    list_of_bonds.append(ob)
                     break
                 cnt += 1
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_bond'].select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
-    return None
+    return list_of_bonds,nl
 
 
 def draw_bonds_new(atoms):
     print("Using Longbond mech")
+    list_of_bonds=[];bondlengths=[] # for animation
     nl = ase.neighborlist.NeighborList([covalent_radii[atomic_number] * 0.9 for atomic_number in atoms.numbers],
                                        self_interaction=False, bothways=False)
     nl.update(atoms)
@@ -142,6 +152,9 @@ def draw_bonds_new(atoms):
                     theta = np.arccos(displacements[0][2] / (distance / 2))
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
+                    list_of_bonds.append(ob)#anim
+                    bondlengths.append('long')#anim
+                    
                 else:
                     # print("Shortbond")
                     # create two bon fragments on either end
@@ -164,6 +177,8 @@ def draw_bonds_new(atoms):
                     theta = np.arccos(displacements[0][2] / distance)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
+                    list_of_bonds.append(ob) #anim
+                    bondlengths.append('short1') #anim
                     # neighbor to atom
                     displacements = [0.5 * (atom.position - atoms.positions[neighbor] - np.dot(offset, atoms.cell)),
                                      0.5 * (atoms.positions[neighbor] + np.dot(offset, atoms.cell) + atom.position)]
@@ -184,13 +199,15 @@ def draw_bonds_new(atoms):
                     theta = np.arccos(displacements[0][2] / distance)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
+                    list_of_bonds.append(ob)#anim
+                    bondlengths.append('short2')
             cnt += 1
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_bond'].select_set(True)
     bpy.data.objects['ref_bondx2'].select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
-    return None
+    return list_of_bonds,nl,bondlengths
 
 
 def draw_unit_cell(atoms):

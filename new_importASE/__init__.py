@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 __author__ = "Hendrik Weiske"
-__credits__ = ["Tassem El-Sayed"]
-__version__ = "1.2"
+__credits__ = ["Franz Thiemann"]
+__version__ = "1.3"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -10,8 +10,8 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (1, 2),
-    "blender": (3, 60, 0),
+    "version": (1, 3),
+    "blender": (4, 0, 0),
     "location": "File > Import",
     "category": "Import-Export",
 }
@@ -99,6 +99,11 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                     "the atoms to lie outside the unit cell (if drawn). This option compensates for that.",
         default=False,
     )
+    imageslice: bpy.props.IntProperty(
+        name='nth-image',
+        description='when loading long trajectories it is recommended not to use all images, since that will scale poorly depending on the number of bonds in the molecule and drastically influence performance',
+        default=1
+    )
     files: bpy.props.CollectionProperty(
         type=bpy.types.OperatorFileListElement,
         options={'HIDDEN', 'SKIP_SAVE'},
@@ -129,6 +134,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'separate_collections')
         layout.prop(self, 'read_density')
         layout.prop(self, 'zero_cell')
+        layout.prop(self,'imageslice')
 
     def execute(self, context):
         for file in self.files:
@@ -144,7 +150,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                                 color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
                                 unit_cell=self.unit_cell, representation=self.representation,
                                 separate_collections=self.separate_collections,
-                                read_density=self.read_density, SUPERCELL=SUPERCELL, shift_cell=self.zero_cell)
+                                read_density=self.read_density, SUPERCELL=SUPERCELL, shift_cell=self.zero_cell,imageslice=self.imageslice)
         return {"FINISHED"}
 
     def invoke(self, context, event):

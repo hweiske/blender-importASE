@@ -6,6 +6,7 @@ import os
 from os import path
 from .setup_nodetree import visualize_edensity_node_group, newShader
 from .utils import toggle
+import os.path
 
 
 def cube2vol(filename, filepath=os.environ.get('HOME')):
@@ -27,7 +28,10 @@ def cube2vol(filename, filepath=os.environ.get('HOME')):
     GRID.gridClass = vdb.GridClass.FOG_VOLUME
     GRID.name = 'density'
     TMPFILE = filename.split('.')[-2] + '_density.vdb'
-    vdb.write(TMPFILE, GRID)
+    if os.path.isfile(TMPFILE):
+        skip = True
+    else:
+        vdb.write(TMPFILE, GRID)
     VOL = bpy.ops.object.volume_import(filepath=TMPFILE, location=ORIGIN)
     #    os.remove(TMPFILE)
     # bpy.data.objects[TMPFILE.split('.')[-2].split('/')[-1]].select_set(True)
