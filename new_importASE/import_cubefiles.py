@@ -49,9 +49,9 @@ def cube2vol(filename, filepath=os.environ.get('HOME')):
     bpy.ops.object.modifier_add(type='NODES')
     node = bpy.data.node_groups["visualize_edensity"]
     bpy.context.object.modifiers['GeometryNodes'].node_group = node
-    mat = newShader("+ material", "diffuse", 1, 0, 0)
+    mat = newShader("+ material", "diffuse", 0, 0, 1)
     bpy.context.active_object.data.materials.append(mat)
-    mat = newShader("- material", "diffuse", 0, 0, 1)
+    mat = newShader("- material", "diffuse", 1, 0, 0)
     density_obj = bpy.context.active_object
     bpy.context.active_object.data.materials.append(mat)
     bpy.context.object.modifiers["GeometryNodes"]["Input_9"] = bpy.data.materials["+ material"]
