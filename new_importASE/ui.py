@@ -20,14 +20,15 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
                         imageslice=1, animate = True, **kwargs):
     
     atoms = ase.io.read(filepath,index = ':')
-    if isinstance(atoms[0],Atoms):
+    if isinstance(atoms[0],Atoms) and len(atoms) > 1:
         trajectory = True
         TRAJECTORY=atoms.copy()[1:]
         atoms=atoms[0]
         if animate == False:
             atoms = TRAJECTORY[-1]
-    else:
+    elif len(atoms) == 1:
         trajectory = False
+        atoms=atoms[0]
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
     cell = atoms.cell
     shift_vector = 0.5 * cell[0] + 0.5 * cell[1] + 0.5 * cell[2]
