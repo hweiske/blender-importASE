@@ -99,6 +99,11 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                     "the atoms to lie outside the unit cell (if drawn). This option compensates for that.",
         default=False,
     )
+    animate: bpy.props.BoolProperty(
+        name='animate',
+        description="animate trajectory (all traj-files readable by ASE)",
+        default=True,
+    )
     imageslice: bpy.props.IntProperty(
         name='nth-image',
         description='when loading long trajectories it is recommended not to use all images, since that will scale poorly depending on the number of bonds in the molecule and drastically influence performance',
@@ -134,6 +139,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'separate_collections')
         layout.prop(self, 'read_density')
         layout.prop(self, 'zero_cell')
+        layout.prop(self, 'animate')
         layout.prop(self,'imageslice')
 
     def execute(self, context):
@@ -150,7 +156,10 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                                 color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
                                 unit_cell=self.unit_cell, representation=self.representation,
                                 separate_collections=self.separate_collections,
-                                read_density=self.read_density, SUPERCELL=SUPERCELL, shift_cell=self.zero_cell,imageslice=self.imageslice)
+                                read_density=self.read_density, SUPERCELL=SUPERCELL, 
+                                shift_cell=self.zero_cell,imageslice=self.imageslice,
+                                animate=self.animate
+                                )
         return {"FINISHED"}
 
     def invoke(self, context, event):

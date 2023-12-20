@@ -17,14 +17,15 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
                         unit_cell=False,
                         representation="Balls'n'Sticks", separate_collections=False,
                         read_density=True, SUPERCELL=True, shift_cell=False, 
-                        imageslice=1,
-                        **kwargs
-                        ):
+                        imageslice=1, animate = True, **kwargs):
+    
     atoms = ase.io.read(filepath,index = ':')
     if isinstance(atoms[0],Atoms):
         trajectory = True
         TRAJECTORY=atoms.copy()[1:]
         atoms=atoms[0]
+        if animate == False:
+            atoms = TRAJECTORY[-1]
     else:
         trajectory = False
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
@@ -76,11 +77,12 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
             # bpy.data.objects[name].location.x += shift_vector[0]
             # bpy.data.objects[name].location.y += shift_vector[1]
             # bpy.data.objects[name].location.z += shift_vector[2]
-    if trajectory == True:
+    if trajectory == True and animate == True:
         move_atoms(TRAJECTORY,list_of_atoms,imageslice)
-        if fix_bonds == True:
-            move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
-        else:
-            move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
+        if representation != 'VDW':
+            if fix_bonds == True:
+                move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
+            else:
+                move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
 
             
