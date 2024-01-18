@@ -13,6 +13,7 @@ from .utils import setup_materials, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
 from .trajectory import move_atoms, move_bonds,move_longbonds
 
+
 def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks", separate_collections=False,
@@ -79,6 +80,7 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
             # bpy.data.objects[name].location.y += shift_vector[1]
             # bpy.data.objects[name].location.z += shift_vector[2]
     if trajectory == True and animate == True:
+
         move_atoms(TRAJECTORY,list_of_atoms,imageslice)
         if representation != 'VDW':
             if fix_bonds == True:

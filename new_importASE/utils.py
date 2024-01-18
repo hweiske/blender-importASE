@@ -188,19 +188,19 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
             else:
                 specular = 0.5
             sa.inputs[0].default_value=COL
-            sa.inputs[7].default_value=specular
-            sa.inputs[9].default_value=rough
-            sa.inputs[6].default_value=metal
+            sa.inputs[12].default_value=specular
+            sa.inputs[2].default_value=rough
+            sa.inputs[3].default_value=metal
             if colorbonds == False:
                 sb.inputs[0].default_value=[color,color,color,1]
-                sb.inputs[7].default_value=0.3
-                sb.inputs[9].default_value=0.5
-                sb.inputs[6].default_value=0
+                sb.inputs[12].default_value=0.3
+                sb.inputs[2].default_value=0.5
+                sb.inputs[3].default_value=0
             else:
                 sb.inputs[0].default_value=COL
-                sb.inputs[7].default_value=specular
-                sb.inputs[9].default_value=0.7
-                sb.inputs[6].default_value=0.2
+                sb.inputs[12].default_value=specular
+                sb.inputs[2].default_value=0.7
+                sb.inputs[3].default_value=0.2
     bpy.data.objects['ref_sphere'].select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT') 
