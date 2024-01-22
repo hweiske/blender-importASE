@@ -98,14 +98,15 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Cl'    :   0.5,
     'Br'    :   0.5,
     'I'     :   0.5,
-    'Ti'    :   0.5,
+    'Ti'    :   0.3,
     'Cu'    :   0.4,
     'Au'    :   0.4,
     'Fe'    :   0.5,
     'Ag'    :   0.4,
     'Al'    :   0.4,
     'Se'    :   0.5, #
-    'Te'    :   0.4
+    'Te'    :   0.4,
+    'Hf'    :   0.3,
     }
     metal_dict={    
     'H'     :   0,
@@ -134,6 +135,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Al'    :   1,
     'Se'    :   0.5,
     'Te'    :   1,
+    'Hf'    :   1,
     }
     specular_dict={'H'     :0.2,
     'C'     :0,
