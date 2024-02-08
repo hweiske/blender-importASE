@@ -83,7 +83,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'H'     :   0.5,
     'C'     :   0.5,
     'B'     :   0.5,
-    'Si'    :   0.7,
+    'Si'    :   0.5,
     'Ge'    :   0.7,
     'Ga'    :   0.6,
     'In'    :   0.4,
