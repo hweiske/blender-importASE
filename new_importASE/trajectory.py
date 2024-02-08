@@ -26,6 +26,7 @@ def move_atoms(trajectory,list_of_atoms,imageslice):
             atom_ob.location=image[n].position
             if n == 1:
                 print(ni,n,image[n].position,atom_ob.location)
+            #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
             atom_ob.keyframe_insert(data_path='location')
             atom_ob.select_set(False)
     return None
@@ -54,6 +55,7 @@ def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice):
                         ob.rotation_euler[1] = theta
                         ob.rotation_euler[2] = phi
                         cnt+=1
+                        #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
                         bpy.ops.anim.keyframe_insert(type='LocRotScale')
 #                        ob.keyframe_insert(data_path='LocRotScale')
                         break
@@ -86,6 +88,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     theta = np.arccos(displacements[0][2] / (distance / 2))
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
+                    #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
                     bpy.ops.anim.keyframe_insert(type='LocRotScale')
                     cnt+=1
                 else:
@@ -102,6 +105,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     theta = np.arccos(displacements[0][2] / distance)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
+                    #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
                     bpy.ops.anim.keyframe_insert(type='LocRotScale')
                     cnt += 1
                     # neighbor to atom
@@ -118,6 +122,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     theta = np.arccos(displacements[0][2] / distance)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
+                    #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
                     bpy.ops.anim.keyframe_insert(type='LocRotScale')
                     cnt += 1
     print(f'plotted {cnt*len(trajectory)} bonds')

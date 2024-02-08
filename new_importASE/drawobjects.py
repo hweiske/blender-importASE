@@ -42,11 +42,11 @@ def draw_atoms(atoms, scale=1, representation="Balls'n'Sticks"):
         #list_of_atoms.append(full_object_name)
         print(ob)
         list_of_atoms.append(ob)
+        bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_sphere'].select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
-    
     return list_of_atoms
 
 
@@ -91,6 +91,7 @@ def draw_bonds(atoms):
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
                     list_of_bonds.append(ob)
+                    bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
                     break
                 cnt += 1
     bpy.ops.object.select_all(action='DESELECT')
@@ -154,7 +155,7 @@ def draw_bonds_new(atoms):
                     ob.rotation_euler[2] = phi
                     list_of_bonds.append(ob)#anim
                     bondlengths.append('long')#anim
-                    
+                    bpy.ops.object.transform_apply(location=False,rotation=True,scale=True) 
                 else:
                     # print("Shortbond")
                     # create two bon fragments on either end
@@ -201,6 +202,7 @@ def draw_bonds_new(atoms):
                     ob.rotation_euler[2] = phi
                     list_of_bonds.append(ob)#anim
                     bondlengths.append('short2')
+                    bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
             cnt += 1
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_bond'].select_set(True)
