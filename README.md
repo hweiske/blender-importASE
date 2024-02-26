@@ -5,9 +5,10 @@
 
   `/snap/blender/xxxx/3.x/python/bin/python3.x -m pip install ase`
 
+## Installation
+To use the addons in Blender simply download the zip file `importASE.zip` go to edit -> preferences -> addons; click install; find the zip file and install it install them. Then activate the new addon in the list. If you want to use the automatic rendering of viewpoints, also download the file `render_vpts.py` and install and activate the same way.
 
 ## Usage
-To use the addons in Blender simply go to edit -> preferences -> addons; click install; find these addons, install them, than activate them in the list.
 
 You can now import molecules from the File -> import tab and use render -> render vpts to render all collections seperately for your list of cameras.
 
