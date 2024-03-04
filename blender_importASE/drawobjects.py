@@ -43,7 +43,7 @@ def draw_atoms(atoms, scale=1, representation="Balls'n'Sticks"):
         #full_object_name = bpy.utils.object.full_name(ob)
         #print(full_object_name)
         #list_of_atoms.append(full_object_name)
-        print(ob)
+        #print(ob)
         list_of_atoms.append(ob)
         bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
     bpy.ops.object.select_all(action='DESELECT')
@@ -105,7 +105,7 @@ def draw_bonds(atoms):
 
 
 def draw_bonds_new(atoms):
-    print("Using Longbond mech")
+    #print("Using Longbond mech")
     list_of_bonds=[];bondlengths=[] # for animation
     nl = ase.neighborlist.NeighborList([covalent_radii[atomic_number] * 0.9 for atomic_number in atoms.numbers],
                                        self_interaction=False, bothways=False)
@@ -129,9 +129,9 @@ def draw_bonds_new(atoms):
                 neighbor_position = atoms.positions[neighbor] + offset.dot(atoms.cell)
                 pos = atom.position
                 # Hier liegt das problem: die Zelle ist nicht 1x1x1
-                print(f'PBC: {atoms.pbc}')
+                #print(f'PBC: {atoms.pbc}')
                 if atoms.pbc.all() == True:
-                    print(atoms.pbc, 'need to check for unit cell')
+                    #print(atoms.pbc, 'need to check for unit cell')
                     is_same_unit_cell = is_inside_cell(neighbor_position, cell)
                 else:
                     is_same_unit_cell = True
@@ -245,7 +245,7 @@ def draw_unit_cell(atoms):
         pos2 = np.array([X[n], Y[n], Z[n]])
         location1 = np.dot(pos1, atoms.cell)
         location2 = np.dot(pos2, atoms.cell)
-        print(n, location1, location2, pos1, pos2)
+        #print(n, location1, location2, pos1, pos2)
         displacement = location2 - location1
         distance = np.linalg.norm(location1 - location2)
         ob = cell.copy()
@@ -258,7 +258,7 @@ def draw_unit_cell(atoms):
         ob.scale = (1, 1, 1)
         ob.dimensions = (0.1, 0.1, distance)
         phi = np.arctan2(displacement[1], displacement[0])
-        print(displacement, distance)
+        #print(displacement, distance)
         theta = np.arccos(displacement[2] / distance)
         ob.rotation_euler[1] = theta
         ob.rotation_euler[2] = phi

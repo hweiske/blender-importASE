@@ -33,19 +33,19 @@ class RenderImageOperator(bpy.types.Operator,ExportHelper):
         scene = bpy.context.scene
         cameras=self.get_camera_list()
         collections=scene.collection.children
-        print(collections)
+        #print(collections)
         for camera in cameras:
             self.toggle(camera,SET=True)
         for collection in collections:
             self.toggle_collection(collection,SET=True)
         for collection in collections:
             self.toggle_collection(collection,SET=False)
-            print(collection.name)
+            #print(collection.name)
             for camera in cameras:
                 self.toggle(camera,SET=False)
                 bpy.context.scene.camera = camera   
                 self.RENDER(FILEPATH=str(Path(f'{join(self.directory,collection.name)}_{camera.name}.png')))
-                print(camera.name)
+                #print(camera.name)
                 self.toggle(camera,SET=True)
             self.toggle_collection(collection,SET=True)
         for camera in cameras:
