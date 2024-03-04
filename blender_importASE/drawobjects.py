@@ -16,7 +16,10 @@ def draw_atoms(atoms, scale=1, representation="Balls'n'Sticks"):
     list_of_atoms=[]
     # bpy.ops.surface.primitive_nurbs_surface_sphere_add(radius=1, enter_editmode=False, align='WORLD', location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
     bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 0), segments=16, ring_count=16)
-    bpy.ops.object.shade_smooth()
+    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+        bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    else:
+        bpy.ops.object.shade_smooth()
     sphere = bpy.context.object
     sphere.name = 'ref_sphere'
     for n, atom in enumerate(atoms):
@@ -227,7 +230,10 @@ def draw_unit_cell(atoms):
     COL = (0.1, 0.1, 0.1, 1)
     su.inputs[0].default_value = COL
     bpy.ops.mesh.primitive_cylinder_add(vertices=16)
-    bpy.ops.object.shade_smooth()
+    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+        bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    else:
+        bpy.ops.object.shade_smooth()
     cell = bpy.context.object
     cell.name = 'ref_cell'
     cnt = 0
@@ -266,7 +272,10 @@ def draw_unit_cell(atoms):
 def create_half_bond():
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_cylinder_add(vertices=16)
-    bpy.ops.object.shade_smooth()
+    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+        bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    else:
+        bpy.ops.object.shade_smooth()
     bond = bpy.context.object
     bond.name = 'ref_bond'
     bpy.ops.object.mode_set(mode='EDIT')
@@ -291,7 +300,10 @@ def create_half_bond():
 def create_full_bond():
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_cylinder_add(vertices=16)
-    bpy.ops.object.shade_smooth()
+    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+        bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    else:
+        bpy.ops.object.shade_smooth()
     bond = bpy.context.object
     bond.name = 'ref_bondx2'
     bpy.ops.object.mode_set(mode='EDIT')

@@ -21,7 +21,10 @@ def group_atoms(atoms):
 def setup_materials(atoms,colorbonds=False,color=0.6):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_uv_sphere_add(location=(0,0,0),segments = 16 ,ring_count = 16)
-    bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+        bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    else:
+        bpy.ops.object.shade_smooth()
     sphere = bpy.context.object
     sphere.name = 'ref_sphere'
     bpy.data.objects['ref_sphere'].select_set(True)
