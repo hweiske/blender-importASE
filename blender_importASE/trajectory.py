@@ -15,7 +15,7 @@ def move_atoms(trajectory,list_of_atoms,imageslice):
 #    view_layer=bpy.context.view_layer
     trajectory=trajectory[::imageslice]
     for ni,image in enumerate(trajectory):
-        print(ni*imageslice)
+        #print(ni*imageslice)
         for n, atom_ob in enumerate(list_of_atoms):
             #print(ni,atom_ob)
             bpy.ops.object.select_all(action='DESELECT')
@@ -24,8 +24,8 @@ def move_atoms(trajectory,list_of_atoms,imageslice):
             bpy.context.scene.frame_set(ni+1)
   #          bpy.context.active_object.location = image[n].position
             atom_ob.location=image[n].position
-            if n == 1:
-                print(ni,n,image[n].position,atom_ob.location)
+#            if n == 1:
+#                print(ni,n,image[n].position,atom_ob.location)
             #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
             atom_ob.keyframe_insert(data_path='location')
             atom_ob.select_set(False)
@@ -34,7 +34,7 @@ def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice):
     trajectory=trajectory[::imageslice]
     for ni,image in enumerate(trajectory):
         cnt=0
-        print(ni*imageslice)
+        #print(ni*imageslice)
         for na,atom in enumerate(image):
             neighbors, offsets = NEIGHBORLIST.get_neighbors(atom.index)
             for neighbor, offset in zip(neighbors, offsets):
@@ -59,15 +59,15 @@ def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice):
                         bpy.ops.anim.keyframe_insert(type='LocRotScale')
 #                        ob.keyframe_insert(data_path='LocRotScale')
                         break
-    print(f'plotted {cnt*len(trajectory)} bonds')
+    #print(f'plotted {cnt*len(trajectory)} bonds')
     return None
 def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice):
-    print("Using Longbond mech")
+    #print("Using Longbond mech")
     trajectory = trajectory[::imageslice]
     for ni,image in enumerate(trajectory):
         cnt=0
-        print(ni*imageslice,cnt)
-        print(cnt,len(list_of_bonds))
+        #print(ni*imageslice,cnt)
+        #print(cnt,len(list_of_bonds))
         for na,atom in enumerate(image):
             neighbors, offsets = NEIGHBORLIST.get_neighbors(atom.index)
             for neighbor, offset in zip(neighbors, offsets):
@@ -125,5 +125,5 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
                     bpy.ops.anim.keyframe_insert(type='LocRotScale')
                     cnt += 1
-    print(f'plotted {cnt*len(trajectory)} bonds')
+    #print(f'plotted {cnt*len(trajectory)} bonds')
     return None

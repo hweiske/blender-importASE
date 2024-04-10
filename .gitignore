@@ -169,5 +169,9 @@ old_things/
 setup.py
 testmaterials.xyz
 write_colors.py
+<<<<<<< HEAD
 importASE.zip
+=======
+*.zip
+>>>>>>> dc95909698bdf4e64cb157f0d98363f3bbea918d
 

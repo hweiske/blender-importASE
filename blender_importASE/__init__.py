@@ -125,7 +125,8 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         box = layout.box()
         box.label(text="")
         box.separator()
-        box.operator("import_scene.my_format", text="Import")
+        # commented out because it throws errors, don't know what it does anyhow... -PM
+        #box.operator("import_scene.my_format", text="Import")
         for i in range(3):
             row = box.row(align=True)
             for j in range(3):
