@@ -1,5 +1,7 @@
 # Collection of Blender Addons for Molecular Structures
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10776696.svg)](https://doi.org/10.5281/zenodo.10776696)
+
 ## Dependencies
 * ASE: You just need to find the location of your blender installation and use pip to install ase for blender to find it. For example when installed with snap:
 
