@@ -1,13 +1,7 @@
 import bpy
-from bpy_extras.io_utils import ImportHelper
-from ase import io
 import ase
-from ase.data import covalent_radii, colors
-from ase.build import make_supercell
+from ase.data import covalent_radii
 import numpy as np
-from ase import Atoms
-from os.path import join
-import os
 import ase.neighborlist
 
 
@@ -61,7 +55,7 @@ def draw_bonds(atoms):
     bpy.ops.object.select_all(action='DESELECT')
     try:
         bpy.ops.group.create(name='bonds')
-    except:
+    except Exception:
         None
     # bpy.ops.surface.primitive_nurbs_surface_cylinder_add(radius=1.0, enter_editmode=False, align='WORLD',
     # location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
@@ -106,14 +100,15 @@ def draw_bonds(atoms):
 
 def draw_bonds_new(atoms):
     #print("Using Longbond mech")
-    list_of_bonds=[];bondlengths=[] # for animation
+    list_of_bonds=[]
+    bondlengths=[] # for animation
     nl = ase.neighborlist.NeighborList([covalent_radii[atomic_number] * 0.9 for atomic_number in atoms.numbers],
                                        self_interaction=False, bothways=False)
     nl.update(atoms)
     bpy.ops.object.select_all(action='DESELECT')
     try:
         bpy.ops.group.create(name='bonds')
-    except:
+    except Exception:
         pass
     # create half bond
     hbond = create_half_bond()
@@ -125,12 +120,10 @@ def draw_bonds_new(atoms):
         if nl.get_neighbors(atom.index)[0].size > 0:
             neighbors, offsets = nl.get_neighbors(atom.index)
             for neighbor, offset in zip(neighbors, offsets):
-                neighbor_pos = atoms.positions[neighbor]
                 neighbor_position = atoms.positions[neighbor] + offset.dot(atoms.cell)
-                pos = atom.position
                 # Hier liegt das problem: die Zelle ist nicht 1x1x1
                 #print(f'PBC: {atoms.pbc}')
-                if atoms.pbc.all() == True:
+                if atoms.pbc.all() is True:
                     #print(atoms.pbc, 'need to check for unit cell')
                     is_same_unit_cell = is_inside_cell(neighbor_position, cell)
                 else:
@@ -219,7 +212,7 @@ def draw_unit_cell(atoms):
     bpy.ops.object.select_all(action='DESELECT')
     try:
         bpy.ops.group.create(name='cell')
-    except:
+    except Exception:
         None
 
     # SETUP MATERIAL
@@ -236,7 +229,6 @@ def draw_unit_cell(atoms):
         bpy.ops.object.shade_smooth()
     cell = bpy.context.object
     cell.name = 'ref_cell'
-    cnt = 0
     X = [0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0]
     Y = [0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0]
     Z = [0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1]
@@ -251,7 +243,7 @@ def draw_unit_cell(atoms):
         ob = cell.copy()
         ob.data = cell.data.copy()
         bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
-        ob.name = f'unitcell-cylinder'
+        ob.name = 'unitcell-cylinder'
         bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
             bpy.data.materials['unit_cell'])
         ob.location = location1 + (displacement / 2)
@@ -341,7 +333,6 @@ def is_inside_cell(pos, cell):
 
 
 def assign_to_longbond(bond, mat1, mat2):
-    mesh = bond.data
     mat1_r = bpy.data.materials.get(mat1)
     mat2_r = bpy.data.materials.get(mat2)
     bond.data.materials.append(mat1_r)

@@ -1,17 +1,18 @@
+import bpy
+from os.path import join
+from pathlib import Path
+from bpy_extras.io_utils import ExportHelper
+
 bl_info = {
     "name": "Render vpts",
     "blender": (2, 80, 0),
     "category": "Render",
 }
-import bpy
-from os.path import join
-from pathlib import Path
-from bpy_extras.io_utils import ImportHelper,ExportHelper
 
 class RenderImageOperator(bpy.types.Operator,ExportHelper):
     bl_idname = "render.render_vpts"
     bl_label = "Render structure vpts"
-    directory:bpy.props.StringProperty(
+    directory = bpy.props.StringProperty(
         name='folder',
         description='where to put the images',
         subtype='DIR_PATH'

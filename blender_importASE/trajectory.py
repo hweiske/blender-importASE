@@ -1,14 +1,5 @@
 import bpy
-from bpy_extras.io_utils import ImportHelper
-from ase import io
-import ase
-from ase.data import covalent_radii, colors
-from ase.build import make_supercell
 import numpy as np
-from ase import Atoms
-from os.path import join
-import os
-import ase.neighborlist
 
 
 def move_atoms(trajectory,list_of_atoms,imageslice):
@@ -71,9 +62,6 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
         for na,atom in enumerate(image):
             neighbors, offsets = NEIGHBORLIST.get_neighbors(atom.index)
             for neighbor, offset in zip(neighbors, offsets):
-                neighbor_pos = image.positions[neighbor]
-                neighbor_position = image.positions[neighbor] + offset.dot(image.cell)
-                pos = atom.position
                 ob=list_of_bonds[cnt]
                 ob.select_set(True)
                 bpy.context.scene.frame_set(ni+1)
