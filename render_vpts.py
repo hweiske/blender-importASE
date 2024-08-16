@@ -12,7 +12,7 @@ bl_info = {
 class RenderImageOperator(bpy.types.Operator,ExportHelper):
     bl_idname = "render.render_vpts"
     bl_label = "Render structure vpts"
-    directory = bpy.props.StringProperty(
+    directory: bpy.props.StringProperty(
         name='folder',
         description='where to put the images',
         subtype='DIR_PATH'
