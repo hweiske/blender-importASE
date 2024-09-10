@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 
+import bpy
+from bpy_extras.io_utils import ImportHelper
+import numpy as np
+from os.path import join
+from .ui import import_ase_molecule
+
+
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
 __version__ = "1.3"
@@ -15,22 +22,6 @@ bl_info = {
     "location": "File > Import",
     "category": "Import-Export",
 }
-
-import bpy
-from bpy_extras.io_utils import ImportHelper
-from ase import io
-import ase
-from ase.data import covalent_radii, colors
-from ase.build import make_supercell
-import numpy as np
-from ase import Atoms
-from os.path import join
-import os
-from .import_cubefiles import cube2vol
-from .utils import setup_materials, group_atoms
-from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell
-from .ui import import_ase_molecule
-
 
 class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     bl_idname = "import_mesh.ase"

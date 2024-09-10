@@ -1,13 +1,5 @@
 import bpy
-from bpy_extras.io_utils import ImportHelper
-from ase import io
-import ase
-from ase.data import covalent_radii,colors
-from ase.build import make_supercell
-import numpy as np
-from ase import Atoms
-from os.path import join
-import os
+from ase.data import colors
 
 def group_atoms(atoms):
     atom_types = set(atoms.get_chemical_symbols())
@@ -15,7 +7,7 @@ def group_atoms(atoms):
     for atom_type in atom_types:
         try:
             bpy.ops.group.create(name=atom_type)
-        except:
+        except Exception:
             None
     return None    
 def setup_materials(atoms,colorbonds=False,color=0.6):
@@ -56,32 +48,6 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Ag'    :(        0.59,0.59,0.59        ),
     'Hf'    :(        0.365,0.509,0.920     ),
     }
-    color_dict_VMD_CHEMCRAFT={
-    'H'     :(      1, 1, 1                   ),
-    'C'     :(      0.19, 0.19, 0.19        ),
-    'B'     :(      0.8, 0.33, 0.43         ),
-    'Al'    :(      0.72, 0.62, 0.62        ),
-    'Si'    :(      0.02, 0.38,	0.67        ),
-    'Ge'    :(      0.05, 0.45, 0.45        ),
-    'Ga'    :(      0.33, 0.71, 0.09        ),
-    'In'    :(      0, 0, 0.01              ),
-    'N'     :(      0.00, 0.00, 1.00        ),
-    'P'     :(      0.413, 0.013, 0.0004    ),
-    'As'    :(      0.482, 0.378, 0.00      ),
-    'Sb'    :(      0.74, 0.46, 0.17        ),
-    'Bi'    :(      0.82, 0.71, 0.55        ),
-    'O'     :(      1.00, 0.00, 0.00        ),
-    'S'     :(      1.00, 1.00, 0.00        ),
-    'F'     :(      0.00, 1.00, 0.00        ),
-    'Cl'    :(      0.50, 1.00, 0.00        ),
-    'Br'    :(      0.39, 0.15, 0.03        ),
-    'I'     :(      0.257, 0.00, 0.257      ),
-    'Ti'    :(      0.25, 1.75, 0.75        ),
-    'Au'    :(      0.518,0.312,0.006       ),
-    'Cu'    :(      0.594,0.1,0.048         ),
-    'Ag'    :(        0.59,0.59,0.59        ),
-    'Hf'    :(        0.365,0.509,0.920     ),
-        }
     roughness_dict={  
     'H'     :   0.5,
     'C'     :   0.5,
@@ -140,33 +106,33 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Te'    :   1,
     'Hf'    :   1,
     }
-    specular_dict={'H'     :0.2,
-    'C'     :0,
-    'B'     :0.5,
-    'Si'    :0.5,
-    'Ge'    :0.5,
-    'Ga'    :0.5,
-    'In'    :0.5,
-    'N'     :0.1,
-    'P'     :0.7,
-    'As'    :0.8,
-    'Sb'    :0.7,
-    'Bi'    :0.9,
-    'O'     :0.2,
-    'S'     :0.2,
-    'F'     :0.2,
-    'Cl'    :0.2,
-    'Br'    :0.2,
-    'I'     :0.2,
-    'Ti'    :0.5,
-    'Cu'    : 0.5,
-    'Au'    : 0.5,
-    'Fe'    : 0.5,
-    'Ag'    : 0.5,
-    'Al'    :   1,
-    'Se'    :   0.5,
-    'Te'    :   1,
-}
+#     specular_dict={'H'     :0.2,
+#     'C'     :0,
+#     'B'     :0.5,
+#     'Si'    :0.5,
+#     'Ge'    :0.5,
+#     'Ga'    :0.5,
+#     'In'    :0.5,
+#     'N'     :0.1,
+#     'P'     :0.7,
+#     'As'    :0.8,
+#     'Sb'    :0.7,
+#     'Bi'    :0.9,
+#     'O'     :0.2,
+#     'S'     :0.2,
+#     'F'     :0.2,
+#     'Cl'    :0.2,
+#     'Br'    :0.2,
+#     'I'     :0.2,
+#     'Ti'    :0.5,
+#     'Cu'    : 0.5,
+#     'Au'    : 0.5,
+#     'Fe'    : 0.5,
+#     'Ag'    : 0.5,
+#     'Al'    :   1,
+#     'Se'    :   0.5,
+#     'Te'    :   1,
+# }
 
     default_roughness=0.7
     atom_types = set(atoms.get_chemical_symbols())
@@ -228,16 +194,16 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
                 rough=roughness_dict[atom_type]
             else:
                 rough=default_roughness
-            if atom_type in specular_dict:
-                specular = specular_dict[atom_type]
-            else:
-                specular = 0.5
+            # if atom_type in specular_dict:
+            #     specular = specular_dict[atom_type]
+            # else:
+            #     specular = 0.5
             sa.inputs[0].default_value=COL
             sa.inputs[12].default_value=0
             sa.inputs[3].default_value=1.45
             sa.inputs[2].default_value=rough
             sa.inputs[1].default_value=metal
-            if colorbonds == False:
+            if colorbonds is False:
                 sb.inputs[0].default_value=[color,color,color,1]
                 sb.inputs[12].default_value=0
                 sb.inputs[3].default_value=1.45

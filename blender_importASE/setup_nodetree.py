@@ -1,9 +1,4 @@
 import bpy
-import numpy as np
-from ase.io.cube import read_cube
-import pyopenvdb as vdb
-import os
-from os import path
     
 #initialize visualize_edensity node group
 def visualize_edensity_node_group(): #from node2python
@@ -559,7 +554,7 @@ def visualize_edensity_node_group(): #from node2python
     #group_input.material - -> set_material_001.Material
     visualize_edensity.links.new(group_input.outputs[9], set_material_001.inputs[2])
     return visualize_edensity
-import bpy
+
 def newMaterial(id):
     
     mat = bpy.data.materials.get(id)
@@ -581,8 +576,6 @@ def newShader(id, r, g, b):
     
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    output = nodes.new(type='ShaderNodeOutputMaterial')
-    shader = nodes.new(type='ShaderNodeBsdfPrincipled')
     s=nodes["Principled BSDF"]
     s.inputs[0].default_value=(r,g,b,1) #color
     s.inputs[1].default_value=0 #metal

@@ -1,13 +1,6 @@
 import bpy
-from bpy_extras.io_utils import ImportHelper
-from ase import io
 import ase
-from ase.data import covalent_radii, colors
-from ase.build import make_supercell
-import numpy as np
 from ase import Atoms
-from os.path import join
-import os
 from .import_cubefiles import cube2vol
 from .utils import setup_materials, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
@@ -25,7 +18,7 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
         trajectory = True
         TRAJECTORY=atoms.copy()[1:]
         atoms=atoms[0]
-        if animate == False:
+        if animate is False:
             atoms = TRAJECTORY[-1]
     elif len(atoms) == 1:
         trajectory = False
@@ -58,7 +51,7 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
             list_of_bonds,nl,bondlengths=draw_bonds_new(atoms)
         else:
             list_of_bonds,nl=draw_bonds(atoms)
-    if unit_cell == True and atoms.pbc.all() != False:
+    if unit_cell is True and atoms.pbc.all() is not False:
         if separate_collections:
             my_coll = bpy.data.collections.new(
                 name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_cell')
@@ -70,7 +63,7 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
         if 'cube' in filename:
             density_obj = cube2vol(filepath)
             #print(density_obj)
-            if shift_cell == True:
+            if shift_cell is True:
                 density_obj.location.x += shift_vector[0]
                 density_obj.location.y += shift_vector[1]
                 density_obj.location.z += shift_vector[2]
@@ -79,11 +72,11 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
             # bpy.data.objects[name].location.x += shift_vector[0]
             # bpy.data.objects[name].location.y += shift_vector[1]
             # bpy.data.objects[name].location.z += shift_vector[2]
-    if trajectory == True and animate == True:
+    if trajectory is True and animate is True:
 
         move_atoms(TRAJECTORY,list_of_atoms,imageslice)
         if representation != 'VDW':
-            if fix_bonds == True:
+            if fix_bonds is True:
                 move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
             else:
                 move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
