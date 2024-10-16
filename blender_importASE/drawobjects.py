@@ -126,6 +126,12 @@ def draw_bonds_new(atoms):
                 if atoms.pbc.all() is True:
                     #print(atoms.pbc, 'need to check for unit cell')
                     is_same_unit_cell = is_inside_cell(neighbor_position, cell)
+                    if is_same_unit_cell == True:
+                        dis=round(atoms.get_distance(atom.index,neighbor,mic=False),3)
+                        dismin=round(atoms.get_distance(atom.index,neighbor,mic=True),3)
+                        if dis != dismin:
+                            print(dis,dismin)
+                            is_same_unit_cell = False
                 else:
                     is_same_unit_cell = True
                 if is_same_unit_cell:
