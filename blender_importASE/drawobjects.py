@@ -123,7 +123,7 @@ def draw_bonds_new(atoms):
                 neighbor_position = atoms.positions[neighbor] + offset.dot(atoms.cell)
                 # Hier liegt das problem: die Zelle ist nicht 1x1x1
                 #print(f'PBC: {atoms.pbc}')
-                if atoms.pbc.all() is True:
+                if atoms.pbc.all() == True:
                     #print(atoms.pbc, 'need to check for unit cell')
                     is_same_unit_cell = is_inside_cell(neighbor_position, cell)
                     if is_same_unit_cell == True:
