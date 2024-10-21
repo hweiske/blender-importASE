@@ -28,9 +28,9 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Si'    :(      0.001, 0.093, 0.314     ),
     'Ge'    :(      0.024,0.22,0.22         ),
     'Ga'    :(      0.33, 0.71, 0.09        ),
-    'In'    :(      0,0,0.01                 ),
+    'In'    :(0.016710, 0.008966, 0.049616  ),
     'N'     :(      0.00, 0.00, 1.00        ),
-    'P'     :(      0.413, 0.013, 0.0004    ),
+    'P'     :( 0.099349, 0.004972, 0.000206 ),
     'As'    :(      0.482, 0.378, 0.00      ),
     'Sb'    :(      0.74, 0.46, 0.17        ),
     'Bi'    :(      0.82, 0.71, 0.55        ),
@@ -47,6 +47,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Cu'    :(      0.594,0.1,0.048         ),
     'Ag'    :(        0.59,0.59,0.59        ),
     'Hf'    :(        0.365,0.509,0.920     ),
+    'Ta'    :(0.214031, 0.008155, 0.000296  ),
     }
     roughness_dict={  
     'H'     :   0.5,
@@ -76,6 +77,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Se'    :   0.5, #
     'Te'    :   0.4,
     'Hf'    :   0.3,
+    'Ta'    :   0.3,
     }
     metal_dict={    
     'H'     :   0,
@@ -105,6 +107,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Se'    :   0.5,
     'Te'    :   1,
     'Hf'    :   1,
+    'Ta'    :   1,
     }
 #     specular_dict={'H'     :0.2,
 #     'C'     :0,
