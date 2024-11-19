@@ -7,7 +7,7 @@ from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
 from .trajectory import move_atoms, move_bonds,move_longbonds
 
 
-def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
+def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks", separate_collections=False,
                         read_density=True, SUPERCELL=True, shift_cell=False, 
@@ -39,7 +39,7 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
     layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
     bpy.context.view_layer.active_layer_collection = layer_collection
     group_atoms(atoms)
-    list_of_atoms=draw_atoms(atoms, scale=scale, representation=representation)
+    list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
     if representation != 'VDW':
         if separate_collections:
             my_coll = bpy.data.collections.new(
@@ -48,9 +48,9 @@ def import_ase_molecule(filepath, filename, matrix, colorbonds=False, fix_bonds=
             layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
             bpy.context.view_layer.active_layer_collection = layer_collection
         if fix_bonds:
-            list_of_bonds,nl,bondlengths=draw_bonds_new(atoms)
+            list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
         else:
-            list_of_bonds,nl=draw_bonds(atoms)
+            list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
     if unit_cell is True and atoms.pbc.all() is not False:
         if separate_collections:
             my_coll = bpy.data.collections.new(
