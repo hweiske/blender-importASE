@@ -1,6 +1,9 @@
 import bpy
 from ase.io.cube import read_cube
-import pyopenvdb as vdb
+if bpy.app.version[1] < 4:
+    import pyopenvdb as vdb
+else:
+    import openvdb as vdb
 import os
 from .setup_nodetree import visualize_edensity_node_group
 from .utils import toggle

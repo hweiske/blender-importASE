@@ -5,7 +5,7 @@ from .import_cubefiles import cube2vol
 from .utils import setup_materials, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
 from .trajectory import move_atoms, move_bonds,move_longbonds
-
+from .nodeatoms import set_atoms_node_group, atoms_from_verts_node_group
 
 def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
@@ -31,26 +31,57 @@ def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=Fa
     #    if SUPERCELL == True:
     #        atoms=make_supercell(atoms,matrix)
     setup_materials(atoms, colorbonds=colorbonds, color=color)
-    if separate_collections:
-        my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_atoms')
-    else:
-        my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
-    bpy.context.scene.collection.children.link(my_coll)
-    layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
-    bpy.context.view_layer.active_layer_collection = layer_collection
-    group_atoms(atoms)
-    list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
-    if representation != 'VDW':
+    if representation != 'bonds_fromnodes' and representation != 'nodes':
         if separate_collections:
-            my_coll = bpy.data.collections.new(
-                name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_bonds')
-            bpy.context.scene.collection.children.link(my_coll)
-            layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
-            bpy.context.view_layer.active_layer_collection = layer_collection
-        if fix_bonds:
-            list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
+            my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_atoms')
         else:
-            list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
+            my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
+        bpy.context.scene.collection.children.link(my_coll)
+        layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
+        bpy.context.view_layer.active_layer_collection = layer_collection
+        group_atoms(atoms)
+        list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
+        if representation != 'VDW':
+            if separate_collections:
+                my_coll = bpy.data.collections.new(
+                    name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_bonds')
+                bpy.context.scene.collection.children.link(my_coll)
+                layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
+                bpy.context.view_layer.active_layer_collection = layer_collection
+            if fix_bonds:
+                list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
+            else:
+                list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
+        if separate_collections:
+            my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_atoms')
+        else:
+            my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
+        bpy.context.scene.collection.children.link(my_coll)
+        layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
+        bpy.context.view_layer.active_layer_collection = layer_collection
+        group_atoms(atoms)
+        list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
+        if representation != 'VDW':
+            if separate_collections:
+                my_coll = bpy.data.collections.new(
+                    name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_bonds')
+                bpy.context.scene.collection.children.link(my_coll)
+                layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
+                bpy.context.view_layer.active_layer_collection = layer_collection
+            if fix_bonds:
+                list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
+            else:
+                list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
+    if representation == 'nodes':
+        set_atoms = set_atoms_node_group()
+        if animate is True:
+            atoms_from_verts = atoms_from_verts_node_group(TRAJECTORY,atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=animate)
+        else:
+            atoms_from_verts = atoms_from_verts_node_group(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=animate)
+        #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
+    #if representation == 'bonds_fromnodes':
+    #    bond_nodes = bond_nodes_node_group()
+
     if unit_cell is True and atoms.pbc.all() is not False:
         if separate_collections:
             my_coll = bpy.data.collections.new(

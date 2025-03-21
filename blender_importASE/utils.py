@@ -174,8 +174,14 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
                         'Th','Pa', 'U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr'
                         'Al','Sn','Tl','Pb']
     for n,atom_type in enumerate(atom_types):
-            matat=bpy.data.materials.new(name = str(atom_type))
-            matb=bpy.data.materials.new(name = f'{atom_type}-bond')
+            if atom_type not in bpy.data.materials:
+                matat=bpy.data.materials.new(name = str(atom_type))
+            else:
+                matat=bpy.data.materials[atom_type]
+            if atom_type+'-bond' not in bpy.data.materials:
+                matb=bpy.data.materials.new(name = str(atom_type)+'-bond')
+            else:
+                matb=bpy.data.materials[atom_type+'-bond']
             matb.use_nodes=True
             matat.use_nodes=True
             ta=matat.node_tree

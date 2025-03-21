@@ -9,7 +9,7 @@ from .ui import import_ase_molecule
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "1.3"
+__version__ = "1.3" 
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -18,7 +18,7 @@ bl_info = {
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
     "version": (1, 3),
-    "blender": (4, 0, 0),
+    "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
 }
@@ -83,6 +83,8 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
             ("Balls'n'Sticks", "Balls'n'Sticks", "Balls and sticks representaiton"),
             ("Licorice", "Licorice", "Licorice representation"),
             ('VDW', 'VDW', 'VDW Radii, no bonds'),
+            ('bonds_fromnodes', 'bonds_fromnodes', 'bonds from geometrynodes'),
+            ('nodes', 'nodes', 'Everything from geometrynodes. Fastest'),
         ],
         default="Balls'n'Sticks"
     )
