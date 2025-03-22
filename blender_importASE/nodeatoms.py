@@ -1,5 +1,6 @@
 import bpy, mathutils
-from ase.data import covalent_radii, chemical_symbols
+from .utils import atomcolors
+from ase.data import covalent_radii, chemical_symbols, colors
 
 def read_structure(atoms,name, animate=True):
     if animate:
@@ -34,17 +35,18 @@ def read_structure(atoms,name, animate=True):
     if animate:
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        bpy.data.scenes['Scene'].animall_properties.key_point_location = True
+       # bpy.data.scenes['Scene'].animall_properties.key_point_location = True
         vertx=obj.data.vertices
         for n,frame in enumerate(trajectory):
-            bpy.data.scenes['Scene'].frame_current=n
+            #bpy.data.scenes['Scene'].frame_current=n
             for nv,v in enumerate(vertx):
                 v.co=frame.positions[nv]
-            
-            bpy.context.view_layer.update()
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.view3d.insert_keyframe_animall()
-            bpy.ops.object.mode_set(mode='OBJECT')
+        
+                v.keyframe_insert(data_path="co", frame=n)    
+        #    bpy.context.view_layer.update()
+        #    bpy.ops.object.mode_set(mode='EDIT')
+        #    bpy.ops.view3d.insert_keyframe_animall()
+        #    bpy.ops.object.mode_set(mode='OBJECT')
 
     return(obj, mesh)
 #initialize set_atoms node group
@@ -111,7 +113,7 @@ def set_atoms_node_group():
     #Rings
     uv_sphere.inputs[1].default_value = 16
     #Radius
-    uv_sphere.inputs[2].default_value = 1.0
+    uv_sphere.inputs[2].default_value = 0.7
 
 
     shade= set_atoms.nodes.new("GeometryNodeSetShadeSmooth")
@@ -153,6 +155,7 @@ def set_atoms_node_group():
 
 #initialize atoms_from_verts node group
 def atoms_from_verts_node_group(atoms,name,animate=True):
+    atomcolor=atomcolors()
     if animate:
         trajectory=atoms
         atoms=trajectory[0]
@@ -209,7 +212,21 @@ def atoms_from_verts_node_group(atoms,name,animate=True):
     join_geometry.name = "Join Geometry"
     
     #node Compare Elements
-    for n,number in enumerate(set(atoms.get_atomic_numbers())):
+    numbers=list(set(atoms.get_atomic_numbers()))
+
+    #setup up color attribute
+    #color attribute
+    color_attribute = atoms_from_verts.nodes.new("GeometryNodeStoreNamedAttribute")
+    color_attribute.label = "element_attribute"
+    color_attribute.name = "Named Attribute"
+    color_attribute.data_type = 'FLOAT_COLOR'
+    color_attribute.inputs[2].default_value = "color"
+    
+
+    atoms_from_verts.links.new(group_input_1.outputs[0], color_attribute.inputs[0])
+        
+
+    for n,number in enumerate(numbers):
         sym=chemical_symbols[number]
         compare = atoms_from_verts.nodes.new("FunctionNodeCompare")
         compare.label = f"is_element_{number}"
@@ -218,7 +235,7 @@ def atoms_from_verts_node_group(atoms,name,animate=True):
         compare.mode = 'ELEMENT'
         compare.operation = 'EQUAL'
         compare.inputs[3].default_value = number
-        compare.location = (-834.4930419921875, -100+200*n)
+        compare.location = (-1200.4930419921875, -100+200*n)
         #node Group
         group = atoms_from_verts.nodes.new("GeometryNodeGroup")
         group.label = f"set_atoms_{number}"
@@ -227,6 +244,20 @@ def atoms_from_verts_node_group(atoms,name,animate=True):
         group.location = (-458.2143249511719, -100+200*n)
         compare.width, compare.height = 140.0, 100.0
         group.width, group.height = 140.0, 100.0
+
+        #node color
+        color = atoms_from_verts.nodes.new("FunctionNodeInputColor")
+        color.name = sym
+        if sym in atomcolor.color_dict:
+            color.value = list(atomcolor.color_dict[sym]) + [1]
+        else:
+            color.value = list(colors.jmol_colors[number]) + [1]
+        color.location = (-750, -800+200*n)
+        color.width, color.height = 140.0, 100.0
+
+       
+        
+
 
         #node Set Material
         set_material = atoms_from_verts.nodes.new("GeometryNodeSetMaterial")
@@ -239,33 +270,47 @@ def atoms_from_verts_node_group(atoms,name,animate=True):
         set_material.width, set_material.height = 140.0, 100.0
         
         atoms_from_verts.links.new(compare.outputs[0], group.inputs[1])
-        atoms_from_verts.links.new(group_input_1.outputs[0], group.inputs[0])
+        atoms_from_verts.links.new(color_attribute.outputs[0], group.inputs[0])
         atoms_from_verts.links.new(named_attribute.outputs[0], group.inputs[2])
         atoms_from_verts.links.new(named_attribute_001.outputs[0], compare.inputs[2])
         atoms_from_verts.links.new(group.outputs[0], set_material.inputs[0])
         atoms_from_verts.links.new(set_material.outputs[0], join_geometry.inputs[0])
+    
         
+        #switches
+        if n > 0:
+            if n < len(numbers):
+                switch_color = atoms_from_verts.nodes.new("GeometryNodeSwitch")
+                switch_color.name = f"Switch Color {sym}-{chemical_symbols[numbers[n-1]]}"
+                switch_color.label = f"Switch Color {sym}-{chemical_symbols[numbers[n-1]]}"
+                switch_color.inputs[0].default_value = False
+                switch_color.input_type = 'RGBA'
+                atoms_from_verts.links.new(compare.outputs[0], switch_color.inputs[0]) #for every n 
+            if n == 1:
+                old=atoms_from_verts.nodes[chemical_symbols[numbers[n-1]]]
+                atoms_from_verts.links.new(old.outputs[0], switch_color.inputs[1]) #old is color n-1
+                atoms_from_verts.links.new(color.outputs[0], switch_color.inputs[2]) #color is n
+            else:
+                old=atoms_from_verts.nodes[f"Switch Color {chemical_symbols[numbers[n-1]]}-{chemical_symbols[numbers[n-2]]}"]
+                atoms_from_verts.links.new(old.outputs[0], switch_color.inputs[1]) #old is switch_color n-1-2
+                atoms_from_verts.links.new(color.outputs[0], switch_color.inputs[2]) #color is n
+            switch_color.location = (-500, -1000+200*n)
+        
+    atoms_from_verts.links.new(switch_color.outputs[0], color_attribute.inputs[3])
     
-    
-    #node Frame
-    frame = atoms_from_verts.nodes.new("NodeFrame")
-    frame.label = " "
-    frame.name = "Frame"
-    frame.label_size = 20
-    frame.shrink = True
+
 
     atoms_from_verts.links.new(join_geometry.outputs[0], group_output_1.inputs[0])
-
+    
 
 
     #Set locations
-    group_input_1.location = (-650, 63.91105270385742)
-    group_output_1.location = (111.78567504882812, 0.4488945007324219)
-    named_attribute.location = (-650, -112.09099578857422)
-    named_attribute_001.location = (-1024.4930419921875, -66.59099578857422)
-    join_geometry.location = (-70.63062286376953, 1.9488945007324219)
-    frame.location = (712.62744140625, -409.5729064941406)
-
+    group_input_1.location = (-1500 , 63.91105270385742)
+    group_output_1.location = (120, 0.4488945007324219)
+    named_attribute.location = (-1200, -300)
+    named_attribute_001.location = (-1500, -66.59099578857422)
+    join_geometry.location = (0, 1.9488945007324219)
+    color_attribute.location = (-600, 0)
     #Set dimensions
     group_input_1.width, group_input_1.height = 140.0, 100.0
     group_output_1.width, group_output_1.height = 140.0, 100.0
@@ -273,7 +318,6 @@ def atoms_from_verts_node_group(atoms,name,animate=True):
     named_attribute_001.width, named_attribute_001.height = 140.0, 100.0
     
     join_geometry.width, join_geometry.height = 140.0, 100.0
-    frame.width, frame.height = 150.0, 100.0
     if animate:
         obj,mesh=read_structure(trajectory,name,animate=animate)
     else:

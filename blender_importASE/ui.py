@@ -2,18 +2,20 @@ import bpy
 import ase
 from ase import Atoms
 from .import_cubefiles import cube2vol
-from .utils import setup_materials, group_atoms
+from .utils import atomcolors, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
 from .trajectory import move_atoms, move_bonds,move_longbonds
 from .nodeatoms import set_atoms_node_group, atoms_from_verts_node_group
-
+import time
 def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks", separate_collections=False,
                         read_density=True, SUPERCELL=True, shift_cell=False, 
                         imageslice=1, animate = True, **kwargs):
-    
+    start=time.time()
     atoms = ase.io.read(filepath,index = ':')
+    end_read=time.time()
+    print('Time to read file: ',end_read-start)
     if isinstance(atoms[0],Atoms) and len(atoms) > 1:
         trajectory = True
         TRAJECTORY=atoms.copy()[1:]
@@ -30,7 +32,9 @@ def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=Fa
         atoms.positions += shift_vector
     #    if SUPERCELL == True:
     #        atoms=make_supercell(atoms,matrix)
-    setup_materials(atoms, colorbonds=colorbonds, color=color)
+    atomcolor=atomcolors()
+
+    atomcolor.setup_materials(atoms, colorbonds=colorbonds, color=color)
     if representation != 'bonds_fromnodes' and representation != 'nodes':
         if separate_collections:
             my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0] + '_atoms')
@@ -74,10 +78,10 @@ def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=Fa
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
     if representation == 'nodes':
         set_atoms = set_atoms_node_group()
-        if animate is True:
-            atoms_from_verts = atoms_from_verts_node_group(TRAJECTORY,atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=animate)
+        if animate is True and trajectory is True:
+            atoms_from_verts = atoms_from_verts_node_group(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=True)
         else:
-            atoms_from_verts = atoms_from_verts_node_group(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=animate)
+            atoms_from_verts = atoms_from_verts_node_group(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=False)
         #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
     #if representation == 'bonds_fromnodes':
     #    bond_nodes = bond_nodes_node_group()
@@ -104,12 +108,14 @@ def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=Fa
             # bpy.data.objects[name].location.y += shift_vector[1]
             # bpy.data.objects[name].location.z += shift_vector[2]
     if trajectory is True and animate is True:
-
-        move_atoms(TRAJECTORY,list_of_atoms,imageslice)
-        if representation != 'VDW':
-            if fix_bonds is True:
-                move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
-            else:
-                move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
+        if representation != 'nodes' and representation != 'bonds_fromnodes':
+            move_atoms(TRAJECTORY,list_of_atoms,imageslice)
+            if representation != 'VDW':
+                if fix_bonds is True:
+                    move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
+                else:
+                    move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)  
+    end=time.time()
+    print('Time to import atoms_object: ',end-end_read)
 
             

@@ -1,26 +1,10 @@
 import bpy
 from ase.data import colors
 
-def group_atoms(atoms):
-    atom_types = set(atoms.get_chemical_symbols())
-    bpy.ops.object.select_all(action='DESELECT')
-    for atom_type in atom_types:
-        try:
-            bpy.ops.group.create(name=atom_type)
-        except Exception:
-            None
-    return None    
-def setup_materials(atoms,colorbonds=False,color=0.6):
-    bpy.ops.object.select_all(action='DESELECT')
-    bpy.ops.mesh.primitive_uv_sphere_add(location=(0,0,0),segments = 16 ,ring_count = 16)
-    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
-        bpy.ops.object.shade_smooth(use_auto_smooth=True)
-    else:
-        bpy.ops.object.shade_smooth()
-    sphere = bpy.context.object
-    sphere.name = 'ref_sphere'
-    bpy.data.objects['ref_sphere'].select_set(True)
-    color_dict={
+class atomcolors():
+    def __init__(self):
+        self.default_roughness=0.7
+        self.color_dict={
     'H'     :(      1,1,1                   ),
     'C'     :(      0.05, 0.05, 0.05        ),
     'Al'    :(      0.6,0.42,0.42           ),#
@@ -49,7 +33,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Hf'    :(        0.365,0.509,0.920     ),
     'Ta'    :(0.214031, 0.008155, 0.000296  ),
     }
-    roughness_dict={  
+        self.roughness_dict={  
     'H'     :   0.5,
     'C'     :   0.5,
     'B'     :   0.5,
@@ -79,7 +63,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Hf'    :   0.3,
     'Ta'    :   0.3,
     }
-    metal_dict={    
+        self.metal_dict={    
     'H'     :   0,
     'C'     :   0.5,
     'B'     :   0,
@@ -109,37 +93,9 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     'Hf'    :   1,
     'Ta'    :   1,
     }
-#     specular_dict={'H'     :0.2,
-#     'C'     :0,
-#     'B'     :0.5,
-#     'Si'    :0.5,
-#     'Ge'    :0.5,
-#     'Ga'    :0.5,
-#     'In'    :0.5,
-#     'N'     :0.1,
-#     'P'     :0.7,
-#     'As'    :0.8,
-#     'Sb'    :0.7,
-#     'Bi'    :0.9,
-#     'O'     :0.2,
-#     'S'     :0.2,
-#     'F'     :0.2,
-#     'Cl'    :0.2,
-#     'Br'    :0.2,
-#     'I'     :0.2,
-#     'Ti'    :0.5,
-#     'Cu'    : 0.5,
-#     'Au'    : 0.5,
-#     'Fe'    : 0.5,
-#     'Ag'    : 0.5,
-#     'Al'    :   1,
-#     'Se'    :   0.5,
-#     'Te'    :   1,
-# }
 
-    default_roughness=0.7
-    atom_types = set(atoms.get_chemical_symbols())
-    atom_n=list(set(atoms.numbers))
+
+    
     #base color 0
     #subsurface 1
     #subsurface radius 2
@@ -165,7 +121,7 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
     #normal 22
     #Clearcoat Normal 23
     #Tangent 24
-    METALS=['Li','Be','Na','Mg','K','Ca','Rb','Sr','Cs','Ba','Fr','Ra',
+        self.METALS=['Li','Be','Na','Mg','K','Ca','Rb','Sr','Cs','Ba','Fr','Ra',
                         'Sc','V' ,'Cr','Mn','Fe','Co','Ni','Cu','Zn',
                          'Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd',
                         'La','Ta', 'W','Re','Os','Ir','Pt','Au','Hg',
@@ -173,61 +129,84 @@ def setup_materials(atoms,colorbonds=False,color=0.6):
                         'Ce','Pr','Nd','Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu',
                         'Th','Pa', 'U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr'
                         'Al','Sn','Tl','Pb']
-    for n,atom_type in enumerate(atom_types):
-            if atom_type not in bpy.data.materials:
-                matat=bpy.data.materials.new(name = str(atom_type))
-            else:
-                matat=bpy.data.materials[atom_type]
-            if atom_type+'-bond' not in bpy.data.materials:
-                matb=bpy.data.materials.new(name = str(atom_type)+'-bond')
-            else:
-                matb=bpy.data.materials[atom_type+'-bond']
-            matb.use_nodes=True
-            matat.use_nodes=True
-            ta=matat.node_tree
-            tb=matb.node_tree
-            sa=ta.nodes['Principled BSDF']
-            sb=tb.nodes['Principled BSDF']
-            if atom_type in color_dict:
-                COL=list(color_dict[atom_type]) + [1]
-            else:
-                COL=list(colors.jmol_colors[atom_n[n]]) + [1]
-            if atom_type in metal_dict:
-                metal=metal_dict[atom_type]
-            else:
-                if atom_type in METALS:    
-                    metal  = 1
+    def setup_materials(self,atoms,colorbonds=False,color=0.6):
+        atom_types = set(atoms.get_chemical_symbols())
+        atom_n=list(set(atoms.numbers))
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.mesh.primitive_uv_sphere_add(location=(0,0,0),segments = 16 ,ring_count = 16)
+        if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+            bpy.ops.object.shade_smooth(use_auto_smooth=True)
+        else:
+            bpy.ops.object.shade_smooth()
+        sphere = bpy.context.object
+        sphere.name = 'ref_sphere'
+        bpy.data.objects['ref_sphere'].select_set(True)
+        
+        for n,atom_type in enumerate(atom_types):
+                if atom_type not in bpy.data.materials:
+                    matat=bpy.data.materials.new(name = str(atom_type))
                 else:
-                    metal=0
-            if atom_type in roughness_dict:
-                rough=roughness_dict[atom_type]
-            else:
-                rough=default_roughness
-            # if atom_type in specular_dict:
-            #     specular = specular_dict[atom_type]
-            # else:
-            #     specular = 0.5
-            sa.inputs[0].default_value=COL
-            sa.inputs[12].default_value=0
-            sa.inputs[3].default_value=1.45
-            sa.inputs[2].default_value=rough
-            sa.inputs[1].default_value=metal
-            if colorbonds is False:
-                sb.inputs[0].default_value=[color,color,color,1]
-                sb.inputs[12].default_value=0
-                sb.inputs[3].default_value=1.45
-                sb.inputs[2].default_value=0.5
-                sb.inputs[1].default_value=0
-            else:
-                sb.inputs[0].default_value=COL
-                sb.inputs[12].default_value=0
-                sb.inputs[3].default_value=1.45
-                sb.inputs[2].default_value=0.7
-                sb.inputs[1].default_value=0.2
-    bpy.data.objects['ref_sphere'].select_set(True)
-    bpy.ops.object.delete()
-    bpy.ops.object.select_all(action='DESELECT') 
-    return None 
+                    matat=bpy.data.materials[atom_type]
+                if atom_type+'-bond' not in bpy.data.materials:
+                    matb=bpy.data.materials.new(name = str(atom_type)+'-bond')
+                else:
+                    matb=bpy.data.materials[atom_type+'-bond']
+                matb.use_nodes=True
+                matat.use_nodes=True
+                ta=matat.node_tree
+                tb=matb.node_tree
+                sa=ta.nodes['Principled BSDF']
+                sb=tb.nodes['Principled BSDF']
+                if atom_type in self.color_dict:
+                    COL=list(self.color_dict[atom_type]) + [1]
+                else:
+                    COL=list(colors.jmol_colors[atom_n[n]]) + [1]
+                if atom_type in self.metal_dict:
+                    metal=self.metal_dict[atom_type]
+                else:
+                    if atom_type in self.METALS:    
+                        metal  = 1
+                    else:
+                        metal=0
+                if atom_type in self.roughness_dict:
+                    rough=self.roughness_dict[atom_type]
+                else:
+                    rough=self.default_roughness
+                # if atom_type in specular_dict:
+                #     specular = specular_dict[atom_type]
+                # else:
+                #     specular = 0.5
+                sa.inputs[0].default_value=COL
+                sa.inputs[12].default_value=0
+                sa.inputs[3].default_value=1.45
+                sa.inputs[2].default_value=rough
+                sa.inputs[1].default_value=metal
+                if colorbonds is False:
+                    sb.inputs[0].default_value=[color,color,color,1]
+                    sb.inputs[12].default_value=0
+                    sb.inputs[3].default_value=1.45
+                    sb.inputs[2].default_value=0.5
+                    sb.inputs[1].default_value=0
+                else:
+                    sb.inputs[0].default_value=COL
+                    sb.inputs[12].default_value=0
+                    sb.inputs[3].default_value=1.45
+                    sb.inputs[2].default_value=0.7
+                    sb.inputs[1].default_value=0.2
+        bpy.data.objects['ref_sphere'].select_set(True)
+        bpy.ops.object.delete()
+        bpy.ops.object.select_all(action='DESELECT') 
+        return None 
+def group_atoms(atoms):
+    atom_types = set(atoms.get_chemical_symbols())
+    bpy.ops.object.select_all(action='DESELECT')
+    for atom_type in atom_types:
+        try:
+            bpy.ops.group.create(name=atom_type)
+        except Exception:
+            None
+    return None    
+
 def toggle(obj,SET=True):
         obj.hide_render = SET
         obj.hide_viewport = SET  # Optional: hide in the viewport as well
