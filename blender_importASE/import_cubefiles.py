@@ -5,7 +5,7 @@ if bpy.app.version[1] < 4:
 else:
     import openvdb as vdb
 import os
-from .setup_nodetree import visualize_edensity_node_group
+from .node_networks.electron_density_nodes import visualize_edensity_node_group
 from .utils import toggle
 import os.path
 

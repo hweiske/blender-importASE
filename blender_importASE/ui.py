@@ -5,13 +5,17 @@ from .import_cubefiles import cube2vol
 from .utils import atomcolors, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
 from .trajectory import move_atoms, move_bonds,move_longbonds
-from .nodeatoms import set_atoms_node_group, atoms_from_verts_node_group
+from .node_networks.nodes_atoms_and_bonds import set_atoms_node_group, atoms_and_bonds, read_structure
+from .node_networks.supercell import make_supercell
+from .node_networks.bond_mat import create_bondmat
+from .node_networks.outline import outline_objects
+from .node_networks.bond_node import make_bonds
 import time
-def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
+def import_ase_molecule(filepath, filename, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks", separate_collections=False,
-                        read_density=True, SUPERCELL=True, shift_cell=False, 
-                        imageslice=1, animate = True, **kwargs):
+                        read_density=True, shift_cell=False, 
+                        imageslice=1, animate = True, outline = True, **kwargs):
     start=time.time()
     atoms = ase.io.read(filepath,index = ':')
     end_read=time.time()
@@ -77,14 +81,28 @@ def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=Fa
             else:
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
     if representation == 'nodes':
-        set_atoms = set_atoms_node_group()
-        if animate is True and trajectory is True:
-            atoms_from_verts = atoms_from_verts_node_group(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=True)
+        
+        if animate and trajectory:
+            obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True)
         else:
-            atoms_from_verts = atoms_from_verts_node_group(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0], animate=False)
+            obj,mesh=read_structure(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=False)
+    
+        make_supercell(obj, atoms, 'GeometryNodes')
+        set_atoms = set_atoms_node_group()
+        create_bondmat()
+        atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes.001')
+       
+        bpy.context.object.modifiers['GeometryNodes.001'].node_group = atoms_from_verts
+        bpy.context.object.modifiers["GeometryNodes.001"]["Socket_2"] = 0.7
+        bpy.context.object.modifiers["GeometryNodes.001"]["Socket_3"] = 0.075
+        
+
         #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
-    #if representation == 'bonds_fromnodes':
-    #    bond_nodes = bond_nodes_node_group()
+    if representation == 'bonds_fromnodes':
+        list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation='b')
+
+        bond_nodes = make_bonds()
+
 
     if unit_cell is True and atoms.pbc.all() is not False:
         if separate_collections:
@@ -109,6 +127,7 @@ def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=Fa
             # bpy.data.objects[name].location.z += shift_vector[2]
     if trajectory is True and animate is True:
         if representation != 'nodes' and representation != 'bonds_fromnodes':
+            
             move_atoms(TRAJECTORY,list_of_atoms,imageslice)
             if representation != 'VDW':
                 if fix_bonds is True:
@@ -116,6 +135,17 @@ def import_ase_molecule(filepath, filename, matrix, resolution=16, colorbonds=Fa
                 else:
                     move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)  
     end=time.time()
+
+    if outline == True:
+        if representation != 'nodes' and representation != 'bonds_fromnodes' and representation != 'VDW':
+            outline_objects(list_of_atoms + list_of_bonds)
+        if representation == 'bonds_fromnodes':
+            outline_objects(list_of_atoms+[bonds_obj])
+        if representation == 'nodes':
+            outline_objects([obj],'GeometryNodes.002')
+        if representation == 'VDW':
+            outline_objects(list_of_atoms)
+
     print('Time to import atoms_object: ',end-end_read)
 
             

@@ -24,7 +24,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         bpy.context.view_layer.active_layer_collection.collection.objects[-1].name = atom.symbol
         if representation == "Balls'n'Sticks":
             bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [covalent_radii[
-                                                                                               atom.number] * 0.5 * scale, ] * 3
+                                                                                               atom.number]  * scale, ] * 3
         elif representation == 'Licorice':
             bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [0.1] * 3
         else:
