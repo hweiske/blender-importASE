@@ -42,6 +42,13 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         min=0.0,
         soft_max=10,
     )
+
+    resolution: bpy.props.IntProperty(
+        name='resolution',
+        description='resolution of bonds and atoms',
+        default=16,
+    )
+
     colorbonds: bpy.props.BoolProperty(
         name='colorbonds',
         description="Color the bonds according to the surrounding atoms",
@@ -122,6 +129,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
             row = box.row(align=True)
             for j in range(3):
                 row.prop(self, "supercell1", index=i * 3 + j, emboss=False, slider=True)
+        layout.prop(self, "resolution")
         layout.prop(self, "scale")
         layout.prop(self, 'colorbonds')
         layout.prop(self, 'fix_bonds')
@@ -145,6 +153,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                     SUPERCELL = True
                 break
             import_ase_molecule(filepath, file.name, matrix,
+                                resolution=self.resolution,
                                 color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
                                 unit_cell=self.unit_cell, representation=self.representation,
                                 separate_collections=self.separate_collections,

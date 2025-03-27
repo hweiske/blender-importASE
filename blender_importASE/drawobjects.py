@@ -5,11 +5,11 @@ import numpy as np
 import ase.neighborlist
 
 
-def draw_atoms(atoms, scale=1, representation="Balls'n'Sticks"):
+def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
     cnt = 0
     list_of_atoms=[]
     # bpy.ops.surface.primitive_nurbs_surface_sphere_add(radius=1, enter_editmode=False, align='WORLD', location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
-    bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 0), segments=16, ring_count=16)
+    bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 0), segments=resolution, ring_count=resolution)
     if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
     else:
@@ -47,7 +47,7 @@ def draw_atoms(atoms, scale=1, representation="Balls'n'Sticks"):
     return list_of_atoms
 
 
-def draw_bonds(atoms):
+def draw_bonds(atoms,resolution=16):
     list_of_bonds=[]
     nl = ase.neighborlist.NeighborList([covalent_radii[atomic_number] * 0.9 for atomic_number in atoms.numbers],
                                        self_interaction=False, bothways=True)
@@ -59,7 +59,7 @@ def draw_bonds(atoms):
         None
     # bpy.ops.surface.primitive_nurbs_surface_cylinder_add(radius=1.0, enter_editmode=False, align='WORLD',
     # location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
-    bond = create_half_bond()
+    bond = create_half_bond(resolution=resolution)
     cnt = 0
     for atom in atoms:
         if nl.get_neighbors(atom.index)[0].size > 0:
@@ -98,7 +98,7 @@ def draw_bonds(atoms):
     return list_of_bonds,nl
 
 
-def draw_bonds_new(atoms):
+def draw_bonds_new(atoms,resolution=16):
     #print("Using Longbond mech")
     list_of_bonds=[]
     bondlengths=[] # for animation
@@ -111,8 +111,8 @@ def draw_bonds_new(atoms):
     except Exception:
         pass
     # create half bond
-    hbond = create_half_bond()
-    bond = create_full_bond()
+    hbond = create_half_bond(resolution=resolution)
+    bond = create_full_bond(resolution=resolution)
     cnt = 0
     cell = atoms.get_cell()
     # make a list of all bonds
@@ -126,6 +126,12 @@ def draw_bonds_new(atoms):
                 if atoms.pbc.all():
                     #print(atoms.pbc, 'need to check for unit cell')
                     is_same_unit_cell = is_inside_cell(neighbor_position, cell)
+                    if is_same_unit_cell:
+                        dis=round(atoms.get_distance(atom.index,neighbor,mic=False),3)
+                        dismin=round(atoms.get_distance(atom.index,neighbor,mic=True),3)
+                        if dis != dismin:
+                            print(dis,dismin)
+                            is_same_unit_cell = False
                 else:
                     is_same_unit_cell = True
                 if is_same_unit_cell:
@@ -261,9 +267,9 @@ def draw_unit_cell(atoms):
     return None
 
 
-def create_half_bond():
+def create_half_bond(resolution=16):
     bpy.ops.object.select_all(action='DESELECT')
-    bpy.ops.mesh.primitive_cylinder_add(vertices=16)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=resolution)
     if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
     else:
@@ -289,9 +295,9 @@ def create_half_bond():
     return bond
 
 
-def create_full_bond():
+def create_full_bond(resolution=16):
     bpy.ops.object.select_all(action='DESELECT')
-    bpy.ops.mesh.primitive_cylinder_add(vertices=16)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=resolution)
     if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
     else:

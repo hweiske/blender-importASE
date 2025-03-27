@@ -576,6 +576,7 @@ def newShader(id, r, g, b):
     
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
+    nodes.new(type='ShaderNodeBsdfPrincipled')
     s=nodes["Principled BSDF"]
     s.inputs[0].default_value=(r,g,b,1) #color
     s.inputs[1].default_value=0 #metal

@@ -22,13 +22,13 @@ class RenderImageOperator(bpy.types.Operator,ExportHelper):
     #    description="basename of the image",
     #        default='image'
     #        )
-    #imagepath:bpy.props.StringProperty(
-     #   name='imagepath',
-     #   description="path for the image",
-     #       default='',
-     #       subtype='FILE_PATH'
-    #        )
-    #imagepath = bpy.props.StringProperty(subtype="FILE_PATH") 
+    imagepath:bpy.props.StringProperty(
+        name='imagepath',
+        description="path for the image",
+            default='',
+            subtype='FILE_PATH'
+            )
+    imagepath = bpy.props.StringProperty(subtype="FILE_PATH") 
     def execute(self, context):
         # Set up scene
         scene = bpy.context.scene
