@@ -1,4 +1,5 @@
 import bpy, mathutils
+from ase.data import chemical_symbols
 
 #initialize cutoff_group node group
 def cutoff_group_node_group():
@@ -192,7 +193,7 @@ def cutoff_group_node_group():
     delete_geometry_001.width, delete_geometry_001.height = 140.0, 100.0
     delete_geometry.width, delete_geometry.height = 140.0, 100.0
     compare.width, compare.height = 140.0, 100.0
-    compare_001.width, compare_001.height = 140.0, 100.0
+    compare_001.width, compare_001.height = 140.0, 100.0397
     compare_003.width, compare_003.height = 140.0, 100.0
     delete_geometry_004.width, delete_geometry_004.height = 140.0, 100.0
     delete_geometry_005.width, delete_geometry_005.height = 140.0, 100.0
@@ -260,6 +261,7 @@ def cutoff_group_node_group():
     return cutoff_group
 #initialize supercell node group
 def supercell_node_group(atoms):
+    cutoff_group=cutoff_group_node_group()
     supercell = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "supercell")
 
     supercell.color_tag = 'NONE'
@@ -425,19 +427,19 @@ def supercell_node_group(atoms):
     group_input_1.name = "Group Input"
 
     #node Realize Instances
-    realize_instances = supercell.nodes.new("GeometryNodeRealizeInstances")
-    realize_instances.name = "Realize Instances"
+    realize_instances_beforevectorcutoff = supercell.nodes.new("GeometryNodeRealizeInstances")
+    realize_instances_beforevectorcutoff.name = "Realize Instances"
     #Selection
-    realize_instances.inputs[1].default_value = True
+    realize_instances_beforevectorcutoff.inputs[1].default_value = True
     #Realize All
-    realize_instances.inputs[2].default_value = True
+    realize_instances_beforevectorcutoff.inputs[2].default_value = True
     #Depth
-    realize_instances.inputs[3].default_value = 0
+    realize_instances_beforevectorcutoff.inputs[3].default_value = 0
 
     #node Group.001
-    group_001 = supercell.nodes.new("GeometryNodeGroup")
-    group_001.name = "Group.001"
-    group_001.node_tree = cutoff_group
+    cutoff_group_check = supercell.nodes.new("GeometryNodeGroup")
+    cutoff_group_check.name = "Group.001"
+    cutoff_group_check.node_tree = cutoff_group
 
     #node Mesh Line.002
     mesh_line_002 = supercell.nodes.new("GeometryNodeMeshLine")
@@ -678,12 +680,7 @@ def supercell_node_group(atoms):
     #Depth
     realize_instances_001.inputs[3].default_value = 0
 
-    #node Named Attribute
-    named_attribute = supercell.nodes.new("GeometryNodeInputNamedAttribute")
-    named_attribute.name = "Named Attribute"
-    named_attribute.data_type = 'FLOAT'
-    #Name
-    named_attribute.inputs[0].default_value = "element"
+    
 
     #node Join Geometry
     join_geometry = supercell.nodes.new("GeometryNodeJoinGeometry")
@@ -699,77 +696,121 @@ def supercell_node_group(atoms):
     merge_by_distance.inputs[2].default_value = 0.0010000000474974513
 
     #node Reroute.008
-    reroute_008 = supercell.nodes.new("NodeReroute")
-    reroute_008.name = "Reroute.008"
-    reroute_008.socket_idname = "NodeSocketGeometry"
+    reroute_element = supercell.nodes.new("NodeReroute")
+    reroute_element.name = "Reroute.008"
+    reroute_element.socket_idname = "NodeSocketGeometry"
     #node Reroute.009
     reroute_009 = supercell.nodes.new("NodeReroute")
     reroute_009.name = "Reroute.009"
     reroute_009.socket_idname = "NodeSocketGeometry"
     #node Switch.006
-    switch_006 = supercell.nodes.new("GeometryNodeSwitch")
-    switch_006.name = "Switch.006"
-    switch_006.input_type = 'GEOMETRY'
+    switch_vectorcutoff = supercell.nodes.new("GeometryNodeSwitch")
+    switch_vectorcutoff.name = "Switch.006"
+    switch_vectorcutoff.input_type = 'GEOMETRY'
     #Switch
-    switch_006.inputs[0].default_value = False
+    switch_vectorcutoff.inputs[0].default_value = False
 
     #node Group Input.004
-    group_input_004 = supercell.nodes.new("NodeGroupInput")
-    group_input_004.name = "Group Input.004"
+    group_input_vectorcutoff = supercell.nodes.new("NodeGroupInput")
+    group_input_vectorcutoff.name = "Group Input.004"
 
+    
+    #node Named Attribute
+    element_attribute = supercell.nodes.new("GeometryNodeInputNamedAttribute")
+    element_attribute.name = "Named Attribute"
+    element_attribute.data_type = 'FLOAT'
+    #Name
+    element_attribute.inputs[0].default_value = "element"
 
+    
     #initialize supercell_001 links
     #compare.Result -> delete_geometry.Selection
-    for number in set(atoms.get_atomic_numbers()):
+
+    # named attribute into compare node
+    # compare into delete
+    # delete into switch[2]
+    # input_el into switch[0]
+    # reroute_008 into switch[1]
+
+    #after n == 1
+    #old_delete into delete_geometry
+    #old_switch into switch[1]
+    # if n len
+    #switch into realize istnance_001?
+
+    group_input_element=supercell.nodes.new("NodeGroupInput")
+    group_input_element.name = "Group Input Element"
+    group_input_element.label = "Element"
+    
+    for n,number in enumerate(set(atoms.get_atomic_numbers())):
         sym=chemical_symbols[number]
         #Socket cutoff_H
-        cutoff_h_socket = supercell.interface.new_socket(name = f"cutoff_{sym}", in_out='INPUT', socket_type = 'NodeSocketBool')
-        cutoff_h_socket.default_value = False
-        cutoff_h_socket.attribute_domain = 'POINT'
+        cutoff_element_socket = supercell.interface.new_socket(name = f"cutoff_{sym}", in_out='INPUT', socket_type = 'NodeSocketBool')
+        cutoff_element_socket.default_value = False
+        cutoff_element_socket.attribute_domain = 'POINT'
+        
+
+        is_element = supercell.nodes.new("FunctionNodeCompare")
+        is_element.label = f"is_element_{sym}"
+        is_element.name = "Compare"
+        is_element.data_type = 'INT'
+        is_element.mode = 'ELEMENT'
+        is_element.operation = 'EQUAL'
+        is_element.inputs[3].default_value = number
 
 
-        compare = supercell.nodes.new("FunctionNodeCompare")
-        compare.label = f"is_element_{sym}"
-        compare.name = "Compare"
-        compare.data_type = 'INT'
-        compare.mode = 'ELEMENT'
-        compare.operation = 'EQUAL'
-        compare.inputs[1].default_value = number
-        compare.location = (400, -100+200*n)
+        
 
         #node Delete Geometry
         delete_geometry_element = supercell.nodes.new("GeometryNodeDeleteGeometry")
         delete_geometry_element.name = f"Delete Geometry_{sym}"
         delete_geometry_element.domain = 'POINT'
         delete_geometry_element.mode = 'ALL'
-        delete_geometry_element.location = (700, -100+200*n)
+        
         
         #node switch
-        switch_cutoff=supercell.nodes.new("GeometryNodeSwitch")
-        switch_cutoff.name = f"Switch_{sym}"
-        switch_cutoff.label = f"{sym}"
-        switch_cutoff.input_type = 'GEOMETRY'
-        switch_cutoff.inputs[0].default_value = False
+        switch_element=supercell.nodes.new("GeometryNodeSwitch")
+        switch_element.name = f"Switch_{sym}"
+        switch_element.label = f"{sym}"
+        switch_element.input_type = 'GEOMETRY'
+        switch_element.inputs[0].default_value = False
         
-        supercell.links.new(compare.outputs[0], delete_geometry_element.inputs[1])
-        supercell.links.new(named_attribute.outputs[0], compare.inputs[0])
-        supercell.links.new(delete_geometry_element.outputs[0], switch_cutoff.inputs[2])
+        supercell.links.new(is_element.outputs[0], delete_geometry_element.inputs[1])
+        supercell.links.new(element_attribute.outputs[0], is_element.inputs[2])
+        
+        supercell.links.new(group_input_element.outputs[14+n], switch_element.inputs[0])
+        supercell.links.new(delete_geometry_element.outputs[0], switch_element.inputs[2])
+
         if n == 0:
-            supercell.links.new(switch_cutoff.outputs[0], realize_instances.inputs[0])
+            supercell.links.new(reroute_element.outputs[0], delete_geometry_element.inputs[0])
+            supercell.links.new(reroute_element.outputs[0], switch_element.inputs[1])
+
         else:
-            supercell.links.new(old.outputs[0],switch_cutoff.inputs[0])
-        supercell.links.new(reroute_008.outputs[0], switch_cutoff.inputs[1])
 
-        old=switch_cutoff
-        compare.width, compare.height = 140.0, 100.0
-        group.width, group.height = 140.0, 100.0
+            supercell.links.new(old_switch.outputs[0],switch_element.inputs[1])
+            supercell.links.new(old_switch.outputs[0],delete_geometry_element.inputs[0])
 
-
+            #supercell.links.new(old_delete.outputs[0], switch_element.inputs[2])
+            if n == len(set(atoms.get_atomic_numbers()))-1:
+                supercell.links.new(switch_element.outputs[0], realize_instances_beforevectorcutoff.inputs[0])
+        old_switch=switch_element
+        old_delete=delete_geometry_element
+        is_element.width, is_element.height = 140.0, 100.0
+        switch_element.width, switch_element.height = 140.0, 100.0
+        is_element.location = (400, 1000-200*n)
+        delete_geometry_element.location = (700, 1000-200*n)
+        switch_element.location = (1000, 1000-200*n)
+    element_attribute.location = (100, 600)
+    group_input_element.location = (-100, 1000)
+    supercell.links.new(realize_instances_beforevectorcutoff.outputs[0], switch_vectorcutoff.inputs[1])
+    supercell.links.new(realize_instances_beforevectorcutoff.outputs[0], cutoff_group_check.inputs[0])
+    supercell.links.new(group_input_vectorcutoff.outputs[7], switch_vectorcutoff.inputs[0])
+    supercell.links.new(reroute_009.outputs[0], switch_vectorcutoff.inputs[2])
 
 
     #Set parents
-    realize_instances.parent = frame_002
-    group_001.parent = frame_002
+    realize_instances_beforevectorcutoff.parent = frame_002
+    cutoff_group_check.parent = frame_002
     mesh_line_002.parent = frame_001
     mesh_line.parent = frame_001
     mesh_line_001.parent = frame_001
@@ -799,8 +840,8 @@ def supercell_node_group(atoms):
     instance_on_points.location = (637.8240356445312, 127.73196411132812)
     group_output_1.location = (2785.444580078125, 506.9361267089844)
     group_input_1.location = (376.5082092285156, -185.8363494873047)
-    realize_instances.location = (29.2001953125, -39.510223388671875)
-    group_001.location = (192.3704833984375, -60.467041015625)
+    realize_instances_beforevectorcutoff.location = (29.2001953125, -39.510223388671875)
+    cutoff_group_check.location = (192.3704833984375, -60.467041015625)
     mesh_line_002.location = (28.935646057128906, -338.6833801269531)
     mesh_line.location = (53.452327728271484, -44.30804443359375)
     mesh_line_001.location = (62.39809036254883, -179.75738525390625)
@@ -835,13 +876,12 @@ def supercell_node_group(atoms):
     frame_004.location = (-1324.3333740234375, -127.83333587646484)
     frame_005.location = (-1077.6666259765625, 801.1666870117188)
     realize_instances_001.location = (2425.327880859375, 437.6210021972656)
-    named_attribute.location = (533.5164184570312, 397.7518310546875)
     join_geometry.location = (2189.292724609375, 361.0550842285156)
     merge_by_distance.location = (2605.523193359375, 482.2424011230469)
-    reroute_008.location = (909.9058227539062, 92.05680084228516)
+    reroute_element.location = (909.9058227539062, 92.05680084228516)
     reroute_009.location = (1616.8719482421875, -223.92974853515625)
-    switch_006.location = (1843.2039794921875, 658.1240234375)
-    group_input_004.location = (1098.405029296875, 399.9941101074219)
+    switch_vectorcutoff.location = (1843.2039794921875, 658.1240234375)
+    group_input_vectorcutoff.location = (1098.405029296875, 399.9941101074219)
 
     #Set dimensions
     frame_002.width, frame_002.height = 361.333251953125, 310.5
@@ -850,8 +890,8 @@ def supercell_node_group(atoms):
     instance_on_points.width, instance_on_points.height = 140.0, 100.0
     group_output_1.width, group_output_1.height = 140.0, 100.0
     group_input_1.width, group_input_1.height = 140.0, 100.0
-    realize_instances.width, realize_instances.height = 140.0, 100.0
-    group_001.width, group_001.height = 140.0, 100.0
+    realize_instances_beforevectorcutoff.width, realize_instances_beforevectorcutoff.height = 140.0, 100.0
+    cutoff_group_check.width, cutoff_group_check.height = 140.0, 100.0
     mesh_line_002.width, mesh_line_002.height = 211.4036865234375, 100.0
     mesh_line.width, mesh_line.height = 211.4036865234375, 100.0
     mesh_line_001.width, mesh_line_001.height = 186.6614227294922, 100.0
@@ -886,13 +926,13 @@ def supercell_node_group(atoms):
     frame_004.width, frame_004.height = 204.666748046875, 541.8333740234375
     frame_005.width, frame_005.height = 219.99993896484375, 222.8333740234375
     realize_instances_001.width, realize_instances_001.height = 140.0, 100.0
-    named_attribute.width, named_attribute.height = 140.0, 100.0
+    element_attribute.width, element_attribute.height = 140.0, 100.0
     join_geometry.width, join_geometry.height = 140.0, 100.0
     merge_by_distance.width, merge_by_distance.height = 140.0, 100.0
-    reroute_008.width, reroute_008.height = 14.5, 100.0
+    reroute_element.width, reroute_element.height = 14.5, 100.0
     reroute_009.width, reroute_009.height = 14.5, 100.0
-    switch_006.width, switch_006.height = 140.0, 100.0
-    group_input_004.width, group_input_004.height = 140.0, 100.0
+    switch_vectorcutoff.width, switch_vectorcutoff.height = 140.0, 100.0
+    group_input_vectorcutoff.width, group_input_vectorcutoff.height = 140.0, 100.0
 
     #initialize supercell links
     #group_input_1.Geometry -> instance_on_points.Instance
@@ -926,7 +966,7 @@ def supercell_node_group(atoms):
     #vector_math_002.Vector -> mesh_line_002.Start Location
     supercell.links.new(vector_math_002.outputs[0], mesh_line_002.inputs[2])
     #realize_instances.Geometry -> group_001.Geometry
-    supercell.links.new(realize_instances.outputs[0], group_001.inputs[0])
+    #supercell.links.new(realize_instances_beforevectorcutoff.outputs[0], cutoff_group_check.inputs[0])
     #reroute_002.Output -> mesh_line.Count
     supercell.links.new(reroute_002.outputs[0], mesh_line.inputs[0])
     #reroute_004.Output -> mesh_line_001.Count
@@ -994,90 +1034,74 @@ def supercell_node_group(atoms):
     #realize_instances_001.Geometry -> merge_by_distance.Geometry
     supercell.links.new(realize_instances_001.outputs[0], merge_by_distance.inputs[0])
     #instance_on_points.Instances -> reroute_008.Input
-    supercell.links.new(instance_on_points.outputs[0], reroute_008.inputs[0])
+    supercell.links.new(instance_on_points.outputs[0], reroute_element.inputs[0])
     #group_input_1.Geometry -> reroute_009.Input
     supercell.links.new(group_input_1.outputs[0], reroute_009.inputs[0])
     #group_001.Geometry -> switch_006.True
-    supercell.links.new(group_001.outputs[0], switch_006.inputs[2])
+    supercell.links.new(cutoff_group_check.outputs[0], switch_vectorcutoff.inputs[2])
     #reroute_008.Output -> realize_instances.Geometry
-    supercell.links.new(reroute_008.outputs[0], realize_instances.inputs[0])
+    #supercell.links.new(reroute_element.outputs[0], realize_instances.inputs[0])
     #reroute_008.Output -> switch_006.False
-    supercell.links.new(reroute_008.outputs[0], switch_006.inputs[1])
+  #  supercell.links.new(reroute_element.outputs[0], switch_vectorcutoff.inputs[1])
     #group_input_004.+x -> group_001.+x
-    supercell.links.new(group_input_004.outputs[9], group_001.inputs[1])
+    supercell.links.new(group_input_vectorcutoff.outputs[8], cutoff_group_check.inputs[1])
     #group_input_004.+y -> group_001.+y
-    supercell.links.new(group_input_004.outputs[10], group_001.inputs[2])
+    supercell.links.new(group_input_vectorcutoff.outputs[9], cutoff_group_check.inputs[2])
     #group_input_004.+z -> group_001.+z
-    supercell.links.new(group_input_004.outputs[11], group_001.inputs[3])
+    supercell.links.new(group_input_vectorcutoff.outputs[10], cutoff_group_check.inputs[3])
     #group_input_004.-x -> group_001.-x
-    supercell.links.new(group_input_004.outputs[12], group_001.inputs[4])
+    supercell.links.new(group_input_vectorcutoff.outputs[11], cutoff_group_check.inputs[4])
     #group_input_004.-y -> group_001.-y
-    supercell.links.new(group_input_004.outputs[13], group_001.inputs[5])
+    supercell.links.new(group_input_vectorcutoff.outputs[12], cutoff_group_check.inputs[5])
     #group_input_004.-z -> group_001.-z
-    supercell.links.new(group_input_004.outputs[14], group_001.inputs[6])
+    supercell.links.new(group_input_vectorcutoff.outputs[13], cutoff_group_check.inputs[6])
+    
     #switch_006.Output -> join_geometry.Geometry
-    supercell.links.new(switch_006.outputs[0], join_geometry.inputs[0])
+    supercell.links.new(switch_vectorcutoff.outputs[0], join_geometry.inputs[0])
 
 
     #initialize supercell_001 nodes
     #node Compare
-    compare = supercell_001.nodes.new("FunctionNodeCompare")
-    compare.name = "Compare"
-    compare.hide = True
-    compare.data_type = 'INT'
-    compare.mode = 'ELEMENT'
-    compare.operation = 'EQUAL'
+    is_element = supercell.nodes.new("FunctionNodeCompare")
+    is_element.name = "Compare"
+    is_element.hide = True
+    is_element.data_type = 'INT'
+    is_element.mode = 'ELEMENT'
+    is_element.operation = 'EQUAL'
     #A_INT
-    compare.inputs[2].default_value = 0
+    is_element.inputs[2].default_value = 0
     #B_INT
-    compare.inputs[3].default_value = 1
+    is_element.inputs[3].default_value = 1
 
     #node Delete Geometry
-    delete_geometry = supercell_001.nodes.new("GeometryNodeDeleteGeometry")
+    delete_geometry = supercell.nodes.new("GeometryNodeDeleteGeometry")
     delete_geometry.name = "Delete Geometry"
     delete_geometry.hide = True
     delete_geometry.domain = 'POINT'
     delete_geometry.mode = 'ALL'
 
     #node Switch.007
-    switch_007 = supercell_001.nodes.new("GeometryNodeSwitch")
+    switch_007 = supercell.nodes.new("GeometryNodeSwitch")
     switch_007.name = "Switch.007"
     switch_007.hide = True
     switch_007.input_type = 'GEOMETRY'
 
-    #node Group Input.003
-    group_input_003 = supercell_001.nodes.new("NodeGroupInput")
-    group_input_003.name = "Group Input.003"
-
-
-
-
-
     
-
-
-    #group_input_003.cutoff_H -> switch_007.Switch
-    supercell.links.new(group_input_003.outputs[8], switch_007.inputs[0])
-    #delete_geometry.Geometry -> switch_007.True
-    supercell.links.new(delete_geometry.outputs[0], switch_007.inputs[2])
-
-
-
     return supercell
 
 
-def make_supercell(obj, atoms,modifier='GeometryNodes'):
+def make_supercell(list_of_objects, atoms,modifier='GeometryNodes'):
     if any(atoms.pbc):
         if len(atoms.cell) == 2:
             atoms.cell.append([0,0,50])
     else:
         'print()'
         return
-    cutoff_group_node_group()
-    supercell=supercell_node_group(atoms)
     
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.modifier_add(type='NODES')
-    obj.modifiers[modifier].node_group = supercell
+    supercell=supercell_node_group(atoms)
+    for obj in list_of_objects:
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.modifier_add(type='NODES')
+        obj.modifiers[modifier].node_group = supercell
     return

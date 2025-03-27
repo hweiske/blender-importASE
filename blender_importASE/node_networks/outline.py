@@ -30,7 +30,7 @@ def outline_node_group():
 
     #Socket global_thickness
     global_thickness_socket = outline.interface.new_socket(name = "global_thickness", in_out='INPUT', socket_type = 'NodeSocketBool')
-    global_thickness_socket.default_value = True
+    global_thickness_socket.default_value = False
     global_thickness_socket.attribute_domain = 'POINT'
     global_thickness_socket.description = "whether to choose the value in the switch or use individual values. usually leave true. set Value in the large purple box"
 
@@ -187,6 +187,7 @@ def outline_node_group():
 def outline_color_node_group(mat):
 
     outline_color = mat.node_tree
+    print(outline_color)
     #start with a clean node tree
     for node in outline_color.nodes:
         outline_color.nodes.remove(node)
@@ -288,13 +289,19 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
         mat = bpy.data.materials.new(name = "outline_color")
     else:
         mat = bpy.data.materials["outline_color"]
-    outline_color = outline_color_node_group(mat)
     mat.use_nodes = True
+    outline_color = outline_color_node_group(mat)
+    
+
 #initialize outline_color node group
     node = outline_node_group()
     for obj in list_of_objects:
+        if obj.data.materials:
+            obj.data.materials[0] = mat
+        else:
+            obj.data.materials.append(mat)
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_add(type='NODES')
         node = bpy.data.node_groups["outline"]
         bpy.context.object.modifiers[modifier].node_group = node
-   
+        

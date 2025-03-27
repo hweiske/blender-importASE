@@ -273,7 +273,8 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
         atoms_and_bonds.links.new(element_attribute.outputs[0], compare.inputs[2])
         atoms_and_bonds.links.new(group.outputs[0], set_material.inputs[0])
         atoms_and_bonds.links.new(set_material.outputs[0], join_geometry_atoms.inputs[0])
-    
+
+        
         
         #switches
         if n > 0:
@@ -1627,4 +1628,9 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_add(type='NODES')
     obj.modifiers[modifier].node_group = atoms_and_bonds
+    #attach materials to atoms  
+    for number in set(atoms.get_atomic_numbers()):
+        sym = chemical_symbols[number]
+        obj.data.materials.append(bpy.data.materials[sym])
+    obj.data.materials.append(bpy.data.materials["BOND_nodes"])
     return  atoms_and_bonds
