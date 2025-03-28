@@ -24,6 +24,7 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
     atoms = ase.io.read(filepath,index = ':')
     end_read=time.time()
     print('Time to read file: ',end_read-start)
+    trajectory = False
     if isinstance(atoms[0],Atoms) and len(atoms) > 1:
         trajectory = True
         TRAJECTORY=atoms.copy()[1:]
@@ -31,7 +32,6 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
         if animate is False:
             atoms = TRAJECTORY[-1]
     elif len(atoms) == 1:
-        trajectory = False
         atoms=atoms[0]
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
     cell = atoms.cell
@@ -81,7 +81,7 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
             if added:
                 modifier_counter += 1
                 modifier_chosen=f'.00{modifier_counter}'
-        set_atoms = set_atoms_node_group()
+        set_atoms_node_group()
         create_bondmat()
         
         atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen)
@@ -101,7 +101,7 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
             if added:
                 modifier_counter += 1
                 modifier_chosen=f'.00{modifier_counter}'
-        bond_nodes = make_bonds()
+        make_bonds()
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
 
@@ -134,7 +134,7 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
                     move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)  
     end=time.time()
 
-    if outline == True:
+    if outline:
         if representation != 'nodes' and representation != 'bonds_fromnodes' and representation != 'VDW':
             outline_objects(list_of_atoms + list_of_bonds)
         if representation == 'bonds_fromnodes':

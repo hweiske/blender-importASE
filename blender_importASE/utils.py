@@ -204,7 +204,7 @@ def group_atoms(atoms):
         try:
             bpy.ops.group.create(name=atom_type)
         except Exception:
-            None
+            pass
     return None    
 
 def toggle(obj,SET=True):

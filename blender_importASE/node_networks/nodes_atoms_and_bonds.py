@@ -1,4 +1,4 @@
-import bpy, mathutils
+import bpy
 from ..utils import atomcolors
 from ase.data import covalent_radii, chemical_symbols, colors
 

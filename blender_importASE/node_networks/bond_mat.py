@@ -1,4 +1,4 @@
-import bpy, mathutils
+import bpy
 
 def bond_nodes_node_group(mat):
 
@@ -166,5 +166,5 @@ def create_bondmat():
         return
     mat.use_nodes = True
     #initialize BOND_nodes node group
-    bond_nodes = bond_nodes_node_group(mat)
+    bond_nodes_node_group(mat)
 

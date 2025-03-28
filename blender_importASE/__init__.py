@@ -2,7 +2,6 @@
 
 import bpy
 from bpy_extras.io_utils import ImportHelper
-import numpy as np
 from os.path import join
 from .ui import import_ase_molecule
 
@@ -151,7 +150,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         for file in self.files:
             filepath = join(self.directory, file.name)
             
-            if self.overwrite == True and self.representation != 'nodes':
+            if self.overwrite and self.representation != 'nodes':
                 self.representation = 'nodes'
             import_ase_molecule(filepath, file.name,
                                 resolution=self.resolution,

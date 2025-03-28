@@ -1,5 +1,4 @@
 from ase.data import chemical_symbols
-from ase.io import read
 import bpy
 def hide_node_group(atoms):
     hide_atoms = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "hide atoms")
@@ -70,7 +69,7 @@ def hide_node_group(atoms):
         
         hide_atoms.links.new(group_input.outputs[1+n], switch_element.inputs[0])
         hide_atoms.links.new(delete_geometry_element.outputs[0], switch_element.inputs[2])
-
+        old_switch = switch_element
         if n == 0:
             hide_atoms.links.new(group_input.outputs[0], delete_geometry_element.inputs[0])
             hide_atoms.links.new(group_input.outputs[0], switch_element.inputs[1])
@@ -83,8 +82,7 @@ def hide_node_group(atoms):
             #supercell.links.new(old_delete.outputs[0], switch_element.inputs[2])
             if n == len(set(atoms.get_atomic_numbers()))-1:
                 hide_atoms.links.new(switch_element.outputs[0], group_output.inputs[0])
-        old_switch=switch_element
-        old_delete=delete_geometry_element
+        # old_delete=delete_geometry_element
         is_element.width, is_element.height = 140.0, 100.0
         switch_element.width, switch_element.height = 140.0, 100.0
         is_element.location = (500, 1000-200*n)
