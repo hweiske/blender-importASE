@@ -30,8 +30,9 @@ def hide_node_group(atoms):
     geometry_socket = hide_atoms.interface.new_socket(name = "Geometry", in_out='OUTPUT', socket_type = 'NodeSocketGeometry')
     geometry_socket.attribute_domain = 'POINT'
 
-    
+    old_switch = group_input
     for n,number in enumerate(set(atoms.get_atomic_numbers())):
+
         sym=chemical_symbols[number]
         #Socket cutoff_H
         cutoff_element_socket = hide_atoms.interface.new_socket(name = f"cutoff_{sym}", in_out='INPUT', socket_type = 'NodeSocketBool')
@@ -69,20 +70,15 @@ def hide_node_group(atoms):
         
         hide_atoms.links.new(group_input.outputs[1+n], switch_element.inputs[0])
         hide_atoms.links.new(delete_geometry_element.outputs[0], switch_element.inputs[2])
-        old_switch = switch_element
-        if n == 0:
-            hide_atoms.links.new(group_input.outputs[0], delete_geometry_element.inputs[0])
-            hide_atoms.links.new(group_input.outputs[0], switch_element.inputs[1])
 
-        else:
+        hide_atoms.links.new(old_switch.outputs[0],switch_element.inputs[1])
+        hide_atoms.links.new(old_switch.outputs[0],delete_geometry_element.inputs[0])
 
-            hide_atoms.links.new(old_switch.outputs[0],switch_element.inputs[1])
-            hide_atoms.links.new(old_switch.outputs[0],delete_geometry_element.inputs[0])
-
-            #supercell.links.new(old_delete.outputs[0], switch_element.inputs[2])
-            if n == len(set(atoms.get_atomic_numbers()))-1:
-                hide_atoms.links.new(switch_element.outputs[0], group_output.inputs[0])
-        # old_delete=delete_geometry_element
+        #supercell.links.new(old_delete.outputs[0], switch_element.inputs[2])
+        if n == len(set(atoms.get_atomic_numbers()))-1:
+            hide_atoms.links.new(switch_element.outputs[0], group_output.inputs[0])
+        old_switch=switch_element
+        ## old_delete=delete_geometry_element
         is_element.width, is_element.height = 140.0, 100.0
         switch_element.width, switch_element.height = 140.0, 100.0
         is_element.location = (500, 1000-200*n)

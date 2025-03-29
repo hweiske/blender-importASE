@@ -101,7 +101,7 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
             if added:
                 modifier_counter += 1
                 modifier_chosen=f'.00{modifier_counter}'
-        make_bonds()
+        bonds_obj = make_bonds()
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
 
@@ -118,11 +118,6 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
                 density_obj.location.x += shift_vector[0]
                 density_obj.location.y += shift_vector[1]
                 density_obj.location.z += shift_vector[2]
-            # name = cube2vol(filepath)
-            # name = name.split('.')[0].split("/")[-1]
-            # bpy.data.objects[name].location.x += shift_vector[0]
-            # bpy.data.objects[name].location.y += shift_vector[1]
-            # bpy.data.objects[name].location.z += shift_vector[2]
     if trajectory is True and animate is True:
         if representation != 'nodes' and representation != 'bonds_fromnodes':
             
