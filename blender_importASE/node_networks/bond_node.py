@@ -2,12 +2,10 @@ import bpy
 
 #initialize bonds node group
 def bonds_geometry_node_group():
-    print("check", 'BONDS_GEOMETRY' in bpy.data.node_groups)
-    if not 'BONDS_GEOMETRY' in bpy.data.node_groups:
+    if 'BONDS_GEOMETRY' not in bpy.data.node_groups:
         print("Work")
         bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "BONDS_GEOMETRY")
     else:
-        print("Return")
         return
 
     bonds.color_tag = 'NONE'
