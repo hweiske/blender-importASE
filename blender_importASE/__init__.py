@@ -106,7 +106,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     overwrite: bpy.props.BoolProperty(
         name='overwrite',
         description='overwrite representation to "nodes" for animations',
-        default=True
+        default=False
     )
     outline: bpy.props.BoolProperty(
         name='outline',
@@ -149,7 +149,8 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     def execute(self, context):
         for file in self.files:
             filepath = join(self.directory, file.name)
-            
+            # this section causes the representation to be ignored when overwrite is checked
+            # we should come up with something else for now set default to false
             if self.overwrite and self.representation != 'nodes':
                 self.representation = 'nodes'
             import_ase_molecule(filepath, file.name,

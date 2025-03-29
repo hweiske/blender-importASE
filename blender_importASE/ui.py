@@ -20,7 +20,6 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
     start=time.time()
     modifier_counter = 0
     modifier_chosen=''
-
     atoms = ase.io.read(filepath,index = ':')
     end_read=time.time()
     print('Time to read file: ',end_read-start)
@@ -44,7 +43,6 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
 
     atomcolor.setup_materials(atoms, colorbonds=colorbonds, color=color)
     if representation != 'bonds_fromnodes' and representation != 'nodes':
-        
         my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
         bpy.context.scene.collection.children.link(my_coll)
         layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
@@ -58,7 +56,7 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
         my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
         bpy.context.scene.collection.children.link(my_coll)
-        layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
+        layer_collection = layer_collection = bpy.context.view_layer.layer_collection.children.children[my_coll.name]
         bpy.context.view_layer.active_layer_collection = layer_collection
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
@@ -94,13 +92,20 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
 
         #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
     if representation == 'bonds_fromnodes':
-        
+        my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
+        bpy.context.scene.collection.children.link(my_coll)
+        layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
+        bpy.context.view_layer.active_layer_collection = layer_collection
+        group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation='b')
+
         if add_supercell:
             added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen)
             if added:
                 modifier_counter += 1
                 modifier_chosen=f'.00{modifier_counter}'
+        scene_collection = bpy.context.view_layer.layer_collection
+        bpy.context.view_layer.active_layer_collection = scene_collection
         bonds_obj = make_bonds()
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'

@@ -2,9 +2,12 @@ import bpy
 
 #initialize bonds node group
 def bonds_geometry_node_group():
-    if 'BONDS_GEOMETRY' in bpy.data.node_groups:
+    print("check", 'BONDS_GEOMETRY' in bpy.data.node_groups)
+    if not 'BONDS_GEOMETRY' in bpy.data.node_groups:
+        print("Work")
         bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "BONDS_GEOMETRY")
     else:
+        print("Return")
         return
 
     bonds.color_tag = 'NONE'
@@ -1422,8 +1425,7 @@ def bonds_node_group(mat):
 
 
 def make_bonds():
-    
-    bpy.primitive_cube_add(size=1, location=(0, 0, 0))
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0))
     bonds_obj = bpy.context.object
     bonds_obj.name = "bonds_object"
     if "BONDS_MAT" not in bpy.data.materials:
