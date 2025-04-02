@@ -1096,4 +1096,4 @@ def make_supercell(list_of_objects, atoms,modifier='GeometryNodes'):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_add(type='NODES')
         obj.modifiers[modifier].node_group = supercell
-    return
+    return True

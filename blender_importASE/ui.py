@@ -12,7 +12,7 @@ from .node_networks.outline import outline_objects
 from .node_networks.bond_node import make_bonds
 from .node_networks.hide_atoms import hide_atoms
 import time
-def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
+def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks",
                         read_density=True, shift_cell=False, 
@@ -32,6 +32,8 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
             atoms = TRAJECTORY[-1]
     elif len(atoms) == 1:
         atoms=atoms[0]
+    if overwrite and representation != 'nodes' and animate and trajectory:
+        self.representation = 'nodes'
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
     cell = atoms.cell
     shift_vector = 0.5 * cell[0] + 0.5 * cell[1] + 0.5 * cell[2]
@@ -41,12 +43,12 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
     #        atoms=make_supercell(atoms,matrix)
     atomcolor=atomcolors()
 
-    atomcolor.setup_materials(atoms, colorbonds=colorbonds, color=color)
+    atomcolor.setup_materials(atoms, colorbonds=colorbonds, color=color)        
+    my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
+    bpy.context.scene.collection.children.link(my_coll)
+    layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
+    bpy.context.view_layer.active_layer_collection = layer_collection
     if representation != 'bonds_fromnodes' and representation != 'nodes':
-        my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
-        bpy.context.scene.collection.children.link(my_coll)
-        layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
-        bpy.context.view_layer.active_layer_collection = layer_collection
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         if representation != 'VDW':
@@ -54,10 +56,6 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
                 list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
             else:
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
-        my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
-        bpy.context.scene.collection.children.link(my_coll)
-        layer_collection = layer_collection = bpy.context.view_layer.layer_collection.children.children[my_coll.name]
-        bpy.context.view_layer.active_layer_collection = layer_collection
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         if representation != 'VDW':
@@ -71,31 +69,30 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
             obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True)
         else:
             obj,mesh=read_structure(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=False)
-        hide_atoms(obj,atoms)
+        print(f'add hide modifier to GeometryNodes{modifier_chosen}')
+        hide_atoms(obj,atoms,modifier='GeometryNodes'+modifier_chosen)
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
         if add_supercell:
+            print(f'add supercell modifier to GeometryNodes{modifier_chosen}')
             added=make_supercell([obj], atoms, 'GeometryNodes'+modifier_chosen)
             if added:
                 modifier_counter += 1
                 modifier_chosen=f'.00{modifier_counter}'
         set_atoms_node_group()
         create_bondmat()
-        
+        print(f'add atoms_and_bonds modifier to GeometryNodes{modifier_chosen}')
         atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen)
        
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen].node_group = atoms_from_verts
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.7
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.075
+        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.1
         modifier_counter += 1
+        modifier_chosen=f'.00{modifier_counter}'
         
 
         #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
     if representation == 'bonds_fromnodes':
-        my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
-        bpy.context.scene.collection.children.link(my_coll)
-        layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
-        bpy.context.view_layer.active_layer_collection = layer_collection
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation='b')
 
@@ -135,14 +132,15 @@ def import_ase_molecule(filepath, filename, add_supercell=True, resolution=16, c
     end=time.time()
 
     if outline:
+        print(f'add outline modifier to GeometryNodes{modifier_chosen}')
         if representation != 'nodes' and representation != 'bonds_fromnodes' and representation != 'VDW':
-            outline_objects(list_of_atoms + list_of_bonds)
+            outline_objects(list_of_atoms + list_of_bonds,modifier='GeometryNodes'+modifier_chosen)
         if representation == 'bonds_fromnodes':
-            outline_objects(list_of_atoms+[bonds_obj])
+            outline_objects(list_of_atoms+[bonds_obj],modifier='GeometryNodes'+modifier_chosen)
         if representation == 'nodes':
-            outline_objects([obj],'GeometryNodes.002')
+            outline_objects([obj],modifier='GeometryNodes'+modifier_chosen)
         if representation == 'VDW':
-            outline_objects(list_of_atoms)
+            outline_objects(list_of_atoms,modifier='GeometryNodes'+modifier_chosen)
 
     print('Time to import atoms_object: ',end-end_read)
 

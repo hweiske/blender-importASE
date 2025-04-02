@@ -106,11 +106,16 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     overwrite: bpy.props.BoolProperty(
         name='overwrite',
         description='overwrite representation to "nodes" for animations',
-        default=False
+        default=True
     )
     outline: bpy.props.BoolProperty(
         name='outline',
         description='add outline modifier for atoms and bonds',
+        default=True
+    )
+    add_supercell: bpy.props.BoolProperty(
+        name='add_supercell',
+        description='add supercell modifier when PBC',
         default=True
     )
     files: bpy.props.CollectionProperty(
@@ -123,17 +128,14 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         description='directory of file',
         subtype='DIR_PATH'
     )
+    
 
     def draw(self, context):
         layout = self.layout
-        box = layout.box()
-        box.label(text="")
-        box.separator()
-        # commented out because it throws errors, don't know what it does anyhow... -PM
-        #box.operator("import_scene.my_format", text="Import")
         layout.prop(self, "resolution")
         layout.prop(self, "scale")
         layout.prop(self, 'outline')
+        layout.prop(self, 'add_supercell')
         layout.prop(self, 'colorbonds')
         layout.prop(self, 'fix_bonds')
         layout.prop(self, 'representation')
@@ -147,20 +149,23 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self,'imageslice')
 
     def execute(self, context):
+        
         for file in self.files:
             filepath = join(self.directory, file.name)
             # this section causes the representation to be ignored when overwrite is checked
             # we should come up with something else for now set default to false
-            if self.overwrite and self.representation != 'nodes':
-                self.representation = 'nodes'
+
+            
             import_ase_molecule(filepath, file.name,
+                            
                                 resolution=self.resolution,
                                 color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
                                 unit_cell=self.unit_cell, representation=self.representation,
                                 separate_collections=self.separate_collections,
                                 read_density=self.read_density, 
                                 shift_cell=self.zero_cell,imageslice=self.imageslice,
-                                animate=self.animate, outline=self.outline
+                                animate=self.animate, outline=self.outline,
+                                overwrite=self.overwrite, add_supercell=self.add_supercell
                                 )
         return {"FINISHED"}
 
