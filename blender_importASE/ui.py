@@ -75,7 +75,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         modifier_chosen=f'.00{modifier_counter}'
         if add_supercell:
             print(f'add supercell modifier to GeometryNodes{modifier_chosen}')
-            added=make_supercell([obj], atoms, 'GeometryNodes'+modifier_chosen)
+            added=make_supercell([obj], atoms, 'GeometryNodes'+modifier_chosen,representation=representation)
             if added:
                 modifier_counter += 1
                 modifier_chosen=f'.00{modifier_counter}'
@@ -85,7 +85,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen)
        
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen].node_group = atoms_from_verts
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.7
+        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.68
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.1
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
@@ -93,19 +93,22 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
 
         #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
     if representation == 'bonds_fromnodes':
+       
+        sec_coll = bpy.data.collections.new(name='atoms')
+        my_coll.children.link(sec_coll)
+        seclayer_collection = layer_collection.children[sec_coll.name]
+        bpy.context.view_layer.active_layer_collection = seclayer_collection
         group_atoms(atoms)
-        list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation='b')
+        list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
+       
+        
 
-        if add_supercell:
-            added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen)
-            if added:
-                modifier_counter += 1
-                modifier_chosen=f'.00{modifier_counter}'
-        scene_collection = bpy.context.view_layer.layer_collection
-        bpy.context.view_layer.active_layer_collection = scene_collection
-        bonds_obj = make_bonds()
-        modifier_counter += 1
-        modifier_chosen=f'.00{modifier_counter}'
+        bpy.context.view_layer.active_layer_collection = layer_collection
+        bonds_obj = make_bonds(modifier='GeometryNodes')
+        bpy.context.object.modifiers['GeometryNodes']["Socket_1"] = 0.68
+        bpy.context.object.modifiers['GeometryNodes']["Socket_2"] = 0.1
+        bpy.context.object.modifiers['GeometryNodes']["Socket_3"] = sec_coll
+        
 
 
     if unit_cell is True and atoms.pbc.all() is not False:
@@ -130,18 +133,36 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
                 else:
                     move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)  
     end=time.time()
+    print('Time to import atoms_object: ',end-end_read)
 
     if outline:
         print(f'add outline modifier to GeometryNodes{modifier_chosen}')
         if representation != 'nodes' and representation != 'bonds_fromnodes' and representation != 'VDW':
             outline_objects(list_of_atoms + list_of_bonds,modifier='GeometryNodes'+modifier_chosen)
+            modifier_counter += 1
+            modifier_chosen=f'.00{modifier_counter}'
+            if add_supercell:
+                added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation) 
         if representation == 'bonds_fromnodes':
-            outline_objects(list_of_atoms+[bonds_obj],modifier='GeometryNodes'+modifier_chosen)
+            outline_objects([bonds_obj],modifier='GeometryNodes.001')
+            outline_objects(list_of_atoms,modifier='GeometryNodes')
+            modifier_counter += 1
+            modifier_chosen=f'.00{modifier_counter}'
+            if add_supercell:
+                added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)
+                if added:
+                    print(f'added supercell to GeometryNodes{modifier_chosen}')
+                    modifier_counter += 1
+                    modifier_chosen=f'.00{modifier_counter}'
         if representation == 'nodes':
             outline_objects([obj],modifier='GeometryNodes'+modifier_chosen)
         if representation == 'VDW':
             outline_objects(list_of_atoms,modifier='GeometryNodes'+modifier_chosen)
-
-    print('Time to import atoms_object: ',end-end_read)
+            modifier_counter += 1
+            modifier_chosen=f'.00{modifier_counter}'
+            if add_supercell:
+                added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)       
+    END_END=time.time()
+    print('modifier time: ',END_END-end)
 
             

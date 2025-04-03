@@ -296,7 +296,7 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
 #initialize outline_color node group
     node = outline_node_group()
     for obj in list_of_objects:
-        if obj.data.materials:
+        if not obj.data.materials:
             obj.data.materials[0] = mat
         else:
             obj.data.materials.append(mat)

@@ -1087,7 +1087,15 @@ def bonds_geometry_node_group():
 
     #initialize bonds links
     #set_shade_smooth.Geometry -> group_output.Geometry
-    bonds.links.new(set_shade_smooth.outputs[0], group_output.inputs[0])
+    merge_geometry = bonds.nodes.new("GeometryNodeMergeByDistance")
+    merge_geometry.name = "fix shading"
+    merge_geometry.inputs[2].default_value = 0.001
+    merge_geometry.location = (3500, -1165.5565185546875)
+    bonds.links.new(set_shade_smooth.outputs[0], merge_geometry.inputs[0])
+    bonds.links.new(merge_geometry.outputs[0], group_output.inputs[0])
+
+
+
     #named_attribute.Attribute -> switch.False
     bonds.links.new(named_attribute.outputs[0], switch.inputs[1])
     #compare_006.Result -> boolean_math.Boolean
@@ -1422,7 +1430,7 @@ def bonds_node_group(mat):
 
 
 
-def make_bonds():
+def make_bonds(modifier='GeometryNodes'):
     bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0))
     bonds_obj = bpy.context.object
     bonds_obj.name = "bonds_object"
@@ -1431,6 +1439,11 @@ def make_bonds():
         mat.use_nodes = True
     else:
         mat = bpy.data.materials["BONDS_MAT"]
+    
     bonds_node_group(mat)
-    bonds_geometry_node_group()
+    bonds=bonds_geometry_node_group()
+    bonds_obj.data.materials.append(mat)
+    bpy.context.view_layer.objects.active = bonds_obj
+    bpy.ops.object.modifier_add(type='NODES')
+    bpy.context.object.modifiers[modifier].node_group = bonds
     return bonds_obj

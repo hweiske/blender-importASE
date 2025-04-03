@@ -3,6 +3,7 @@ from ase.data import chemical_symbols
 
 #initialize cutoff_group node group
 def cutoff_group_node_group():
+
     cutoff_group = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "cutoff_group")
 
     cutoff_group.color_tag = 'NONE'
@@ -322,7 +323,7 @@ def supercell_node_group(atoms):
 
     #Socket global
     global_socket = supercell.interface.new_socket(name = "global", in_out='INPUT', socket_type = 'NodeSocketBool')
-    global_socket.default_value = True
+    global_socket.default_value = False
     global_socket.attribute_domain = 'POINT'
 
     #Socket cutoff_vectors
@@ -598,7 +599,7 @@ def supercell_node_group(atoms):
     switch.name = "Switch"
     switch.input_type = 'INT'
     #True
-    switch.inputs[2].default_value = 2
+    switch.inputs[2].default_value = 1
 
     #node Switch.001
     switch_001 = supercell.nodes.new("GeometryNodeSwitch")
@@ -606,7 +607,7 @@ def supercell_node_group(atoms):
     switch_001.name = "Switch.001"
     switch_001.input_type = 'INT'
     #True
-    switch_001.inputs[2].default_value = 3
+    switch_001.inputs[2].default_value = 1
 
     #node Switch.002
     switch_002 = supercell.nodes.new("GeometryNodeSwitch")
@@ -1081,19 +1082,735 @@ def supercell_node_group(atoms):
     
     return supercell
 
+def supercell_atoms_node_group():
+    cutoff_group=cutoff_group_node_group()
+    supercell_atoms = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "supercell_atoms")
+    
+    supercell_atoms.color_tag = 'NONE'
+    supercell_atoms.description = ""
+    supercell_atoms.default_group_node_width = 140
+    
 
-def make_supercell(list_of_objects, atoms,modifier='GeometryNodes'):
+    supercell_atoms.is_modifier = True
+
+    #supercell_atoms interface
+    #Socket Geometry
+    geometry_socket_2 = supercell_atoms.interface.new_socket(name = "Geometry", in_out='OUTPUT', socket_type = 'NodeSocketGeometry')
+    geometry_socket_2.attribute_domain = 'POINT'
+
+    #Socket Geometry
+    geometry_socket_3 = supercell_atoms.interface.new_socket(name = "Geometry", in_out='INPUT', socket_type = 'NodeSocketGeometry')
+    geometry_socket_3.attribute_domain = 'POINT'
+
+    #Socket repeat_x
+    repeat_x_socket = supercell_atoms.interface.new_socket(name = "repeat_x", in_out='INPUT', socket_type = 'NodeSocketInt')
+    repeat_x_socket.default_value = 1
+    repeat_x_socket.min_value = 1
+    repeat_x_socket.max_value = 10000
+    repeat_x_socket.subtype = 'NONE'
+    repeat_x_socket.attribute_domain = 'POINT'
+
+    #Socket repeat_y
+    repeat_y_socket = supercell_atoms.interface.new_socket(name = "repeat_y", in_out='INPUT', socket_type = 'NodeSocketInt')
+    repeat_y_socket.default_value = 1
+    repeat_y_socket.min_value = 1
+    repeat_y_socket.max_value = 10000
+    repeat_y_socket.subtype = 'NONE'
+    repeat_y_socket.attribute_domain = 'POINT'
+
+    #Socket repeat_z
+    repeat_z_socket = supercell_atoms.interface.new_socket(name = "repeat_z", in_out='INPUT', socket_type = 'NodeSocketInt')
+    repeat_z_socket.default_value = 1
+    repeat_z_socket.min_value = 1
+    repeat_z_socket.max_value = 10000
+    repeat_z_socket.subtype = 'NONE'
+    repeat_z_socket.attribute_domain = 'POINT'
+
+    #Socket Offset_x
+    offset_x_socket = supercell_atoms.interface.new_socket(name = "Offset_x", in_out='INPUT', socket_type = 'NodeSocketInt')
+    offset_x_socket.default_value = 0
+    offset_x_socket.min_value = -2147483648
+    offset_x_socket.max_value = 2147483647
+    offset_x_socket.subtype = 'NONE'
+    offset_x_socket.attribute_domain = 'POINT'
+
+    #Socket Offset_y
+    offset_y_socket = supercell_atoms.interface.new_socket(name = "Offset_y", in_out='INPUT', socket_type = 'NodeSocketInt')
+    offset_y_socket.default_value = 0
+    offset_y_socket.min_value = -2147483648
+    offset_y_socket.max_value = 2147483647
+    offset_y_socket.subtype = 'NONE'
+    offset_y_socket.attribute_domain = 'POINT'
+
+    #Socket global
+    global_socket = supercell_atoms.interface.new_socket(name = "global", in_out='INPUT', socket_type = 'NodeSocketBool')
+    global_socket.default_value = False
+    global_socket.attribute_domain = 'POINT'
+
+    #Socket cutoff_vectors
+    cutoff_vectors_socket = supercell_atoms.interface.new_socket(name = "cutoff_vectors", in_out='INPUT', socket_type = 'NodeSocketBool')
+    cutoff_vectors_socket.default_value = False
+    cutoff_vectors_socket.attribute_domain = 'POINT'
+
+    #Socket +x
+    _x_socket_2 = supercell_atoms.interface.new_socket(name = "+x", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    _x_socket_2.default_value = 100.0
+    _x_socket_2.min_value = -10000.0
+    _x_socket_2.max_value = 10000.0
+    _x_socket_2.subtype = 'NONE'
+    _x_socket_2.attribute_domain = 'POINT'
+
+    #Socket +y
+    _y_socket_2 = supercell_atoms.interface.new_socket(name = "+y", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    _y_socket_2.default_value = 100.0
+    _y_socket_2.min_value = -10000.0
+    _y_socket_2.max_value = 10000.0
+    _y_socket_2.subtype = 'NONE'
+    _y_socket_2.attribute_domain = 'POINT'
+
+    #Socket +z
+    _z_socket_2 = supercell_atoms.interface.new_socket(name = "+z", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    _z_socket_2.default_value = 100.0
+    _z_socket_2.min_value = -10000.0
+    _z_socket_2.max_value = 10000.0
+    _z_socket_2.subtype = 'NONE'
+    _z_socket_2.attribute_domain = 'POINT'
+
+    #Socket -x
+    _x_socket_3 = supercell_atoms.interface.new_socket(name = "-x", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    _x_socket_3.default_value = -100.0
+    _x_socket_3.min_value = -10000.0
+    _x_socket_3.max_value = 10000.0
+    _x_socket_3.subtype = 'NONE'
+    _x_socket_3.attribute_domain = 'POINT'
+
+    #Socket -y
+    _y_socket_3 = supercell_atoms.interface.new_socket(name = "-y", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    _y_socket_3.default_value = -100.0
+    _y_socket_3.min_value = -10000.0
+    _y_socket_3.max_value = 10000.0
+    _y_socket_3.subtype = 'NONE'
+    _y_socket_3.attribute_domain = 'POINT'
+
+    #Socket -z
+    _z_socket_3 = supercell_atoms.interface.new_socket(name = "-z", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    _z_socket_3.default_value = -100.0
+    _z_socket_3.min_value = -10000.0
+    _z_socket_3.max_value = 10000.0
+    _z_socket_3.subtype = 'NONE'
+    _z_socket_3.attribute_domain = 'POINT'
+
+
+    #initialize supercell_atoms nodes
+    #node Frame.002
+    frame_002 = supercell_atoms.nodes.new("NodeFrame")
+    frame_002.label = "cutoff"
+    frame_002.name = "Frame.002"
+    frame_002.label_size = 20
+    frame_002.shrink = True
+
+    #node Frame.001
+    frame_001 = supercell_atoms.nodes.new("NodeFrame")
+    frame_001.label = "grid"
+    frame_001.name = "Frame.001"
+    frame_001.label_size = 20
+    frame_001.shrink = True
+
+    #node Frame
+    frame = supercell_atoms.nodes.new("NodeFrame")
+    frame.label = "offset"
+    frame.name = "Frame"
+    frame.label_size = 20
+    frame.shrink = True
+
+    #node Instance on Points
+    instance_on_points = supercell_atoms.nodes.new("GeometryNodeInstanceOnPoints")
+    instance_on_points.name = "Instance on Points"
+    #Selection
+    instance_on_points.inputs[1].default_value = True
+    #Pick Instance
+    instance_on_points.inputs[3].default_value = False
+    #Instance Index
+    instance_on_points.inputs[4].default_value = 0
+    #Rotation
+    instance_on_points.inputs[5].default_value = (0.0, 0.0, 0.0)
+    #Scale
+    instance_on_points.inputs[6].default_value = (1.0, 1.0, 1.0)
+
+    #node Group Output
+    group_output_1 = supercell_atoms.nodes.new("NodeGroupOutput")
+    group_output_1.name = "Group Output"
+    group_output_1.is_active_output = True
+
+    #node Group Input
+    group_input_1 = supercell_atoms.nodes.new("NodeGroupInput")
+    group_input_1.name = "Group Input"
+
+    #node Group.001
+    group_001 = supercell_atoms.nodes.new("GeometryNodeGroup")
+    group_001.name = "Group.001"
+    group_001.node_tree = cutoff_group
+
+    #node Mesh Line.002
+    mesh_line_002 = supercell_atoms.nodes.new("GeometryNodeMeshLine")
+    mesh_line_002.name = "Mesh Line.002"
+    mesh_line_002.count_mode = 'TOTAL'
+    mesh_line_002.mode = 'OFFSET'
+
+    #node Mesh Line
+    mesh_line = supercell_atoms.nodes.new("GeometryNodeMeshLine")
+    mesh_line.name = "Mesh Line"
+    mesh_line.hide = True
+    mesh_line.count_mode = 'TOTAL'
+    mesh_line.mode = 'OFFSET'
+
+    #node Mesh Line.001
+    mesh_line_001 = supercell_atoms.nodes.new("GeometryNodeMeshLine")
+    mesh_line_001.name = "Mesh Line.001"
+    mesh_line_001.hide = True
+    mesh_line_001.count_mode = 'TOTAL'
+    mesh_line_001.mode = 'OFFSET'
+
+    #node Instance on Points.001
+    instance_on_points_001 = supercell_atoms.nodes.new("GeometryNodeInstanceOnPoints")
+    instance_on_points_001.name = "Instance on Points.001"
+    instance_on_points_001.hide = True
+    #Selection
+    instance_on_points_001.inputs[1].default_value = True
+    #Pick Instance
+    instance_on_points_001.inputs[3].default_value = False
+    #Instance Index
+    instance_on_points_001.inputs[4].default_value = 0
+    #Rotation
+    instance_on_points_001.inputs[5].default_value = (0.0, 0.0, 0.0)
+    #Scale
+    instance_on_points_001.inputs[6].default_value = (1.0, 1.0, 1.0)
+
+    #node Instance on Points.002
+    instance_on_points_002 = supercell_atoms.nodes.new("GeometryNodeInstanceOnPoints")
+    instance_on_points_002.name = "Instance on Points.002"
+    instance_on_points_002.hide = True
+    #Selection
+    instance_on_points_002.inputs[1].default_value = True
+    #Pick Instance
+    instance_on_points_002.inputs[3].default_value = False
+    #Instance Index
+    instance_on_points_002.inputs[4].default_value = 0
+    #Rotation
+    instance_on_points_002.inputs[5].default_value = (0.0, 0.0, 0.0)
+    #Scale
+    instance_on_points_002.inputs[6].default_value = (1.0, 1.0, 1.0)
+
+    #node Vector Math.001
+    vector_math_001 = supercell_atoms.nodes.new("ShaderNodeVectorMath")
+    vector_math_001.name = "Vector Math.001"
+    vector_math_001.hide = True
+    vector_math_001.operation = 'SCALE'
+
+    #node Vector Math
+    vector_math = supercell_atoms.nodes.new("ShaderNodeVectorMath")
+    vector_math.name = "Vector Math"
+    vector_math.hide = True
+    vector_math.operation = 'SCALE'
+
+    #node Vector Math.002
+    vector_math_002 = supercell_atoms.nodes.new("ShaderNodeVectorMath")
+    vector_math_002.name = "Vector Math.002"
+    vector_math_002.hide = True
+    vector_math_002.operation = 'SCALE'
+
+    #node Math.002
+    math_002 = supercell_atoms.nodes.new("ShaderNodeMath")
+    math_002.name = "Math.002"
+    math_002.hide = True
+    math_002.operation = 'MULTIPLY'
+    math_002.use_clamp = False
+    #Value_001
+    math_002.inputs[1].default_value = -1.0
+
+    #node Math
+    math = supercell_atoms.nodes.new("ShaderNodeMath")
+    math.name = "Math"
+    math.hide = True
+    math.operation = 'MULTIPLY'
+    math.use_clamp = False
+    #Value_001
+    math.inputs[1].default_value = -1.0
+
+    #node Math.001
+    math_001 = supercell_atoms.nodes.new("ShaderNodeMath")
+    math_001.name = "Math.001"
+    math_001.hide = True
+    math_001.operation = 'MULTIPLY'
+    math_001.use_clamp = False
+    #Value_001
+    math_001.inputs[1].default_value = -1.0
+
+    #node Reroute
+    reroute = supercell_atoms.nodes.new("NodeReroute")
+    reroute.name = "Reroute"
+    reroute.socket_idname = "NodeSocketInt"
+    #node Reroute.001
+    reroute_001 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_001.name = "Reroute.001"
+    reroute_001.socket_idname = "NodeSocketInt"
+    #node Group Input.001
+    group_input_001 = supercell_atoms.nodes.new("NodeGroupInput")
+    group_input_001.name = "Group Input.001"
+
+    #node Reroute.004
+    reroute_004 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_004.name = "Reroute.004"
+    reroute_004.socket_idname = "NodeSocketInt"
+    #node Reroute.002
+    reroute_002 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_002.name = "Reroute.002"
+    reroute_002.socket_idname = "NodeSocketInt"
+    #node Reroute.003
+    reroute_003 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_003.name = "Reroute.003"
+    reroute_003.socket_idname = "NodeSocketInt"
+    #node Reroute.007
+    reroute_007 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_007.name = "Reroute.007"
+    reroute_007.socket_idname = "NodeSocketVector"
+    #node Reroute.005
+    reroute_005 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_005.name = "Reroute.005"
+    reroute_005.socket_idname = "NodeSocketVector"
+    #node Reroute.006
+    reroute_006 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_006.name = "Reroute.006"
+    reroute_006.socket_idname = "NodeSocketVector"
+    #node Vector.002
+    vector_002 = supercell_atoms.nodes.new("FunctionNodeInputVector")
+    vector_002.label = "zvec"
+    vector_002.name = "Vector.002"
+    vector_002.hide = True
+    vector_002.vector = (0.0, 0.0, 30.64883041381836)
+
+    #node Vector
+    vector = supercell_atoms.nodes.new("FunctionNodeInputVector")
+    vector.label = "xvec"
+    vector.name = "Vector"
+    vector.hide = True
+    vector.vector = (15.324419021606445, 0.0, 0.0)
+
+    #node Vector.001
+    vector_001 = supercell_atoms.nodes.new("FunctionNodeInputVector")
+    vector_001.label = "yvec"
+    vector_001.name = "Vector.001"
+    vector_001.vector = (0.0, 15.324399948120117, 0.0)
+
+    #node Switch
+    switch = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch.label = "repeat_X"
+    switch.name = "Switch"
+    switch.input_type = 'INT'
+    #True
+    switch.inputs[2].default_value = 3
+
+    #node Switch.001
+    switch_001 = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch_001.label = "repeat_Y"
+    switch_001.name = "Switch.001"
+    switch_001.input_type = 'INT'
+    #True
+    switch_001.inputs[2].default_value = 3
+
+    #node Switch.002
+    switch_002 = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch_002.label = "repeat_Z"
+    switch_002.name = "Switch.002"
+    switch_002.input_type = 'INT'
+    #True
+    switch_002.inputs[2].default_value = 1
+
+    #node Switch.003
+    switch_003 = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch_003.label = "offset_X"
+    switch_003.name = "Switch.003"
+    switch_003.input_type = 'INT'
+    #True
+    switch_003.inputs[2].default_value = 0
+
+    #node Switch.004
+    switch_004 = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch_004.label = "offset_Y"
+    switch_004.name = "Switch.004"
+    switch_004.input_type = 'INT'
+    #True
+    switch_004.inputs[2].default_value = 1
+
+    #node Switch.005
+    switch_005 = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch_005.label = "offset_Z"
+    switch_005.name = "Switch.005"
+    switch_005.input_type = 'INT'
+    #True
+    switch_005.inputs[2].default_value = 0
+
+    #node Group Input.002
+    group_input_002 = supercell_atoms.nodes.new("NodeGroupInput")
+    group_input_002.name = "Group Input.002"
+
+    #node Frame.003
+    frame_003 = supercell_atoms.nodes.new("NodeFrame")
+    frame_003.label = "modify global value for cell repetition"
+    frame_003.name = "Frame.003"
+    frame_003.use_custom_color = True
+    frame_003.color = (0.41161254048347473, 0.0, 0.6079999804496765)
+    frame_003.label_size = 20
+    frame_003.shrink = True
+
+    #node Frame.004
+    frame_004 = supercell_atoms.nodes.new("NodeFrame")
+    frame_004.label = "global value for offset"
+    frame_004.name = "Frame.004"
+    frame_004.use_custom_color = True
+    frame_004.color = (0.3529382050037384, 0.0235294159501791, 0.5098000168800354)
+    frame_004.label_size = 20
+    frame_004.shrink = True
+
+    #node Frame.005
+    frame_005 = supercell_atoms.nodes.new("NodeFrame")
+    frame_005.name = "Frame.005"
+    frame_005.use_custom_color = True
+    frame_005.color = (0.08440613746643066, 0.6079999804496765, 0.0)
+    frame_005.label_size = 20
+    frame_005.shrink = True
+
+    #node Join Geometry
+    join_geometry = supercell_atoms.nodes.new("GeometryNodeJoinGeometry")
+    join_geometry.name = "Join Geometry"
+
+    #node Merge by Distance
+    merge_by_distance = supercell_atoms.nodes.new("GeometryNodeMergeByDistance")
+    merge_by_distance.name = "Merge by Distance"
+    merge_by_distance.mode = 'ALL'
+    #Selection
+    merge_by_distance.inputs[1].default_value = True
+    #Distance
+    merge_by_distance.inputs[2].default_value = 0.0010000000474974513
+
+    #node Reroute.008
+    reroute_008 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_008.name = "Reroute.008"
+    reroute_008.socket_idname = "NodeSocketGeometry"
+    #node Reroute.009
+    reroute_009 = supercell_atoms.nodes.new("NodeReroute")
+    reroute_009.name = "Reroute.009"
+    reroute_009.socket_idname = "NodeSocketGeometry"
+    #node Switch.006
+    switch_006 = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch_006.name = "Switch.006"
+    switch_006.input_type = 'GEOMETRY'
+
+    #node Group Input.004
+    group_input_004 = supercell_atoms.nodes.new("NodeGroupInput")
+    group_input_004.name = "Group Input.004"
+
+    #node Compare.004
+    compare_004_1 = supercell_atoms.nodes.new("FunctionNodeCompare")
+    compare_004_1.name = "Compare.004"
+    compare_004_1.hide = True
+    compare_004_1.data_type = 'INT'
+    compare_004_1.mode = 'ELEMENT'
+    compare_004_1.operation = 'EQUAL'
+    #A_INT
+    compare_004_1.inputs[2].default_value = 0
+    #B_INT
+    compare_004_1.inputs[3].default_value = 1
+
+    #node Delete Geometry
+    delete_geometry_1 = supercell_atoms.nodes.new("GeometryNodeDeleteGeometry")
+    delete_geometry_1.name = "Delete Geometry"
+    delete_geometry_1.hide = True
+    delete_geometry_1.domain = 'POINT'
+    delete_geometry_1.mode = 'ALL'
+    #Selection
+    delete_geometry_1.inputs[1].default_value = True
+
+    #node Switch.007
+    switch_007 = supercell_atoms.nodes.new("GeometryNodeSwitch")
+    switch_007.name = "Switch.007"
+    switch_007.hide = True
+    switch_007.input_type = 'GEOMETRY'
+    #Switch
+    switch_007.inputs[0].default_value = False
+
+
+
+
+    #Set parents
+    group_001.parent = frame_002
+    mesh_line_002.parent = frame_001
+    mesh_line.parent = frame_001
+    mesh_line_001.parent = frame_001
+    instance_on_points_001.parent = frame_001
+    instance_on_points_002.parent = frame_001
+    vector_math_001.parent = frame
+    vector_math.parent = frame
+    vector_math_002.parent = frame
+    math_002.parent = frame
+    math.parent = frame
+    math_001.parent = frame
+    reroute.parent = frame_003
+    vector_002.parent = frame_005
+    vector.parent = frame_005
+    vector_001.parent = frame_005
+    switch.parent = frame_003
+    switch_001.parent = frame_003
+    switch_002.parent = frame_003
+    switch_003.parent = frame_004
+    switch_004.parent = frame_004
+    switch_005.parent = frame_004
+
+    #Set locations
+    frame_002.location = (1456.0, 441.0)
+    frame_001.location = (13.0, 317.0)
+    frame.location = (-921.0, -263.0)
+    instance_on_points.location = (637.8240356445312, 127.73196411132812)
+    group_output_1.location = (2785.444580078125, 506.9361267089844)
+    group_input_1.location = (376.5082092285156, -185.8363494873047)
+    group_001.location = (29.771484375, -40.318511962890625)
+    mesh_line_002.location = (29.602313995361328, -339.35003662109375)
+    mesh_line.location = (54.118995666503906, -44.974700927734375)
+    mesh_line_001.location = (63.06475830078125, -180.42404174804688)
+    instance_on_points_001.location = (256.6813659667969, -123.66482543945312)
+    instance_on_points_002.location = (318.0640563964844, -291.41241455078125)
+    vector_math_001.location = (338.0208740234375, -97.4842529296875)
+    vector_math.location = (338.0208740234375, -46.4842529296875)
+    vector_math_002.location = (338.0208740234375, -148.4842529296875)
+    math_002.location = (29.62042236328125, -146.7911376953125)
+    math.location = (29.62042236328125, -44.7911376953125)
+    math_001.location = (29.62042236328125, -95.7911376953125)
+    reroute.location = (35.0, -449.6288146972656)
+    reroute_001.location = (-1353.8707275390625, -18.929697036743164)
+    group_input_001.location = (-1792.6153564453125, 362.8712158203125)
+    reroute_004.location = (-674.0416259765625, 124.515869140625)
+    reroute_002.location = (-654.8232421875, 293.1017761230469)
+    reroute_003.location = (-589.20556640625, -89.482421875)
+    reroute_007.location = (-652.3507690429688, -134.8733367919922)
+    reroute_005.location = (-565.2334594726562, 253.76507568359375)
+    reroute_006.location = (-613.8910522460938, 75.26302337646484)
+    vector_002.location = (52.0994873046875, -117.4110107421875)
+    vector.location = (30.301513671875, -35.44384765625)
+    vector_001.location = (44.2880859375, -81.0438232421875)
+    switch.location = (145.6175537109375, -39.5770263671875)
+    switch_001.location = (139.67724609375, -191.27940368652344)
+    switch_002.location = (141.1566162109375, -345.3650817871094)
+    switch_003.location = (33.2828369140625, -40.220001220703125)
+    switch_004.location = (29.772705078125, -203.90206909179688)
+    switch_005.location = (36.392822265625, -376.7545166015625)
+    group_input_002.location = (-1581.3948974609375, -258.635009765625)
+    frame_003.location = (-1377.8472900390625, 437.0)
+    frame_004.location = (-1325.0, -127.0)
+    frame_005.location = (-1079.0, 803.0)
+    join_geometry.location = (2189.292724609375, 361.0550842285156)
+    merge_by_distance.location = (2605.523193359375, 482.2424011230469)
+    reroute_008.location = (909.9058227539062, 92.05680084228516)
+    reroute_009.location = (1616.8719482421875, -223.92974853515625)
+    switch_006.location = (1843.2039794921875, 658.1240234375)
+    group_input_004.location = (1087.9091796875, 835.0838012695312)
+    compare_004_1.location = (0.0, 0.0)
+    delete_geometry_1.location = (0.0, 0.0)
+    switch_007.location = (0.0, 0.0)
+
+    #Set dimensions
+    frame_002.width, frame_002.height = 200.0, 298.0
+    frame_001.width, frame_001.height = 465.73193359375, 512.0
+    frame.width, frame.height = 508.0, 203.0
+    instance_on_points.width, instance_on_points.height = 140.0, 100.0
+    group_output_1.width, group_output_1.height = 140.0, 100.0
+    group_input_1.width, group_input_1.height = 140.0, 100.0
+    group_001.width, group_001.height = 140.0, 100.0
+    mesh_line_002.width, mesh_line_002.height = 211.4036865234375, 100.0
+    mesh_line.width, mesh_line.height = 211.4036865234375, 100.0
+    mesh_line_001.width, mesh_line_001.height = 186.6614227294922, 100.0
+    instance_on_points_001.width, instance_on_points_001.height = 140.0, 100.0
+    instance_on_points_002.width, instance_on_points_002.height = 117.73193359375, 100.0
+    vector_math_001.width, vector_math_001.height = 140.0, 100.0
+    vector_math.width, vector_math.height = 140.0, 100.0
+    vector_math_002.width, vector_math_002.height = 140.0, 100.0
+    math_002.width, math_002.height = 148.916259765625, 100.0
+    math.width, math.height = 148.916259765625, 100.0
+    math_001.width, math_001.height = 148.916259765625, 100.0
+    reroute.width, reroute.height = 10.0, 100.0
+    reroute_001.width, reroute_001.height = 10.0, 100.0
+    group_input_001.width, group_input_001.height = 140.0, 100.0
+    reroute_004.width, reroute_004.height = 10.0, 100.0
+    reroute_002.width, reroute_002.height = 10.0, 100.0
+    reroute_003.width, reroute_003.height = 10.0, 100.0
+    reroute_007.width, reroute_007.height = 10.0, 100.0
+    reroute_005.width, reroute_005.height = 10.0, 100.0
+    reroute_006.width, reroute_006.height = 10.0, 100.0
+    vector_002.width, vector_002.height = 140.0, 100.0
+    vector.width, vector.height = 140.0, 100.0
+    vector_001.width, vector_001.height = 140.0, 100.0
+    switch.width, switch.height = 140.0, 100.0
+    switch_001.width, switch_001.height = 140.0, 100.0
+    switch_002.width, switch_002.height = 140.0, 100.0
+    switch_003.width, switch_003.height = 140.0, 100.0
+    switch_004.width, switch_004.height = 140.0, 100.0
+    switch_005.width, switch_005.height = 140.0, 100.0
+    group_input_002.width, group_input_002.height = 140.0, 100.0
+    frame_003.width, frame_003.height = 315.8472900390625, 518.0
+    frame_004.width, frame_004.height = 206.0, 550.0
+    frame_005.width, frame_005.height = 222.0, 230.0
+    join_geometry.width, join_geometry.height = 140.0, 100.0
+    merge_by_distance.width, merge_by_distance.height = 140.0, 100.0
+    reroute_008.width, reroute_008.height = 10.0, 100.0
+    reroute_009.width, reroute_009.height = 10.0, 100.0
+    switch_006.width, switch_006.height = 140.0, 100.0
+    group_input_004.width, group_input_004.height = 140.0, 100.0
+    compare_004_1.width, compare_004_1.height = 140.0, 100.0
+    delete_geometry_1.width, delete_geometry_1.height = 140.0, 100.0
+    switch_007.width, switch_007.height = 140.0, 100.0
+
+    #initialize supercell_atoms links
+    #group_input_004.cutoff_vectors -> switch_006.Switch
+    supercell_atoms.links.new(group_input_004.outputs[7], switch_006.inputs[0])
+    #group_input_1.Geometry -> instance_on_points.Instance
+    supercell_atoms.links.new(group_input_1.outputs[0], instance_on_points.inputs[2])
+    #reroute_005.Output -> mesh_line.Offset
+    supercell_atoms.links.new(reroute_005.outputs[0], mesh_line.inputs[3])
+    #mesh_line.Mesh -> instance_on_points_001.Points
+    supercell_atoms.links.new(mesh_line.outputs[0], instance_on_points_001.inputs[0])
+    #reroute_006.Output -> mesh_line_001.Offset
+    supercell_atoms.links.new(reroute_006.outputs[0], mesh_line_001.inputs[3])
+    #reroute_007.Output -> mesh_line_002.Offset
+    supercell_atoms.links.new(reroute_007.outputs[0], mesh_line_002.inputs[3])
+    #mesh_line_001.Mesh -> instance_on_points_001.Instance
+    supercell_atoms.links.new(mesh_line_001.outputs[0], instance_on_points_001.inputs[2])
+    #instance_on_points_001.Instances -> instance_on_points_002.Points
+    supercell_atoms.links.new(instance_on_points_001.outputs[0], instance_on_points_002.inputs[0])
+    #mesh_line_002.Mesh -> instance_on_points_002.Instance
+    supercell_atoms.links.new(mesh_line_002.outputs[0], instance_on_points_002.inputs[2])
+    #instance_on_points_002.Instances -> instance_on_points.Points
+    supercell_atoms.links.new(instance_on_points_002.outputs[0], instance_on_points.inputs[0])
+    #math.Value -> vector_math.Scale
+    supercell_atoms.links.new(math.outputs[0], vector_math.inputs[3])
+    #vector_math.Vector -> mesh_line.Start Location
+    supercell_atoms.links.new(vector_math.outputs[0], mesh_line.inputs[2])
+    #math_001.Value -> vector_math_001.Scale
+    supercell_atoms.links.new(math_001.outputs[0], vector_math_001.inputs[3])
+    #vector_math_001.Vector -> mesh_line_001.Start Location
+    supercell_atoms.links.new(vector_math_001.outputs[0], mesh_line_001.inputs[2])
+    #math_002.Value -> vector_math_002.Scale
+    supercell_atoms.links.new(math_002.outputs[0], vector_math_002.inputs[3])
+    #vector_math_002.Vector -> mesh_line_002.Start Location
+    supercell_atoms.links.new(vector_math_002.outputs[0], mesh_line_002.inputs[2])
+    #reroute_002.Output -> mesh_line.Count
+    supercell_atoms.links.new(reroute_002.outputs[0], mesh_line.inputs[0])
+    #reroute_004.Output -> mesh_line_001.Count
+    supercell_atoms.links.new(reroute_004.outputs[0], mesh_line_001.inputs[0])
+    #reroute_003.Output -> mesh_line_002.Count
+    supercell_atoms.links.new(reroute_003.outputs[0], mesh_line_002.inputs[0])
+    #switch_003.Output -> math.Value
+    supercell_atoms.links.new(switch_003.outputs[0], math.inputs[0])
+    #switch_004.Output -> math_001.Value
+    supercell_atoms.links.new(switch_004.outputs[0], math_001.inputs[0])
+    #merge_by_distance.Geometry -> group_output_1.Geometry
+    supercell_atoms.links.new(merge_by_distance.outputs[0], group_output_1.inputs[0])
+    #group_input_001.Offset_x -> reroute.Input
+    supercell_atoms.links.new(group_input_001.outputs[4], reroute.inputs[0])
+    #group_input_001.Offset_y -> reroute_001.Input
+    supercell_atoms.links.new(group_input_001.outputs[5], reroute_001.inputs[0])
+    #switch_002.Output -> reroute_003.Input
+    supercell_atoms.links.new(switch_002.outputs[0], reroute_003.inputs[0])
+    #switch_001.Output -> reroute_004.Input
+    supercell_atoms.links.new(switch_001.outputs[0], reroute_004.inputs[0])
+    #vector_001.Vector -> reroute_006.Input
+    supercell_atoms.links.new(vector_001.outputs[0], reroute_006.inputs[0])
+    #vector_002.Vector -> reroute_007.Input
+    supercell_atoms.links.new(vector_002.outputs[0], reroute_007.inputs[0])
+    #group_input_001.global -> switch.Switch
+    supercell_atoms.links.new(group_input_001.outputs[6], switch.inputs[0])
+    #group_input_001.repeat_x -> switch.False
+    supercell_atoms.links.new(group_input_001.outputs[1], switch.inputs[1])
+    #switch.Output -> reroute_002.Input
+    supercell_atoms.links.new(switch.outputs[0], reroute_002.inputs[0])
+    #group_input_001.repeat_y -> switch_001.False
+    supercell_atoms.links.new(group_input_001.outputs[2], switch_001.inputs[1])
+    #group_input_001.repeat_z -> switch_002.False
+    supercell_atoms.links.new(group_input_001.outputs[3], switch_002.inputs[1])
+    #group_input_001.global -> switch_001.Switch
+    supercell_atoms.links.new(group_input_001.outputs[6], switch_001.inputs[0])
+    #group_input_001.global -> switch_002.Switch
+    supercell_atoms.links.new(group_input_001.outputs[6], switch_002.inputs[0])
+    #reroute.Output -> switch_003.False
+    supercell_atoms.links.new(reroute.outputs[0], switch_003.inputs[1])
+    #reroute_001.Output -> switch_004.False
+    supercell_atoms.links.new(reroute_001.outputs[0], switch_004.inputs[1])
+    #switch_005.Output -> math_002.Value
+    supercell_atoms.links.new(switch_005.outputs[0], math_002.inputs[0])
+    #reroute_001.Output -> switch_005.False
+    supercell_atoms.links.new(reroute_001.outputs[0], switch_005.inputs[1])
+    #group_input_002.global -> switch_003.Switch
+    supercell_atoms.links.new(group_input_002.outputs[6], switch_003.inputs[0])
+    #group_input_002.global -> switch_004.Switch
+    supercell_atoms.links.new(group_input_002.outputs[6], switch_004.inputs[0])
+    #group_input_002.global -> switch_005.Switch
+    supercell_atoms.links.new(group_input_002.outputs[6], switch_005.inputs[0])
+    #reroute_005.Output -> vector_math.Vector
+    supercell_atoms.links.new(reroute_005.outputs[0], vector_math.inputs[0])
+    #reroute_006.Output -> vector_math_001.Vector
+    supercell_atoms.links.new(reroute_006.outputs[0], vector_math_001.inputs[0])
+    #reroute_007.Output -> vector_math_002.Vector
+    supercell_atoms.links.new(reroute_007.outputs[0], vector_math_002.inputs[0])
+    #vector.Vector -> reroute_005.Input
+    supercell_atoms.links.new(vector.outputs[0], reroute_005.inputs[0])
+    #reroute_009.Output -> join_geometry.Geometry
+    supercell_atoms.links.new(reroute_009.outputs[0], join_geometry.inputs[0])
+    #join_geometry.Geometry -> merge_by_distance.Geometry
+    supercell_atoms.links.new(join_geometry.outputs[0], merge_by_distance.inputs[0])
+    #instance_on_points.Instances -> reroute_008.Input
+    supercell_atoms.links.new(instance_on_points.outputs[0], reroute_008.inputs[0])
+    #group_input_1.Geometry -> reroute_009.Input
+    supercell_atoms.links.new(group_input_1.outputs[0], reroute_009.inputs[0])
+    #group_001.Geometry -> switch_006.True
+    supercell_atoms.links.new(group_001.outputs[0], switch_006.inputs[2])
+    #group_input_004.+x -> group_001.+x
+    supercell_atoms.links.new(group_input_004.outputs[8], group_001.inputs[1])
+    #group_input_004.+y -> group_001.+y
+    supercell_atoms.links.new(group_input_004.outputs[9], group_001.inputs[2])
+    #group_input_004.+z -> group_001.+z
+    supercell_atoms.links.new(group_input_004.outputs[10], group_001.inputs[3])
+    #group_input_004.-x -> group_001.-x
+    supercell_atoms.links.new(group_input_004.outputs[11], group_001.inputs[4])
+    #group_input_004.-y -> group_001.-y
+    supercell_atoms.links.new(group_input_004.outputs[12], group_001.inputs[5])
+    #group_input_004.-z -> group_001.-z
+    supercell_atoms.links.new(group_input_004.outputs[13], group_001.inputs[6])
+    #reroute_008.Output -> switch_006.False
+    supercell_atoms.links.new(reroute_008.outputs[0], switch_006.inputs[1])
+    #reroute_008.Output -> group_001.Geometry
+    supercell_atoms.links.new(reroute_008.outputs[0], group_001.inputs[0])
+    #switch_006.Output -> join_geometry.Geometry
+    supercell_atoms.links.new(switch_006.outputs[0], join_geometry.inputs[0])
+    return supercell_atoms
+
+
+
+
+def make_supercell(list_of_objects, atoms,modifier='GeometryNodes',representation='nodes'):
+
     if any(atoms.pbc):
         if len(atoms.cell) == 2:
             atoms.cell.append([0,0,50])
     else:
         'print()'
         return
+    if representation == 'nodes':
+        supercell=supercell_node_group(atoms)
+    else:
+        supercell=supercell_atoms_node_group()
     
-    supercell=supercell_node_group(atoms)
     for obj in list_of_objects:
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_add(type='NODES')
         obj.modifiers[modifier].node_group = supercell
+ 
     return True
