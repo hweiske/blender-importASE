@@ -123,7 +123,7 @@ def bond_nodes_node_group(mat):
     mix.data_type = 'RGBA'
     mix.factor_mode = 'UNIFORM'
     #Factor_Float
-    mix.inputs[0].default_value = 1.0
+    mix.inputs[0].default_value = 0
 
 
     #Set locations

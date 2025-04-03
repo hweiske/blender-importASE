@@ -1806,11 +1806,15 @@ def make_supercell(list_of_objects, atoms,modifier='GeometryNodes',representatio
         supercell=supercell_node_group(atoms)
     else:
         supercell=supercell_atoms_node_group()
-    
+    bpy.ops.object.select_all(action='DESELECT')
     for obj in list_of_objects:
+        if obj == list_of_objects[0]:
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.modifier_add(type='NODES')
+            bpy.context.object.modifiers[modifier].node_group = supercell
+
         obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.modifier_add(type='NODES')
-        obj.modifiers[modifier].node_group = supercell
- 
+        
+    if len(list_of_objects) > 1:
+         bpy.ops.object.make_links_data(type='MODIFIERS')
     return True

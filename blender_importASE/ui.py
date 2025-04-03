@@ -141,27 +141,35 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
             outline_objects(list_of_atoms + list_of_bonds,modifier='GeometryNodes'+modifier_chosen)
             modifier_counter += 1
             modifier_chosen=f'.00{modifier_counter}'
-            if add_supercell:
-                added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation) 
+             
         if representation == 'bonds_fromnodes':
             outline_objects([bonds_obj],modifier='GeometryNodes.001')
             outline_objects(list_of_atoms,modifier='GeometryNodes')
             modifier_counter += 1
             modifier_chosen=f'.00{modifier_counter}'
-            if add_supercell:
-                added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)
-                if added:
-                    print(f'added supercell to GeometryNodes{modifier_chosen}')
-                    modifier_counter += 1
-                    modifier_chosen=f'.00{modifier_counter}'
+            
         if representation == 'nodes':
             outline_objects([obj],modifier='GeometryNodes'+modifier_chosen)
         if representation == 'VDW':
             outline_objects(list_of_atoms,modifier='GeometryNodes'+modifier_chosen)
             modifier_counter += 1
             modifier_chosen=f'.00{modifier_counter}'
-            if add_supercell:
-                added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)       
+
+    if add_supercell:
+        if representation == 'bonds_fromnodes':
+            added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)
+            if added:
+                print(f'added supercell to GeometryNodes{modifier_chosen}')
+                modifier_counter += 1
+                modifier_chosen=f'.00{modifier_counter}'
+        
+        if representation == 'VDW':
+            added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)       
+        
+        if representation == 'licorice' or representation == "Balls'n'Sticks":
+            added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation) 
+    
+    
     END_END=time.time()
     print('modifier time: ',END_END-end)
 

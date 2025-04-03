@@ -130,7 +130,7 @@ def draw_bonds_new(atoms,resolution=16):
                         dis=round(atoms.get_distance(atom.index,neighbor,mic=False),3)
                         dismin=round(atoms.get_distance(atom.index,neighbor,mic=True),3)
                         if dis != dismin:
-                            print(dis,dismin)
+                            #print(dis,dismin)
                             is_same_unit_cell = False
                 else:
                     is_same_unit_cell = True

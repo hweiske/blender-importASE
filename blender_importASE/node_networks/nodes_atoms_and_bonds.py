@@ -113,7 +113,7 @@ def set_atoms_node_group():
     #Rings
     uv_sphere.inputs[1].default_value = 16
     #Radius
-    uv_sphere.inputs[2].default_value = 0.7
+    uv_sphere.inputs[2].default_value = 0.5
 
 
     shade= set_atoms.nodes.new("GeometryNodeSetShadeSmooth")
