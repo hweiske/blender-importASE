@@ -30,6 +30,10 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         atoms=atoms[0]
         if animate is False:
             atoms = TRAJECTORY[-1]
+        else:
+            bpy.data.scenes['Scene'].frame_end = len(TRAJECTORY[::imageslice])
+            bpy.data.scenes['Scene'].frame_start = 0
+            bpy.data.scenes['Scene'].frame_current = 0
     elif len(atoms) == 1:
         atoms=atoms[0]
     if overwrite and representation != 'nodes' and animate and trajectory:
@@ -67,6 +71,9 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         
         if animate and trajectory:
             obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True)
+
+            
+
         else:
             obj,mesh=read_structure(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=False)
         print(f'add hide modifier to GeometryNodes{modifier_chosen}')
@@ -85,7 +92,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen)
        
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen].node_group = atoms_from_verts
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.68
+        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.66
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.1
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
@@ -105,7 +112,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
 
         bpy.context.view_layer.active_layer_collection = layer_collection
         bonds_obj = make_bonds(modifier='GeometryNodes')
-        bpy.context.object.modifiers['GeometryNodes']["Socket_1"] = 0.68
+        bpy.context.object.modifiers['GeometryNodes']["Socket_1"] = 0.66
         bpy.context.object.modifiers['GeometryNodes']["Socket_2"] = 0.1
         bpy.context.object.modifiers['GeometryNodes']["Socket_3"] = sec_coll
         

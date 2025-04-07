@@ -290,7 +290,7 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
     else:
         mat = bpy.data.materials["outline_color"]
     mat.use_nodes = True
-    # outline_color = outline_color_node_group(mat)
+    outline_color = outline_color_node_group(mat)
     
 
 #initialize outline_color node group
@@ -305,11 +305,10 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
             bpy.context.object.modifiers[modifier].node_group = node
 
         obj.select_set(True)
-    #    if not obj.data.materials:
-    #        obj.data.materials[0] = mat
-    #    else:
-    #        obj.data.materials.append(mat)
-        # Add modifier to the first object
+        if not obj.data.materials:
+            obj.data.materials[0] = mat
+        else:
+            obj.data.materials.append(mat)
         
     if len(list_of_objects) > 1:
         bpy.ops.object.make_links_data(type='MODIFIERS')

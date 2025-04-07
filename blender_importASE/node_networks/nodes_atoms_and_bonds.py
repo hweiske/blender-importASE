@@ -2,57 +2,10 @@ import bpy
 from ..utils import atomcolors
 from ase.data import covalent_radii, chemical_symbols, colors
 
-def read_structure(atoms,name, animate=True):
-    if animate:
-        trajectory=atoms
-        atoms=trajectory[0]
-    vertices=atoms.get_positions()
-    object_name=name
-    mesh = bpy.data.meshes.new(name=object_name)
-    obj = bpy.data.objects.new(name=object_name, object_data=mesh)
-    bpy.context.collection.objects.link(obj)
-    # Create the mesh from the vertex list
-    mesh.from_pydata(vertices, [], [])  # No edges or faces
-    if "element" not in mesh.attributes:
-        mesh.attributes.new(name="element", type='FLOAT', domain='POINT')
-    if "atom_radius" not in mesh.attributes:
-        mesh.attributes.new(name="atom_radius", type='FLOAT', domain='POINT')
+import bpy, mathutils
 
-    element = mesh.attributes["element"].data
-    rad = mesh.attributes["atom_radius"].data
-
-    for i, value in enumerate(element):
-        atom=atoms[i]
-        value.value = atom.number  # Example: setting index value
-        # Update the mesh   
-    for i, value in enumerate(rad):
-        atom=atoms[i]
-        rad=covalent_radii[atom.number]
-        value.value = rad 
-    mesh.update()
-    vertx=obj.data.vertices
-    #doesnt work yet
-    if animate:
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-       # bpy.data.scenes['Scene'].animall_properties.key_point_location = True
-        vertx=obj.data.vertices
-        for n,frame in enumerate(trajectory):
-            #bpy.data.scenes['Scene'].frame_current=n
-            for nv,v in enumerate(vertx):
-                v.co=frame.positions[nv]
-        
-                v.keyframe_insert(data_path="co", frame=n)    
-        #    bpy.context.view_layer.update()
-        #    bpy.ops.object.mode_set(mode='EDIT')
-        #    bpy.ops.view3d.insert_keyframe_animall()
-        #    bpy.ops.object.mode_set(mode='OBJECT')
-
-    return(obj, mesh)
 #initialize set_atoms node group
 def set_atoms_node_group():
-    if 'set_atoms' in bpy.data.node_groups:
-        return
     set_atoms = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "set_atoms")
 
     set_atoms.color_tag = 'NONE'
@@ -84,6 +37,14 @@ def set_atoms_node_group():
     scale_socket.subtype = 'XYZ'
     scale_socket.attribute_domain = 'POINT'
 
+    #Socket resolution
+    resolution_socket = set_atoms.interface.new_socket(name = "resolution", in_out='INPUT', socket_type = 'NodeSocketInt')
+    resolution_socket.default_value = 32
+    resolution_socket.min_value = 3
+    resolution_socket.max_value = 1024
+    resolution_socket.subtype = 'NONE'
+    resolution_socket.attribute_domain = 'POINT'
+
 
     #initialize set_atoms nodes
     #node Group Output
@@ -108,50 +69,66 @@ def set_atoms_node_group():
     #node UV Sphere
     uv_sphere = set_atoms.nodes.new("GeometryNodeMeshUVSphere")
     uv_sphere.name = "UV Sphere"
-    #Segments
-    uv_sphere.inputs[0].default_value = 32
-    #Rings
-    uv_sphere.inputs[1].default_value = 16
     #Radius
     uv_sphere.inputs[2].default_value = 0.5
 
+    #node Shade Smooth
+    shade_smooth = set_atoms.nodes.new("GeometryNodeSetShadeSmooth")
+    shade_smooth.name = "Shade Smooth"
+    shade_smooth.domain = 'FACE'
+    #Selection
+    shade_smooth.inputs[1].default_value = True
+    #Shade Smooth
+    shade_smooth.inputs[2].default_value = True
 
-    shade= set_atoms.nodes.new("GeometryNodeSetShadeSmooth")
-    shade.name = "Shade Smooth"
-    shade.inputs[2].default_value = True
-    shade.location = (350, 0)
-    shade.width, shade.height = 140.0, 100.0
+    #node Math
+    math = set_atoms.nodes.new("ShaderNodeMath")
+    math.name = "Math"
+    math.operation = 'MULTIPLY'
+    math.use_clamp = False
+    #Value_001
+    math.inputs[1].default_value = 2.0
 
-    
+
 
 
 
     #Set locations
-    group_output.location = (500.13250732421875, 0.0)
-    group_input.location = (-435.13250732421875, 0.0)
-    instance_on_points.location = (235.13250732421875, 30.57642364501953)
-    uv_sphere.location = (-241.16090393066406, -142.24588012695312)
+    group_output.location = (799.6827392578125, -45.560829162597656)
+    group_input.location = (-281.32958984375, -62.15126037597656)
+    instance_on_points.location = (388.9354248046875, -31.57483673095703)
+    uv_sphere.location = (118.87770080566406, -174.6345672607422)
+    shade_smooth.location = (649.55029296875, -45.560829162597656)
+    math.location = (-61.0, -204.416015625)
 
     #Set dimensions
     group_output.width, group_output.height = 140.0, 100.0
     group_input.width, group_input.height = 140.0, 100.0
     instance_on_points.width, instance_on_points.height = 140.0, 100.0
     uv_sphere.width, uv_sphere.height = 140.0, 100.0
+    shade_smooth.width, shade_smooth.height = 140.0, 100.0
+    math.width, math.height = 140.0, 100.0
 
     #initialize set_atoms links
     #group_input.Points -> instance_on_points.Points
     set_atoms.links.new(group_input.outputs[0], instance_on_points.inputs[0])
     #group_input.Scale -> instance_on_points.Scale
     set_atoms.links.new(group_input.outputs[2], instance_on_points.inputs[6])
-    #instance_on_points.Instances -> group_output.Instances
-    set_atoms.links.new(instance_on_points.outputs[0],shade.inputs[0])
-    set_atoms.links.new(shade.outputs[0], group_output.inputs[0])
+    #instance_on_points.Instances -> shade_smooth.Geometry
+    set_atoms.links.new(instance_on_points.outputs[0], shade_smooth.inputs[0])
+    #shade_smooth.Geometry -> group_output.Instances
+    set_atoms.links.new(shade_smooth.outputs[0], group_output.inputs[0])
     #uv_sphere.Mesh -> instance_on_points.Instance
     set_atoms.links.new(uv_sphere.outputs[0], instance_on_points.inputs[2])
     #group_input.Selection -> instance_on_points.Selection
     set_atoms.links.new(group_input.outputs[1], instance_on_points.inputs[1])
+    #group_input.resolution -> math.Value
+    set_atoms.links.new(group_input.outputs[3], math.inputs[0])
+    #math.Value -> uv_sphere.Segments
+    set_atoms.links.new(math.outputs[0], uv_sphere.inputs[0])
+    #group_input.resolution -> uv_sphere.Rings
+    set_atoms.links.new(group_input.outputs[3], uv_sphere.inputs[1])
     return set_atoms
-
 
 #initialize atoms_from_verts node group
 def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
@@ -175,16 +152,12 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     geometry_socket_1 = atoms_and_bonds.interface.new_socket(name = "Geometry", in_out='INPUT', socket_type = 'NodeSocketGeometry')
     geometry_socket_1.attribute_domain = 'POINT'
 
+    
 
     #initialize atoms_from_verts nodes
     #node Group Input
-    group_input_1 = atoms_and_bonds.nodes.new("NodeGroupInput")
-    group_input_1.name = "Group Input"
-
-    #node Group Output
-    group_output_1 = atoms_and_bonds.nodes.new("NodeGroupOutput")
-    group_output_1.name = "Group Output"
-    group_output_1.is_active_output = True
+    group_input_at_atoms = atoms_and_bonds.nodes.new("NodeGroupInput")
+    group_input_at_atoms.name = "Group Input"
 
     
 
@@ -220,7 +193,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     color_attribute.inputs[2].default_value = "color"
     
 
-    atoms_and_bonds.links.new(group_input_1.outputs[0], color_attribute.inputs[0])
+    atoms_and_bonds.links.new(group_input_at_atoms.outputs[0], color_attribute.inputs[0])
         
 
     for n,number in enumerate(numbers):
@@ -272,6 +245,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
         atoms_and_bonds.links.new(radius_attribute.outputs[0], group.inputs[2])
         atoms_and_bonds.links.new(element_attribute.outputs[0], compare.inputs[2])
         atoms_and_bonds.links.new(group.outputs[0], set_material.inputs[0])
+        atoms_and_bonds.links.new(group_input_at_atoms.outputs[3], group.inputs[3])
         atoms_and_bonds.links.new(set_material.outputs[0], join_geometry_atoms.inputs[0])
 
         
@@ -304,15 +278,13 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
 
 
     #Set locations
-    group_input_1.location = (-1500 , 63.91105270385742)
-    group_output_1.location = (120, 0.4488945007324219)
+    group_input_at_atoms.location = (-1500 , 63.91105270385742)
     radius_attribute.location = (-1200, -300)
     element_attribute.location = (-1500, -66.59099578857422)
     join_geometry_atoms.location = (0, 1.9488945007324219)
     color_attribute.location = (-600, 0)
     #Set dimensions
-    group_input_1.width, group_input_1.height = 140.0, 100.0
-    group_output_1.width, group_output_1.height = 140.0, 100.0
+    group_input_at_atoms.width, group_input_at_atoms.height = 140.0, 100.0
     radius_attribute.width, radius_attribute.height = 140.0, 100.0
     element_attribute.width, element_attribute.height = 140.0, 100.0
     
@@ -338,6 +310,13 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     radius_socket.subtype = 'DISTANCE'
     radius_socket.attribute_domain = 'POINT'
 
+    #Socket resolution
+    resolution = atoms_and_bonds.interface.new_socket(name = "RESOLUTION", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    resolution.default_value = 16
+    resolution.min_value = 3
+    resolution.max_value = 64
+    resolution.subtype = 'Integer'
+    resolution.attribute_domain = 'POINT'
 
     #initialize atoms_from_verts nodes
     #node Frame.008
