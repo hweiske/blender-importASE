@@ -94,6 +94,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen].node_group = atoms_from_verts
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.66
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.1
+        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_4"] = 16
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
         

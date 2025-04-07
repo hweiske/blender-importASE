@@ -4,6 +4,54 @@ from ase.data import covalent_radii, chemical_symbols, colors
 
 import bpy, mathutils
 
+def read_structure(atoms,name, animate=True):
+    if animate:
+        trajectory=atoms
+        atoms=trajectory[0]
+    vertices=atoms.get_positions()
+    object_name=name
+    mesh = bpy.data.meshes.new(name=object_name)
+    obj = bpy.data.objects.new(name=object_name, object_data=mesh)
+    bpy.context.collection.objects.link(obj)
+    # Create the mesh from the vertex list
+    mesh.from_pydata(vertices, [], [])  # No edges or faces
+    if "element" not in mesh.attributes:
+        mesh.attributes.new(name="element", type='FLOAT', domain='POINT')
+    if "atom_radius" not in mesh.attributes:
+        mesh.attributes.new(name="atom_radius", type='FLOAT', domain='POINT')
+
+    element = mesh.attributes["element"].data
+    rad = mesh.attributes["atom_radius"].data
+
+    for i, value in enumerate(element):
+        atom=atoms[i]
+        value.value = atom.number  # Example: setting index value
+        # Update the mesh   
+    for i, value in enumerate(rad):
+        atom=atoms[i]
+        rad=covalent_radii[atom.number]
+        value.value = rad 
+    mesh.update()
+    vertx=obj.data.vertices
+    #doesnt work yet
+    if animate:
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+       # bpy.data.scenes['Scene'].animall_properties.key_point_location = True
+        vertx=obj.data.vertices
+        for n,frame in enumerate(trajectory):
+            #bpy.data.scenes['Scene'].frame_current=n
+            for nv,v in enumerate(vertx):
+                v.co=frame.positions[nv]
+        
+                v.keyframe_insert(data_path="co", frame=n)    
+        #    bpy.context.view_layer.update()
+        #    bpy.ops.object.mode_set(mode='EDIT')
+        #    bpy.ops.view3d.insert_keyframe_animall()
+        #    bpy.ops.object.mode_set(mode='OBJECT')
+
+    return(obj, mesh)
+
 #initialize set_atoms node group
 def set_atoms_node_group():
     set_atoms = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "set_atoms")
@@ -153,6 +201,29 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     geometry_socket_1.attribute_domain = 'POINT'
 
     
+    #Socket Bond distance
+    bond_distance = atoms_and_bonds.interface.new_socket(name = "bond_distance", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    bond_distance.default_value = 1
+    bond_distance.min_value = -10000.0
+    bond_distance.max_value = 10000.0
+    bond_distance.subtype = 'NONE'
+    bond_distance.attribute_domain = 'POINT'
+
+    #Socket bond radius
+    radius_socket = atoms_and_bonds.interface.new_socket(name = "bond_radius", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    radius_socket.default_value = 0.075
+    radius_socket.min_value = 0
+    radius_socket.max_value = 3.4028234663852886e+38
+    radius_socket.subtype = 'DISTANCE'
+    radius_socket.attribute_domain = 'POINT'
+
+    #Socket resolution
+    resolution = atoms_and_bonds.interface.new_socket(name = "RESOLUTION", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    resolution.default_value = 16
+    resolution.min_value = 3
+    resolution.max_value = 64
+    resolution.socket_type = 'NodeSocketInt'
+    resolution.attribute_domain = 'POINT'
 
     #initialize atoms_from_verts nodes
     #node Group Input
@@ -273,7 +344,6 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     
 
 
-    atoms_and_bonds.links.new(join_geometry_atoms.outputs[0], group_output_1.inputs[0])
     
 
 
@@ -294,29 +364,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
 
 ###################  BONDS ################################
 
-    #Socket B
-    bond_distance = atoms_and_bonds.interface.new_socket(name = "bond_distance", in_out='INPUT', socket_type = 'NodeSocketFloat')
-    bond_distance.default_value = 1
-    bond_distance.min_value = -10000.0
-    bond_distance.max_value = 10000.0
-    bond_distance.subtype = 'NONE'
-    bond_distance.attribute_domain = 'POINT'
-
-    #Socket Radius
-    radius_socket = atoms_and_bonds.interface.new_socket(name = "bond_radius", in_out='INPUT', socket_type = 'NodeSocketFloat')
-    radius_socket.default_value = 0.075
-    radius_socket.min_value = 0
-    radius_socket.max_value = 3.4028234663852886e+38
-    radius_socket.subtype = 'DISTANCE'
-    radius_socket.attribute_domain = 'POINT'
-
-    #Socket resolution
-    resolution = atoms_and_bonds.interface.new_socket(name = "RESOLUTION", in_out='INPUT', socket_type = 'NodeSocketFloat')
-    resolution.default_value = 16
-    resolution.min_value = 3
-    resolution.max_value = 64
-    resolution.subtype = 'Integer'
-    resolution.attribute_domain = 'POINT'
+    
 
     #initialize atoms_from_verts nodes
     #node Frame.008
@@ -958,14 +1006,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     reroute_013 = atoms_and_bonds.nodes.new("NodeReroute")
     reroute_013.name = "Reroute.013"
     reroute_013.socket_idname = "NodeSocketFloat"
-    #node Set Shade Smooth
-    set_shade_smooth = atoms_and_bonds.nodes.new("GeometryNodeSetShadeSmooth")
-    set_shade_smooth.name = "Set Shade Smooth"
-    set_shade_smooth.domain = 'FACE'
-    #Selection
-    set_shade_smooth.inputs[1].default_value = True
-    #Shade Smooth
-    set_shade_smooth.inputs[2].default_value = True
+    
 
     #node Merge by Distance
     merge_by_distance = atoms_and_bonds.nodes.new("GeometryNodeMergeByDistance")
@@ -1240,7 +1281,6 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     reroute_008.location = (934.743896484375, -368.193359375)
     reroute_012.location = (389.083251953125, -377.300537109375)
     reroute_013.location = (469.48779296875, -164.701416015625)
-    set_shade_smooth.location = (4471.98876953125, 186.086181640625)
     merge_by_distance.location = (4291.6298828125, 160.23275756835938)
     named_attribute_009.location = (38.109375, -267.3577880859375)
     named_attribute_011.location = (29.117431640625, -441.4185791015625)
@@ -1351,7 +1391,6 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     reroute_008.width, reroute_008.height = 14.5, 100.0
     reroute_012.width, reroute_012.height = 14.5, 100.0
     reroute_013.width, reroute_013.height = 14.5, 100.0
-    set_shade_smooth.width, set_shade_smooth.height = 140.0, 100.0
     merge_by_distance.width, merge_by_distance.height = 140.0, 100.0
     named_attribute_009.width, named_attribute_009.height = 158.470458984375, 100.0
     named_attribute_011.width, named_attribute_011.height = 140.0, 100.0
@@ -1518,6 +1557,8 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     atoms_and_bonds.links.new(points.outputs[0], instance_on_points_002.inputs[2])
     #instance_on_points_002.Instances -> realize_instances_001.Geometry
     atoms_and_bonds.links.new(instance_on_points_002.outputs[0], realize_instances_001.inputs[0])
+    #######################put points to output ####
+    atoms_and_bonds.links.new(instance_on_points_002.outputs[0], join_geometry_001.inputs[0])
     #group_input_003.Radius -> curve_circle_001.Radius
     atoms_and_bonds.links.new(group_input_003.outputs[2], curve_circle_001.inputs[4])
     #boolean_math.Boolean -> delete_geometry.Selection
@@ -1556,8 +1597,11 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     atoms_and_bonds.links.new(realize_instances_001.outputs[0], domain_size_001.inputs[0])
     #realize_instances_001.Geometry -> reroute_002.Input
     atoms_and_bonds.links.new(realize_instances_001.outputs[0], reroute_002.inputs[0])
-    #merge_by_distance.Geometry -> set_shade_smooth.Geometry
-    atoms_and_bonds.links.new(merge_by_distance.outputs[0], set_shade_smooth.inputs[0])
+
+    #removed shade smooth
+    atoms_and_bonds.links.new(merge_by_distance.outputs[0], realize_instances_002.inputs[0])
+                              
+                              
     #join_geometry_001.Geometry -> merge_by_distance.Geometry
     atoms_and_bonds.links.new(join_geometry_001.outputs[0], merge_by_distance.inputs[0])
     #sample_index_008.Value -> store_named_attribute_006.Value
@@ -1594,8 +1638,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     atoms_and_bonds.links.new(group_input_002.outputs[1], math_007.inputs[1])
     #math.Value -> compare_005.B
     atoms_and_bonds.links.new(math.outputs[0], compare_005.inputs[1])
-    #set_shade_smooth.Geometry -> realize_instances_002.Geometry
-    atoms_and_bonds.links.new(set_shade_smooth.outputs[0], realize_instances_002.inputs[0])
+
     #reroute_001.Output -> join_geometry_001.Geometry
     atoms_and_bonds.links.new(reroute_001.outputs[0], join_geometry_001.inputs[0])
 

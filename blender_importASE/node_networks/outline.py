@@ -55,6 +55,11 @@ def outline_node_group():
     join_geometry_001 = outline.nodes.new("GeometryNodeJoinGeometry")
     join_geometry_001.name = "Join Geometry.001"
 
+    #node sperate components
+    separate_components = outline.nodes.new("GeometryNodeSeparateComponents")
+    separate_components.name = "Separate Components"
+    
+
     #node Set Shade Smooth
     set_shade_smooth = outline.nodes.new("GeometryNodeSetShadeSmooth")
     set_shade_smooth.name = "Set Shade Smooth"
@@ -158,7 +163,13 @@ def outline_node_group():
 
     #initialize outline links
     #group_input_001.Geometry -> set_shade_smooth.Geometry
-    outline.links.new(group_input_001.outputs[0], set_shade_smooth.inputs[0])
+
+    outline.links.new(group_input_001.outputs[0], separate_components.inputs[0])
+    #separate_components.Geometry -> set_shade_smooth.Geometry
+    outline.links.new(separate_components.outputs[0], set_shade_smooth.inputs[0])              
+    #points to join
+    outline.links.new(separate_components.outputs[3], join_geometry_001.inputs[0])
+
     #vector_math.Vector -> set_position.Offset
     outline.links.new(vector_math.outputs[0], set_position.inputs[3])
     #set_shade_smooth.Geometry -> set_position.Geometry
