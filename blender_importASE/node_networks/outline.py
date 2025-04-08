@@ -167,7 +167,7 @@ def outline_node_group():
     outline.links.new(group_input_001.outputs[0], separate_components.inputs[0])
     #separate_components.Geometry -> set_shade_smooth.Geometry
     outline.links.new(separate_components.outputs[0], set_shade_smooth.inputs[0])              
-    #points to join
+    #points to join geometry
     outline.links.new(separate_components.outputs[3], join_geometry_001.inputs[0])
 
     #vector_math.Vector -> set_position.Offset
