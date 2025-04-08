@@ -574,24 +574,25 @@ def supercell_node_group(atoms):
     reroute_006.name = "Reroute.006"
     reroute_006.socket_idname = "NodeSocketVector"
     #node Vector.002
-    vector_002 = supercell.nodes.new("FunctionNodeInputVector")
-    vector_002.label = "zvec"
-    vector_002.name = "Vector.002"
-    vector_002.hide = True
-    vector_002.vector = (0.0, 0.0, 30.64883041381836)
+    vector_z = supercell.nodes.new("FunctionNodeInputVector")
+    vector_z.label = "zvec"
+    vector_z.name = "Vector.002"
+    vector_z.hide = True
+    vector_z.vector = atoms.cell[2]
 
     #node Vector
-    vector = supercell.nodes.new("FunctionNodeInputVector")
-    vector.label = "xvec"
-    vector.name = "Vector"
-    vector.hide = True
-    vector.vector = (15.324419021606445, 0.0, 0.0)
+    vector_x = supercell.nodes.new("FunctionNodeInputVector")
+    vector_x.label = "xvec"
+    vector_x.name = "Vector"
+    vector_x.hide = True
+    vector_x.vector = atoms.cell[0]
 
     #node Vector.001
-    vector_001 = supercell.nodes.new("FunctionNodeInputVector")
-    vector_001.label = "yvec"
-    vector_001.name = "Vector.001"
-    vector_001.vector = (0.0, 15.324399948120117, 0.0)
+    vector_y = supercell.nodes.new("FunctionNodeInputVector")
+    vector_y.label = "yvec"
+    vector_y.hide = True
+    vector_y.name = "Vector.001"
+    vector_y.vector = atoms.cell[1]
 
     #node Switch
     switch = supercell.nodes.new("GeometryNodeSwitch")
@@ -816,9 +817,9 @@ def supercell_node_group(atoms):
     math.parent = frame
     math_001.parent = frame
     reroute.parent = frame_003
-    vector_002.parent = frame_005
-    vector.parent = frame_005
-    vector_001.parent = frame_005
+    vector_z.parent = frame_005
+    vector_x.parent = frame_005
+    vector_y.parent = frame_005
     switch.parent = frame_003
     switch_001.parent = frame_003
     switch_002.parent = frame_003
@@ -855,9 +856,9 @@ def supercell_node_group(atoms):
     reroute_007.location = (-652.3507690429688, -134.8733367919922)
     reroute_005.location = (-565.2334594726562, 253.76507568359375)
     reroute_006.location = (-613.8910522460938, 75.26302337646484)
-    vector_002.location = (50.76611328125, -115.57769775390625)
-    vector.location = (28.9681396484375, -33.61053466796875)
-    vector_001.location = (42.9547119140625, -79.21051025390625)
+    vector_z.location = (50.76611328125, -115.57769775390625)
+    vector_x.location = (28.9681396484375, -33.61053466796875)
+    vector_y.location = (42.9547119140625, -79.21051025390625)
     switch.location = (144.450927734375, -39.410369873046875)
     switch_001.location = (138.5106201171875, -191.1127471923828)
     switch_002.location = (139.989990234375, -345.19842529296875)
@@ -905,9 +906,9 @@ def supercell_node_group(atoms):
     reroute_007.width, reroute_007.height = 14.5, 100.0
     reroute_005.width, reroute_005.height = 14.5, 100.0
     reroute_006.width, reroute_006.height = 14.5, 100.0
-    vector_002.width, vector_002.height = 140.0, 100.0
-    vector.width, vector.height = 140.0, 100.0
-    vector_001.width, vector_001.height = 140.0, 100.0
+    vector_z.width, vector_z.height = 140.0, 100.0
+    vector_x.width, vector_x.height = 140.0, 100.0
+    vector_y.width, vector_y.height = 140.0, 100.0
     switch.width, switch.height = 140.0, 100.0
     switch_001.width, switch_001.height = 140.0, 100.0
     switch_002.width, switch_002.height = 140.0, 100.0
@@ -981,9 +982,9 @@ def supercell_node_group(atoms):
     #switch_001.Output -> reroute_004.Input
     supercell.links.new(switch_001.outputs[0], reroute_004.inputs[0])
     #vector_001.Vector -> reroute_006.Input
-    supercell.links.new(vector_001.outputs[0], reroute_006.inputs[0])
+    supercell.links.new(vector_y.outputs[0], reroute_006.inputs[0])
     #vector_002.Vector -> reroute_007.Input
-    supercell.links.new(vector_002.outputs[0], reroute_007.inputs[0])
+    supercell.links.new(vector_z.outputs[0], reroute_007.inputs[0])
     #group_input_001.global -> switch.Switch
     supercell.links.new(group_input_001.outputs[6], switch.inputs[0])
     #group_input_001.repeat_x -> switch.False
@@ -1019,7 +1020,7 @@ def supercell_node_group(atoms):
     #reroute_007.Output -> vector_math_002.Vector
     supercell.links.new(reroute_007.outputs[0], vector_math_002.inputs[0])
     #vector.Vector -> reroute_005.Input
-    supercell.links.new(vector.outputs[0], reroute_005.inputs[0])
+    supercell.links.new(vector_x.outputs[0], reroute_005.inputs[0])
     #join_geometry.Geometry -> realize_instances_001.Geometry
     supercell.links.new(join_geometry.outputs[0], realize_instances_001.inputs[0])
     #reroute_009.Output -> join_geometry.Geometry
@@ -1383,24 +1384,25 @@ def supercell_atoms_node_group():
     reroute_006.name = "Reroute.006"
     reroute_006.socket_idname = "NodeSocketVector"
     #node Vector.002
-    vector_002 = supercell_atoms.nodes.new("FunctionNodeInputVector")
-    vector_002.label = "zvec"
-    vector_002.name = "Vector.002"
-    vector_002.hide = True
-    vector_002.vector = (0.0, 0.0, 30.64883041381836)
+    vector_z = supercell_atoms.nodes.new("FunctionNodeInputVector")
+    vector_z.label = "zvec"
+    vector_z.name = "Vector.002"
+    vector_z.hide = True
+    vector_z.vector = atoms.cell[2]
 
     #node Vector
-    vector = supercell_atoms.nodes.new("FunctionNodeInputVector")
-    vector.label = "xvec"
-    vector.name = "Vector"
-    vector.hide = True
-    vector.vector = (15.324419021606445, 0.0, 0.0)
+    vector_x = supercell_atoms.nodes.new("FunctionNodeInputVector")
+    vector_x.label = "xvec"
+    vector_x.name = "Vector"
+    vector_x.hide = True
+    vector_x.vector = atoms.cell[0]
 
     #node Vector.001
-    vector_001 = supercell_atoms.nodes.new("FunctionNodeInputVector")
-    vector_001.label = "yvec"
-    vector_001.name = "Vector.001"
-    vector_001.vector = (0.0, 15.324399948120117, 0.0)
+    vector_y = supercell_atoms.nodes.new("FunctionNodeInputVector")
+    vector_y.label = "yvec"
+    vector_y.name = "Vector.001"
+    vector_y.hide = True
+    vector_y.vector = atoms.cell[1]
 
     #node Switch
     switch = supercell_atoms.nodes.new("GeometryNodeSwitch")
@@ -1556,9 +1558,9 @@ def supercell_atoms_node_group():
     math.parent = frame
     math_001.parent = frame
     reroute.parent = frame_003
-    vector_002.parent = frame_005
-    vector.parent = frame_005
-    vector_001.parent = frame_005
+    vector_z.parent = frame_005
+    vector_x.parent = frame_005
+    vector_y.parent = frame_005
     switch.parent = frame_003
     switch_001.parent = frame_003
     switch_002.parent = frame_003
@@ -1594,9 +1596,9 @@ def supercell_atoms_node_group():
     reroute_007.location = (-652.3507690429688, -134.8733367919922)
     reroute_005.location = (-565.2334594726562, 253.76507568359375)
     reroute_006.location = (-613.8910522460938, 75.26302337646484)
-    vector_002.location = (52.0994873046875, -117.4110107421875)
-    vector.location = (30.301513671875, -35.44384765625)
-    vector_001.location = (44.2880859375, -81.0438232421875)
+    vector_z.location = (52.0994873046875, -117.4110107421875)
+    vector_x.location = (30.301513671875, -35.44384765625)
+    vector_y.location = (44.2880859375, -81.0438232421875)
     switch.location = (145.6175537109375, -39.5770263671875)
     switch_001.location = (139.67724609375, -191.27940368652344)
     switch_002.location = (141.1566162109375, -345.3650817871094)
@@ -1645,9 +1647,9 @@ def supercell_atoms_node_group():
     reroute_007.width, reroute_007.height = 10.0, 100.0
     reroute_005.width, reroute_005.height = 10.0, 100.0
     reroute_006.width, reroute_006.height = 10.0, 100.0
-    vector_002.width, vector_002.height = 140.0, 100.0
-    vector.width, vector.height = 140.0, 100.0
-    vector_001.width, vector_001.height = 140.0, 100.0
+    vector_z.width, vector_z.height = 140.0, 100.0
+    vector_x.width, vector_x.height = 140.0, 100.0
+    vector_y.width, vector_y.height = 140.0, 100.0
     switch.width, switch.height = 140.0, 100.0
     switch_001.width, switch_001.height = 140.0, 100.0
     switch_002.width, switch_002.height = 140.0, 100.0
@@ -1722,9 +1724,9 @@ def supercell_atoms_node_group():
     #switch_001.Output -> reroute_004.Input
     supercell_atoms.links.new(switch_001.outputs[0], reroute_004.inputs[0])
     #vector_001.Vector -> reroute_006.Input
-    supercell_atoms.links.new(vector_001.outputs[0], reroute_006.inputs[0])
+    supercell_atoms.links.new(vector_y.outputs[0], reroute_006.inputs[0])
     #vector_002.Vector -> reroute_007.Input
-    supercell_atoms.links.new(vector_002.outputs[0], reroute_007.inputs[0])
+    supercell_atoms.links.new(vector_z.outputs[0], reroute_007.inputs[0])
     #group_input_001.global -> switch.Switch
     supercell_atoms.links.new(group_input_001.outputs[6], switch.inputs[0])
     #group_input_001.repeat_x -> switch.False
@@ -1760,7 +1762,7 @@ def supercell_atoms_node_group():
     #reroute_007.Output -> vector_math_002.Vector
     supercell_atoms.links.new(reroute_007.outputs[0], vector_math_002.inputs[0])
     #vector.Vector -> reroute_005.Input
-    supercell_atoms.links.new(vector.outputs[0], reroute_005.inputs[0])
+    supercell_atoms.links.new(vector_x.outputs[0], reroute_005.inputs[0])
     #reroute_009.Output -> join_geometry.Geometry
     supercell_atoms.links.new(reroute_009.outputs[0], join_geometry.inputs[0])
     #join_geometry.Geometry -> merge_by_distance.Geometry
@@ -1805,7 +1807,7 @@ def make_supercell(list_of_objects, atoms,modifier='GeometryNodes',representatio
     if representation == 'nodes':
         supercell=supercell_node_group(atoms)
     else:
-        supercell=supercell_atoms_node_group()
+        supercell=supercell_atoms_node_group(atoms=atoms)
     bpy.ops.object.select_all(action='DESELECT')
     for obj in list_of_objects:
         if obj == list_of_objects[0]:
