@@ -8,6 +8,8 @@
 
   `/snap/blender/xxxx/3.x/python/bin/python3.x -m pip install ase`
 
+  * to find your blender-python for installing ase: open blender; open the python console, type "import sys;sys.executable" and hit enter. now the executable is printed - use as above
+
 ## Installation
 
 To use the addons in Blender simply download the zip file for yor version `blender_importASE.zip` from the latest release. In Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. If you want to use the automatic rendering of viewpoints, also download the file `render_vpts.py` and install and activate the same way.
