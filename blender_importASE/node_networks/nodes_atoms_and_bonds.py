@@ -340,8 +340,10 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
                 atoms_and_bonds.links.new(color.outputs[0], switch_color.inputs[2]) #color is n
             switch_color.location = (-500, -1000+200*n)
         
-    atoms_and_bonds.links.new(switch_color.outputs[0], color_attribute.inputs[3])
-    
+    if len(numbers) > 1:    
+        atoms_and_bonds.links.new(switch_color.outputs[0], color_attribute.inputs[3])
+    else:
+        atoms_and_bonds.links.new(color.outputs[0], color_attribute.inputs[3])
 
 
     
