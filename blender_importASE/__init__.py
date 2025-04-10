@@ -39,23 +39,23 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
 
     resolution: bpy.props.IntProperty(
         name='resolution',
-        description='resolution of bonds and atoms',
+        description='resolution of bonds and atoms. Breaks for Balls\'n\'Sticks and Licorice with Longbonds',
         default=16,
     )
 
     colorbonds: bpy.props.BoolProperty(
         name='colorbonds',
-        description="Color the bonds according to the surrounding atoms",
+        description="Color the bonds according to the connecting atoms",
         default=False,
     )
     fix_bonds: bpy.props.BoolProperty(
         name='Use Longbonds',
-        description="Mitigates lines in the middle of bonds where individual bonds meet",
+        description="Mitigates lines in the middle of bonds where individual bonds meet,  relevant for Balls'n'Sticks and Licorice",
         default=True,
     )
     color: bpy.props.FloatProperty(
         name="color",
-        description="color for gray bonds in BW-scale",
+        description="color for gray bonds in BW-scale, relevant for Balls'n'Sticks and Licorice",
         default=0.6,
         min=0.0,
         max=1.0,
@@ -65,11 +65,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         description="Draw unit cell",
         default=False,
     )
-    separate_collections: bpy.props.BoolProperty(
-        name='separate_collections',
-        description="separate collections by unit cell, atoms and bonds",
-        default=False,
-    )
+
     representation: bpy.props.EnumProperty(
         name="representation",
         description="select the representation for your structure",
@@ -90,7 +86,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     zero_cell: bpy.props.BoolProperty(
         name='Assume zero centered cell',
         description="Calculations in AMS result in zero-centered cells. This will confuse the longbond algorithm and cause" \
-                    "the atoms to lie outside the unit cell (if drawn). This option compensates for that.",
+                    "the atoms to lie outside the unit cell (if drawn). This option compensates for that. relevant for Balls'n'Sticks and Licorice",
         default=False,
     )
     animate: bpy.props.BoolProperty(
@@ -105,7 +101,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     )
     overwrite: bpy.props.BoolProperty(
         name='overwrite',
-        description='overwrite representation to "nodes" for animations',
+        description='overwrite representation to "nodes" for animations. Recommended',
         default=True
     )
     outline: bpy.props.BoolProperty(
@@ -141,7 +137,6 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'representation')
         layout.prop(self, 'color')
         layout.prop(self, 'unit_cell')
-        layout.prop(self, 'separate_collections')
         layout.prop(self, 'read_density')
         layout.prop(self, 'zero_cell')
         layout.prop(self, 'animate')
@@ -161,7 +156,6 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                                 resolution=self.resolution,
                                 color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
                                 unit_cell=self.unit_cell, representation=self.representation,
-                                separate_collections=self.separate_collections,
                                 read_density=self.read_density, 
                                 shift_cell=self.zero_cell,imageslice=self.imageslice,
                                 animate=self.animate, outline=self.outline,

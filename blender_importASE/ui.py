@@ -87,14 +87,15 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
                 modifier_counter += 1
                 modifier_chosen=f'.00{modifier_counter}'
         set_atoms_node_group()
-        create_bondmat()
+        elements_name='_'.join(list(set(atoms.get_chemical_symbols())))
+        bondmat=create_bondmat(colorbonds=colorbonds,name=elements_name)
         print(f'add atoms_and_bonds modifier to GeometryNodes{modifier_chosen}')
-        atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen)
+        atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen,bondmat=bondmat)
        
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen].node_group = atoms_from_verts
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.66
         bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.1
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_4"] = 16
+        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_4"] = resolution
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
         
