@@ -124,8 +124,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         draw_unit_cell(atoms)
     if read_density:
         if 'cube' in filename:
-            density_obj = cube2vol(filepath,modifier='GeometryNodes'+modifier_chosen)
-            modifier_counter += 1
+            density_obj = cube2vol(filepath,modifier='GeometryNodes')
             modifier_chosen=f'.00{modifier_counter}'
             #print(density_obj)
             if shift_cell is True:
