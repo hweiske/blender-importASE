@@ -22,7 +22,7 @@ def outline_node_group():
 
     #Socket Value
     value_socket = outline.interface.new_socket(name = "Value", in_out='INPUT', socket_type = 'NodeSocketFloat')
-    value_socket.default_value = 0.5
+    value_socket.default_value = 1
     value_socket.min_value = -10000.0
     value_socket.max_value = 10000.0
     value_socket.subtype = 'NONE'
@@ -97,7 +97,7 @@ def outline_node_group():
     math.operation = 'MULTIPLY'
     math.use_clamp = False
     #Value_001
-    math.inputs[1].default_value = 0.009999997913837433
+    math.inputs[1].default_value = 0.01
 
     #node Set Material.001
     set_material_001 = outline.nodes.new("GeometryNodeSetMaterial")
@@ -305,15 +305,16 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
     # outline_color_node_group(mat)
     
 
-#initialize outline_color node group
     node = outline_node_group()
-    
+    node["Socket_1"] = 1
+    node["Socket_2"] = False
     bpy.ops.object.select_all(action='DESELECT')
+    
     for obj in list_of_objects:
         if obj == list_of_objects[0]:
             bpy.context.view_layer.objects.active = obj
             bpy.ops.object.modifier_add(type='NODES')
-            node = bpy.data.node_groups["outline"]
+            #node = bpy.data.node_groups["outline"]
             bpy.context.object.modifiers[modifier].node_group = node
 
         obj.select_set(True)
