@@ -1083,7 +1083,7 @@ def supercell_node_group(atoms):
     
     return supercell
 
-def supercell_atoms_node_group(atoms=atoms):
+def supercell_atoms_node_group(atoms):
     cutoff_group=cutoff_group_node_group()
     supercell_atoms = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "supercell_atoms")
     
@@ -1807,7 +1807,7 @@ def make_supercell(list_of_objects, atoms,modifier='GeometryNodes',representatio
     if representation == 'nodes':
         supercell=supercell_node_group(atoms)
     else:
-        supercell=supercell_atoms_node_group(atoms=atoms)
+        supercell=supercell_atoms_node_group(atoms)
     bpy.ops.object.select_all(action='DESELECT')
     for obj in list_of_objects:
         if obj == list_of_objects[0]:
