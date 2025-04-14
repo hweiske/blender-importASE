@@ -53,13 +53,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
     bpy.context.view_layer.active_layer_collection = layer_collection
     if representation != 'bonds_fromnodes' and representation != 'nodes':
-        group_atoms(atoms)
-        list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
-        if representation != 'VDW':
-            if fix_bonds:
-                list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
-            else:
-                list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
+       
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         if representation != 'VDW':
