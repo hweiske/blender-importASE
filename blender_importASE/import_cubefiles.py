@@ -1,9 +1,13 @@
 import bpy
 from ase.io.cube import read_cube
-if bpy.app.version[1] < 4:
-    import pyopenvdb as vdb
-else:
+#if bpy.app.version[1] < 4:         didn't work
+#    import pyopenvdb as vdb
+#else:
+#    import openvdb as vdb
+try:
     import openvdb as vdb
+except ImportError:
+    import pyopenvdb as vdb
 import os
 from .node_networks.electron_density_nodes import visualize_edensity_node_group
 from .utils import toggle
