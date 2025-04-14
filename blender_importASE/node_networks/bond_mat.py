@@ -1,6 +1,6 @@
 import bpy
 
-def bond_nodes_node_group(mat):
+def bond_nodes_node_group(mat,colorbonds=False):
 
     bond_nodes = mat.node_tree
     #start with a clean node tree
@@ -123,7 +123,10 @@ def bond_nodes_node_group(mat):
     mix.data_type = 'RGBA'
     mix.factor_mode = 'UNIFORM'
     #Factor_Float
-    mix.inputs[0].default_value = 0
+    if colorbonds:
+        mix.inputs[0].default_value = 1
+    else:
+        mix.inputs[0].default_value = 0
 
 
     #Set locations
@@ -158,13 +161,14 @@ def bond_nodes_node_group(mat):
     return bond_nodes
 
 
-def create_bondmat():
+def create_bondmat(colorbonds=False,name="atoms"):
     
     if "BOND_nodes" not in bpy.data.materials:
-        mat = bpy.data.materials.new(name = "BOND_nodes")
+        mat = bpy.data.materials.new(name = "BOND_nodes_"+name)
     else:
         return
     mat.use_nodes = True
     #initialize BOND_nodes node group
-    bond_nodes_node_group(mat)
+    bond_nodes_node_group(mat,colorbonds=colorbonds)
+    return(mat)
 

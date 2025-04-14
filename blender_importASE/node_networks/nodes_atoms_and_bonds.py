@@ -179,7 +179,7 @@ def set_atoms_node_group():
     return set_atoms
 
 #initialize atoms_from_verts node group
-def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
+def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     atomcolor=atomcolors()
     
     atoms_and_bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = f"atoms_and_bonds_{atoms.get_chemical_formula()}")
@@ -340,8 +340,10 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
                 atoms_and_bonds.links.new(color.outputs[0], switch_color.inputs[2]) #color is n
             switch_color.location = (-500, -1000+200*n)
         
-    atoms_and_bonds.links.new(switch_color.outputs[0], color_attribute.inputs[3])
-    
+    if len(numbers) > 1:    
+        atoms_and_bonds.links.new(switch_color.outputs[0], color_attribute.inputs[3])
+    else:
+        atoms_and_bonds.links.new(color.outputs[0], color_attribute.inputs[3])
 
 
     
@@ -491,8 +493,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     set_material_006.name = "Set Material.006"
     #Selection
     set_material_006.inputs[1].default_value = True
-    if "BOND_nodes" in bpy.data.materials:
-        set_material_006.inputs[2].default_value = bpy.data.materials["BOND_nodes"]
+    set_material_006.inputs[2].default_value = bondmat
 
     #node Switch.005
     switch_005 = atoms_and_bonds.nodes.new("GeometryNodeSwitch")
@@ -1654,5 +1655,5 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes'):
     for number in set(atoms.get_atomic_numbers()):
         sym = chemical_symbols[number]
         obj.data.materials.append(bpy.data.materials[sym])
-    obj.data.materials.append(bpy.data.materials["BOND_nodes"])
+    obj.data.materials.append(bondmat)
     return  atoms_and_bonds
