@@ -37,7 +37,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     elif len(atoms) == 1:
         atoms=atoms[0]
     if overwrite and representation != 'nodes' and animate and trajectory:
-        self.representation = 'nodes'
+        representation = 'nodes'
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
     cell = atoms.cell
     shift_vector = 0.5 * cell[0] + 0.5 * cell[1] + 0.5 * cell[2]
