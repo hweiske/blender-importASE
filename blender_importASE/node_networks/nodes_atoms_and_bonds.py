@@ -2,7 +2,7 @@ import bpy
 from ..utils import atomcolors
 from ase.data import covalent_radii, chemical_symbols, colors
 
-import bpy, mathutils
+
 
 def read_structure(atoms,name, animate=True):
     if animate:

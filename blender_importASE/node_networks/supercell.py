@@ -1083,7 +1083,7 @@ def supercell_node_group(atoms):
     
     return supercell
 
-def supercell_atoms_node_group():
+def supercell_atoms_node_group(atoms=atoms):
     cutoff_group=cutoff_group_node_group()
     supercell_atoms = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "supercell_atoms")
     

@@ -301,7 +301,8 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
     else:
         mat = bpy.data.materials["outline_color"]
     mat.use_nodes = True
-    outline_color = outline_color_node_group(mat)
+    #outline_color =   # ruff unhappy
+    # outline_color_node_group(mat)
     
 
 #initialize outline_color node group
