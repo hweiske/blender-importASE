@@ -8,7 +8,7 @@ from .ui import import_ase_molecule
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "1.3" 
+__version__ = "2.0" 
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
