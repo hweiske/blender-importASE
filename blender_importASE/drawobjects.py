@@ -24,7 +24,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         bpy.context.view_layer.active_layer_collection.collection.objects[-1].name = atom.symbol
         if representation == "Balls'n'Sticks":
             bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [covalent_radii[
-                                                                                               atom.number] * 0.5 * scale, ] * 3
+                                                                                               atom.number]  * scale, ] * 3
         elif representation == 'Licorice':
             bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [0.1] * 3
         else:
@@ -130,7 +130,7 @@ def draw_bonds_new(atoms,resolution=16):
                         dis=round(atoms.get_distance(atom.index,neighbor,mic=False),3)
                         dismin=round(atoms.get_distance(atom.index,neighbor,mic=True),3)
                         if dis != dismin:
-                            print(dis,dismin)
+                            #print(dis,dismin)
                             is_same_unit_cell = False
                 else:
                     is_same_unit_cell = True
@@ -263,6 +263,8 @@ def draw_unit_cell(atoms):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_cell'].select_set(True)
     bpy.ops.object.delete()
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.join()
     bpy.ops.object.select_all(action='DESELECT')
     return None
 

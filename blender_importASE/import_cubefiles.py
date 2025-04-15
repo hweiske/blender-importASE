@@ -1,13 +1,20 @@
 import bpy
 from ase.io.cube import read_cube
-import pyopenvdb as vdb
+#if bpy.app.version[1] < 4:         didn't work
+#    import pyopenvdb as vdb
+#else:
+#    import openvdb as vdb
+try:
+    import openvdb as vdb
+except ImportError:
+    import pyopenvdb as vdb
 import os
-from .setup_nodetree import visualize_edensity_node_group
+from .node_networks.electron_density_nodes import visualize_edensity_node_group
 from .utils import toggle
 import os.path
 
 
-def cube2vol(filename, filepath=os.environ.get('HOME')):
+def cube2vol(filename, filepath=os.environ.get('HOME'),modifier='GeometryNodes'):
     with open(filename, 'r') as f:
         atoms = read_cube(f, read_data=True, verbose=True)
         ORIGIN = atoms['origin']
@@ -45,8 +52,8 @@ def cube2vol(filename, filepath=os.environ.get('HOME')):
     visualize_edensity_node_group()
     bpy.ops.object.modifier_add(type='NODES')
     node = bpy.data.node_groups["visualize_edensity"]
-    bpy.context.object.modifiers['GeometryNodes'].node_group = node
-    bpy.context.object.modifiers["GeometryNodes"]["Socket_9"] = bpy.data.materials["+ material"]
-    bpy.context.object.modifiers["GeometryNodes"]["Socket_10"] = bpy.data.materials["- material"]
+    bpy.context.object.modifiers[modifier].node_group = node
+    bpy.context.object.modifiers[modifier]["Socket_9"] = bpy.data.materials["+ material"]
+    bpy.context.object.modifiers[modifier]["Socket_10"] = bpy.data.materials["- material"]
     toggle(bpy.context.object, SET=False)
     return density_obj
