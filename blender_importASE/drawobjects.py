@@ -16,6 +16,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         bpy.ops.object.shade_smooth()
     sphere = bpy.context.object
     sphere.name = 'ref_sphere'
+    sphere.name = bpy.context.object.name
     for n, atom in enumerate(atoms):
         ob = sphere.copy()
         ob.data = sphere.data.copy()
@@ -44,7 +45,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         list_of_atoms.append(ob)
         bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
     bpy.ops.object.select_all(action='DESELECT')
-    bpy.data.objects['ref_sphere'].select_set(True)
+    bpy.data.objects[sphere.name].select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
     return list_of_atoms
@@ -57,9 +58,11 @@ def draw_bonds(atoms,resolution=16):
     nl.update(atoms)
     bpy.ops.object.select_all(action='DESELECT')
     try:
-        bpy.ops.group.create(name='bonds')
+        scene = bpy.context.scene
+        bond_collection = bpy.data.collections.new("bonds")
+        scene.collection.children.link(bond_collection)
     except Exception:
-        None
+        print("Group bonds was not created, proceeding without group")
     # bpy.ops.surface.primitive_nurbs_surface_cylinder_add(radius=1.0, enter_editmode=False, align='WORLD',
     # location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
     bond = create_half_bond(resolution=resolution)
@@ -91,11 +94,11 @@ def draw_bonds(atoms,resolution=16):
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
                     list_of_bonds.append(ob)
-                    bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
+                    bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
                     break
                 cnt += 1
     bpy.ops.object.select_all(action='DESELECT')
-    bpy.data.objects['ref_bond'].select_set(True)
+    bond.select_set(True)
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
     return list_of_bonds,nl
