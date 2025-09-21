@@ -43,7 +43,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     resolution: bpy.props.IntProperty(
         name='resolution',
         description='resolution of bonds and atoms. Breaks for Balls\'n\'Sticks and Licorice with Longbonds',
-        default=16,
+        default=32,
     )
 
     colorbonds: bpy.props.BoolProperty(
@@ -51,7 +51,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         description="Color the bonds according to the connecting atoms",
         default=False,
     )
-    fix_bonds: bpy.props.BoolProperty(
+    long_bonds: bpy.props.BoolProperty(
         name='Use Longbonds',
         description="Mitigates lines in the middle of bonds where individual bonds meet,  relevant for Balls'n'Sticks and Licorice",
         default=True,
@@ -136,7 +136,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'outline')
         layout.prop(self, 'add_supercell')
         layout.prop(self, 'colorbonds')
-        layout.prop(self, 'fix_bonds')
+        layout.prop(self, 'long_bonds')
         layout.prop(self, 'representation')
         layout.prop(self, 'color')
         layout.prop(self, 'unit_cell')
@@ -157,10 +157,10 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
             import_ase_molecule(filepath, file.name,
                             
                                 resolution=self.resolution,
-                                color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
+                                color=self.color, colorbonds=self.colorbonds, long_bonds=self.long_bonds, scale=self.scale,
                                 unit_cell=self.unit_cell, representation=self.representation,
                                 read_density=self.read_density, 
-                                shift_cell=self.zero_cell,imageslice=self.imageslice,
+                                shift_cell=self.zero_cell, imageslice=self.imageslice,
                                 animate=self.animate, outline=self.outline,
                                 overwrite=self.overwrite, add_supercell=self.add_supercell
                                 )
