@@ -1,198 +1,163 @@
 import bpy
-
-#initialize outline node group
-def outline_node_group():
-    outline = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "outline")
+from .. import __version__
+def outline_node_group(mat=None):
+    """Initialize outline node group"""
+    outline = bpy.data.node_groups.new(type='GeometryNodeTree', name="outline")
 
     outline.color_tag = 'NONE'
-    outline.description = ""
+    outline.description = __version__
     outline.default_group_node_width = 140
-    
-
     outline.is_modifier = True
 
-    #outline interface
-    #Socket Geometry
-    geometry_socket = outline.interface.new_socket(name = "Geometry", in_out='OUTPUT', socket_type = 'NodeSocketGeometry')
+    # outline interface
+
+    # Socket Geometry
+    geometry_socket = outline.interface.new_socket(name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
     geometry_socket.attribute_domain = 'POINT'
 
-    #Socket Geometry
-    geometry_socket_1 = outline.interface.new_socket(name = "Geometry", in_out='INPUT', socket_type = 'NodeSocketGeometry')
+    # Socket Geometry
+    geometry_socket_1 = outline.interface.new_socket(name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
     geometry_socket_1.attribute_domain = 'POINT'
 
-    #Socket Value
-    value_socket = outline.interface.new_socket(name = "Value", in_out='INPUT', socket_type = 'NodeSocketFloat')
-    value_socket.default_value = 1
+    # Socket Value
+    value_socket = outline.interface.new_socket(name="Value", in_out='INPUT', socket_type='NodeSocketFloat')
+    value_socket.default_value = 0.5
     value_socket.min_value = -10000.0
     value_socket.max_value = 10000.0
     value_socket.subtype = 'NONE'
     value_socket.attribute_domain = 'POINT'
 
-    #Socket global_thickness
-    global_thickness_socket = outline.interface.new_socket(name = "global_thickness", in_out='INPUT', socket_type = 'NodeSocketBool')
-    global_thickness_socket.default_value = False
-    global_thickness_socket.attribute_domain = 'POINT'
-    global_thickness_socket.description = "whether to choose the value in the switch or use individual values. usually leave true. set Value in the large purple box"
+    # Socket Outline-Mat
+    outline_mat_socket = outline.interface.new_socket(name="Outline-Mat", in_out='INPUT', socket_type='NodeSocketMaterial')
+    outline_mat_socket.default_value = mat
+    outline_mat_socket.attribute_domain = 'POINT'
+    outline_mat_socket.description = "Outline Material"
 
+    # Initialize outline nodes
 
-    #initialize outline nodes
-    #node Frame.001
+    # Node Frame.001
     frame_001 = outline.nodes.new("NodeFrame")
     frame_001.name = "Frame.001"
     frame_001.label_size = 20
     frame_001.shrink = True
 
-    #node Group Output.001
+    # Node Group Output.001
     group_output_001 = outline.nodes.new("NodeGroupOutput")
     group_output_001.name = "Group Output.001"
     group_output_001.is_active_output = True
 
-    #node Group Input.001
+    # Node Group Input.001
     group_input_001 = outline.nodes.new("NodeGroupInput")
     group_input_001.name = "Group Input.001"
 
-    #node Join Geometry.001
+    # Node Join Geometry.001
     join_geometry_001 = outline.nodes.new("GeometryNodeJoinGeometry")
     join_geometry_001.name = "Join Geometry.001"
 
-    #node sperate components
-    separate_components = outline.nodes.new("GeometryNodeSeparateComponents")
-    separate_components.name = "Separate Components"
-    
-
-    #node Set Shade Smooth
+    # Node Set Shade Smooth
     set_shade_smooth = outline.nodes.new("GeometryNodeSetShadeSmooth")
     set_shade_smooth.name = "Set Shade Smooth"
     set_shade_smooth.domain = 'FACE'
-    #Selection
+    # Selection
     set_shade_smooth.inputs[1].default_value = True
-    #Shade Smooth
+    # Shade Smooth
     set_shade_smooth.inputs[2].default_value = True
 
-    #node Vector Math
+    # Node Set Material.001
+    set_material_001 = outline.nodes.new("GeometryNodeSetMaterial")
+    set_material_001.name = "Set Material.001"
+    # Selection
+    set_material_001.inputs[1].default_value = True
+
+    # Node Vector Math
     vector_math = outline.nodes.new("ShaderNodeVectorMath")
     vector_math.name = "Vector Math"
     vector_math.operation = 'SCALE'
 
-    #node Set Position
+    # Node Set Position
     set_position = outline.nodes.new("GeometryNodeSetPosition")
     set_position.name = "Set Position"
-    #Selection
+    # Selection
     set_position.inputs[1].default_value = True
-    #Position
+    # Position
     set_position.inputs[2].default_value = (0.0, 0.0, 0.0)
 
-    #node Normal
+    # Node Normal
     normal = outline.nodes.new("GeometryNodeInputNormal")
     normal.name = "Normal"
     normal.legacy_corner_normals = True
 
-    #node Group Input
+    # Node Group Input
     group_input = outline.nodes.new("NodeGroupInput")
     group_input.name = "Group Input"
 
-    #node Math
+    # Node Math
     math = outline.nodes.new("ShaderNodeMath")
     math.name = "Math"
     math.operation = 'MULTIPLY'
     math.use_clamp = False
-    #Value_001
-    math.inputs[1].default_value = 0.01
+    # Value_001
+    math.inputs[1].default_value = 0.05000000074505806
 
-    #node Set Material.001
-    set_material_001 = outline.nodes.new("GeometryNodeSetMaterial")
-    set_material_001.name = "Set Material.001"
-    #Selection
-    set_material_001.inputs[1].default_value = True
-    if "outline_color" in bpy.data.materials:
-        set_material_001.inputs[2].default_value = bpy.data.materials["outline_color"]
-
-    #node Switch
-    switch = outline.nodes.new("GeometryNodeSwitch")
-    switch.name = "Switch"
-    switch.input_type = 'FLOAT'
-    #True
-    switch.inputs[2].default_value = 1.0
-
-    #node Frame
-    frame = outline.nodes.new("NodeFrame")
-    frame.label = "change value in the TRUE window."
-    frame.name = "Frame"
-    frame.use_custom_color = True
-    frame.color = (0.44536352157592773, 0.0, 0.6079999804496765)
-    frame.label_size = 20
-    frame.shrink = False
-
-
-
-
-    #Set parents
+    # Set parents
     group_input_001.parent = frame_001
     set_shade_smooth.parent = frame_001
-    switch.parent = frame
 
-    #Set locations
-    frame_001.location = (-753.0, -1643.0)
+    # Set locations
+    frame_001.location = (-325.0, -1055.0)
     group_output_001.location = (1067.1932373046875, -1736.042724609375)
-    group_input_001.location = (29.5201416015625, -30.237548828125)
+    group_input_001.location = (30.27032470703125, -30.378662109375)
     join_geometry_001.location = (880.1171264648438, -1655.3466796875)
-    set_shade_smooth.location = (631.5191650390625, -153.58154296875)
-    vector_math.location = (-9.259552001953125, -798.9947509765625)
-    set_position.location = (278.2383117675781, -792.7901611328125)
-    normal.location = (-296.5681457519531, -748.4281005859375)
-    group_input.location = (-1078.3758544921875, -856.8770141601562)
-    math.location = (-299.7628479003906, -840.5046997070312)
+    set_shade_smooth.location = (632.2693481445312, -153.72265625)
     set_material_001.location = (554.8684692382812, -1089.7171630859375)
-    switch.location = (79.687744140625, -77.30859375)
-    frame.location = (-773.2191162109375, -702.7998657226562)
+    vector_math.location = (96.314208984375, -812.8528442382812)
+    set_position.location = (278.2383117675781, -792.7901611328125)
+    normal.location = (-317.62713623046875, -734.376220703125)
+    group_input.location = (-532.8179321289062, -956.6204223632812)
+    math.location = (-299.7628479003906, -840.5046997070312)
 
-    #Set dimensions
+    # Set dimensions
     frame_001.width, frame_001.height = 802.0, 327.0
     group_output_001.width, group_output_001.height = 140.0, 100.0
     group_input_001.width, group_input_001.height = 140.0, 100.0
     join_geometry_001.width, join_geometry_001.height = 140.0, 100.0
     set_shade_smooth.width, set_shade_smooth.height = 140.0, 100.0
+    set_material_001.width, set_material_001.height = 140.0, 100.0
     vector_math.width, vector_math.height = 140.0, 100.0
     set_position.width, set_position.height = 140.0, 100.0
     normal.width, normal.height = 140.0, 100.0
     group_input.width, group_input.height = 140.0, 100.0
     math.width, math.height = 140.0, 100.0
-    set_material_001.width, set_material_001.height = 140.0, 100.0
-    switch.width, switch.height = 140.0, 100.0
-    frame.width, frame.height = 299.29315185546875, 298.3521728515625
 
-    #initialize outline links
-    #group_input_001.Geometry -> set_shade_smooth.Geometry
+    # Initialize outline links
 
-    outline.links.new(group_input_001.outputs[0], separate_components.inputs[0])
-    #separate_components.Geometry -> set_shade_smooth.Geometry
-    outline.links.new(separate_components.outputs[0], set_shade_smooth.inputs[0])              
-    #points to join geometry
-    outline.links.new(separate_components.outputs[3], join_geometry_001.inputs[0])
-
-    #vector_math.Vector -> set_position.Offset
+    # group_input_001.Geometry -> set_shade_smooth.Geometry
+    outline.links.new(group_input_001.outputs[0], set_shade_smooth.inputs[0])
+    # vector_math.Vector -> set_position.Offset
     outline.links.new(vector_math.outputs[0], set_position.inputs[3])
-    #set_shade_smooth.Geometry -> set_position.Geometry
+    # set_shade_smooth.Geometry -> set_position.Geometry
     outline.links.new(set_shade_smooth.outputs[0], set_position.inputs[0])
-    #normal.Normal -> vector_math.Vector
+    # normal.Normal -> vector_math.Vector
     outline.links.new(normal.outputs[0], vector_math.inputs[0])
-    #join_geometry_001.Geometry -> group_output_001.Geometry
+    # join_geometry_001.Geometry -> group_output_001.Geometry
     outline.links.new(join_geometry_001.outputs[0], group_output_001.inputs[0])
-    #set_material_001.Geometry -> join_geometry_001.Geometry
+    # set_material_001.Geometry -> join_geometry_001.Geometry
     outline.links.new(set_material_001.outputs[0], join_geometry_001.inputs[0])
-    #set_position.Geometry -> set_material_001.Geometry
+    # set_position.Geometry -> set_material_001.Geometry
     outline.links.new(set_position.outputs[0], set_material_001.inputs[0])
-    #math.Value -> vector_math.Scale
+    # math.Value -> vector_math.Scale
     outline.links.new(math.outputs[0], vector_math.inputs[3])
-    #group_input.Value -> switch.False
-    outline.links.new(group_input.outputs[1], switch.inputs[1])
-    #switch.Output -> math.Value
-    outline.links.new(switch.outputs[0], math.inputs[0])
-    #group_input.global_thickness -> switch.Switch
-    outline.links.new(group_input.outputs[2], switch.inputs[0])
-    #set_shade_smooth.Geometry -> join_geometry_001.Geometry
+    # group_input.Value -> math.Value
+    outline.links.new(group_input.outputs[1], math.inputs[0])
+    # group_input.Outline-Mat -> set_material_001.Material
+    outline.links.new(group_input.outputs[2], set_material_001.inputs[2])
+    # set_shade_smooth.Geometry -> join_geometry_001.Geometry
     outline.links.new(set_shade_smooth.outputs[0], join_geometry_001.inputs[0])
+
     return outline
+
+
+outline = outline_node_group()
 
 
 def outline_color_node_group(mat):
@@ -304,8 +269,16 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
     #outline_color =   # ruff unhappy
     outline_color_node_group(mat)
     
+    if 'outline' in bpy.data.node_groups:
+        node = bpy.data.node_groups["outline"]
+        # check if it is the current version otherwise rename and create new
+        desc = node.description
+        if desc != __version__:
+            node.name = f"outline_old"
+            node = outline_node_group(mat=mat)
+    else:
+        node = outline_node_group(mat=mat)
 
-    node = outline_node_group()
     node["Socket_1"] = 1
     node["Socket_2"] = False
     bpy.ops.object.select_all(action='DESELECT')
