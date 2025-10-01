@@ -274,7 +274,7 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
         # check if it is the current version otherwise rename and create new
         desc = node.description
         if desc != __version__:
-            node.name = f"outline_old"
+            node.name = "outline_old"
             node = outline_node_group(mat=mat)
     else:
         node = outline_node_group(mat=mat)
