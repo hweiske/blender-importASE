@@ -1,13 +1,20 @@
 import bpy
+form .. import __version__
 
 #initialize bonds node group
 def bonds_geometry_node_group():
-    if 'BONDS_GEOMETRY' not in bpy.data.node_groups:
-        print("Work")
-        bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "BONDS_GEOMETRY")
+    if 'BONDS_GEOMETRY' in bpy.data.node_groups:
+        # check the version and update if necessary
+        node = bpy.data.node_groups["BONDS_GEOMETRY"]
+        desc = node.description
+        if desc != __version__:
+            node.name = f"BONDS_GEOMETRY_old"
+            node = create_bonds_geometry_node_group()
     else:
-        return
-
+        node = create_bonds_geometry_node_group()
+    
+def create_bonds_geometry_node_group():
+    bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "BONDS_GEOMETRY")
     bonds.color_tag = 'NONE'
     bonds.description = ""
     bonds.default_group_node_width = 140
