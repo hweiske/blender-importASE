@@ -8,7 +8,7 @@ def bonds_geometry_node_group():
         node = bpy.data.node_groups["BONDS_GEOMETRY"]
         desc = node.description
         if desc != __version__:
-            node.name = f"BONDS_GEOMETRY_old"
+            node.name = "BONDS_GEOMETRY_old"
             node = create_bonds_geometry_node_group()
     else:
         node = create_bonds_geometry_node_group()
