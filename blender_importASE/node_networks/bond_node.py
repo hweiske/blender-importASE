@@ -649,7 +649,7 @@ def bonds_geometry_node_group():
     curve_to_mesh = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh.name = "Curve to Mesh"
     #Fill Caps
-    curve_to_mesh.inputs[2].default_value = False
+    curve_to_mesh.inputs[2].default_value = True
 
     #node Reroute.021
     reroute_021 = bonds.nodes.new("NodeReroute")
@@ -669,7 +669,7 @@ def bonds_geometry_node_group():
     curve_to_mesh_001 = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh_001.name = "Curve to Mesh.001"
     #Fill Caps
-    curve_to_mesh_001.inputs[2].default_value = False
+    curve_to_mesh_001.inputs[2].default_value = True
 
     #node Group Input.003
     group_input_003 = bonds.nodes.new("NodeGroupInput")
