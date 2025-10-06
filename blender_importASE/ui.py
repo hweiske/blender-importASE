@@ -108,12 +108,9 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         bpy.context.view_layer.active_layer_collection = seclayer_collection
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
-       
-        
-
         bpy.context.view_layer.active_layer_collection = layer_collection
         bonds_obj = make_bonds(modifier='GeometryNodes')
-        bpy.context.object.modifiers['GeometryNodes']["Socket_1"] = 0.66
+        bpy.context.object.modifiers['GeometryNodes']["Socket_1"] = 0.60
         bpy.context.object.modifiers['GeometryNodes']["Socket_2"] = 0.1
         bpy.context.object.modifiers['GeometryNodes']["Socket_3"] = sec_coll
         

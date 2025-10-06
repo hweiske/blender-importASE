@@ -12,6 +12,7 @@ def bonds_geometry_node_group():
             node = create_bonds_geometry_node_group()
     else:
         node = create_bonds_geometry_node_group()
+    return node
     
 def create_bonds_geometry_node_group():
     bonds = bpy.data.node_groups.new(type='GeometryNodeTree', name="BONDS_GEOMETRY")
@@ -1446,11 +1447,9 @@ def make_bonds(modifier='GeometryNodes'):
         mat.use_nodes = True
     else:
         mat = bpy.data.materials["BONDS_MAT"]
-    
     bonds_node_group(mat)
     bonds=bonds_geometry_node_group()
     bonds_obj.data.materials.append(mat)
-    bpy.context.view_layer.objects.active = bonds_obj
-    bpy.ops.object.modifier_add(type='NODES')
-    bpy.context.object.modifiers[modifier].node_group = bonds
+    bonds_obj.modifiers.new(name=modifier, type='NODES')
+    bonds_obj.modifiers[modifier].node_group = bonds
     return bonds_obj
