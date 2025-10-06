@@ -269,14 +269,12 @@ def create_bond(resolution=16, half_bond=False):
     bm = bmesh.from_edit_mesh(bond.data)
     z = Vector((0.0, 0.0, 1.0))
     tol = 1e-3
-
     for f in bm.faces:
         n = f.normal.normalized() if f.normal.length > tol else f.normal
         dot = n.dot(z)
         # Select faces whose normals are nearly +Z or -Z
         if abs(dot - 1.0) <= tol:
             f.select = True
-            topface = f
         else:
             f.select = False
     bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, 2)})
