@@ -69,7 +69,7 @@ def draw_bonds(atoms,resolution=16):
         print("Group bonds was not created, proceeding without group")
     # bpy.ops.surface.primitive_nurbs_surface_cylinder_add(radius=1.0, enter_editmode=False, align='WORLD',
     # location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
-    bond = create_half_bond(resolution=resolution)
+    bond = create_bond(resolution=resolution, half_bond=True)
     cnt = 0
     for atom in atoms:
         if nl.get_neighbors(atom.index)[0].size > 0:
@@ -100,8 +100,8 @@ def draw_longbonds(atoms,resolution=16, colorbonds=False):
     except Exception:
         pass
     # create half bond
-    hbond = create_half_bond(resolution=resolution)
-    bond = create_full_bond(resolution=resolution)
+    hbond = create_bond(resolution=resolution, half_bond=True)
+    bond = create_bond(resolution=resolution, half_bond=False)
     cnt = 0
     cell = atoms.get_cell()
     # make a list of all bonds
@@ -247,7 +247,7 @@ def draw_unit_cell(atoms):
     bpy.ops.object.select_all(action='DESELECT')
     return None
 
-def create_half_bond(resolution=16):
+def create_bond(resolution=16, half_bond=False):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_cylinder_add(vertices=resolution)
     if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
@@ -255,40 +255,10 @@ def create_half_bond(resolution=16):
     else:
         bpy.ops.object.shade_smooth()
     bond = bpy.context.object
-    bond.name = 'ref_bond'
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_mode(type="FACE")
-    bpy.ops.mesh.select_all(action='DESELECT')
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_mode(type='FACE')
-    bm = bmesh.from_edit_mesh(bond.data)
-    z = Vector((0.0, 0.0, 1.0))
-    tol = 1e-3
-
-    for f in bm.faces:
-        n = f.normal.normalized() if f.normal.length > tol else f.normal
-        dot = n.dot(z)
-        # Select faces whose normals are nearly +Z or -Z
-        if abs(abs(dot) - 1.0) <= tol:
-            f.select = True
-        else:
-            f.select = False
-    bpy.ops.mesh.inset(thickness=0.1)
-    bmesh.update_edit_mesh(bond.data, loop_triangles=False, destructive=False)
-    bpy.ops.object.mode_set(mode='OBJECT')
-    return bond
-
-def create_full_bond(resolution=16):
-    bpy.ops.object.select_all(action='DESELECT')
-    bpy.ops.mesh.primitive_cylinder_add(vertices=resolution)
-    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
-        bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    if half_bond:
+        bond.name = 'ref_bond'
     else:
-        bpy.ops.object.shade_smooth()
-    bond = bpy.context.object
-    bond.name = 'ref_bondx2'
+        bond.name = 'ref_bondx2'
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_mode(type="FACE")
     bpy.ops.mesh.select_all(action='DESELECT')
@@ -306,9 +276,14 @@ def create_full_bond(resolution=16):
         # Select faces whose normals are nearly +Z or -Z
         if abs(dot - 1.0) <= tol:
             f.select = True
+            topface = f
         else:
             f.select = False
     bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, 2)})
+    if not half_bond:
+        bpy.ops.transform.translate(value=(0, 0, -0.3))
+        bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, 0.3)})
+        bpy.ops.transform.resize(value=(1.3, 1.3, 1))
     bpy.ops.mesh.inset(thickness=0.1)
     for f in bm.faces:
         n = f.normal.normalized() if f.normal.length > tol else f.normal
@@ -318,6 +293,9 @@ def create_full_bond(resolution=16):
             f.select = True
         else:
             f.select = False
+    bpy.ops.transform.translate(value=(0, 0, 0.3))
+    bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, -0.3)})
+    bpy.ops.transform.resize(value=(1.3, 1.3, 1))
     bpy.ops.mesh.inset(thickness=0.1)
     bmesh.update_edit_mesh(bond.data, loop_triangles=False, destructive=False)
     bpy.ops.object.mode_set(mode='OBJECT')
