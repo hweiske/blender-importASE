@@ -16,7 +16,7 @@ def bonds_geometry_node_group():
 def create_bonds_geometry_node_group():
     bonds = bpy.data.node_groups.new(type='GeometryNodeTree', name="BONDS_GEOMETRY")
     bonds.color_tag = 'NONE'
-    bonds.description = ""
+    bonds.description = __version__
     bonds.default_group_node_width = 140
     
 

@@ -1,8 +1,11 @@
 import bpy
+import bmesh
+from mathutils import Vector
 import ase
 from ase.data import covalent_radii, vdw_alvarez
 import numpy as np
 import ase.neighborlist
+from .utils import atomcolors
 
 
 def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
@@ -43,7 +46,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         #list_of_atoms.append(full_object_name)
         #print(ob)
         list_of_atoms.append(ob)
-        bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
+        bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects[sphere.name].select_set(True)
     bpy.ops.object.delete()
@@ -53,6 +56,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
 
 def draw_bonds(atoms,resolution=16):
     list_of_bonds=[]
+    bondlengths=[] # for animation
     nl = ase.neighborlist.NeighborList([covalent_radii[atomic_number] * 0.9 for atomic_number in atoms.numbers],
                                        self_interaction=False, bothways=True)
     nl.update(atoms)
@@ -71,31 +75,10 @@ def draw_bonds(atoms,resolution=16):
         if nl.get_neighbors(atom.index)[0].size > 0:
             neighbors, offsets = nl.get_neighbors(atom.index)
             for neighbor, offset in zip(neighbors, offsets):
-                displacements = [0.5 * (atoms.positions[neighbor] - atom.position + np.dot(offset, atoms.cell)),
-                                 0.5 * (atom.position - np.dot(offset, atoms.cell) - atoms.positions[neighbor])]
-                for n, displacement in enumerate(displacements):
-                    if n == 0:
-                        location = atom.position + (displacement / 2)
-                    # else:
-                    # location=atoms[neighbor].position + (displacement/2)
-                    distance = atoms.get_distance(atom.index, neighbor, mic=True) / 2
-                    ob = bond.copy()
-                    ob.data = bond.data.copy()
-                    bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
-                    ob.name = f'{atom.symbol}{atom.index}-{atoms[neighbor].symbol}{neighbor}'
-                    bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
-                        bpy.data.materials[f'{atom.symbol}-bond'])
-                    ob.location = location
-                    ob.scale = (1, 1, 1)
-                    # if n == 0:
-                    ob.dimensions = (0.2, 0.2, distance)
-                    phi = np.arctan2(displacement[1], displacement[0])
-                    theta = np.arccos(displacement[2] / distance)
-                    ob.rotation_euler[1] = theta
-                    ob.rotation_euler[2] = phi
-                    list_of_bonds.append(ob)
-                    bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
-                    break
+                make_shortbond(atom, atoms, offset, neighbor, bond, list_of_bonds, bondlengths,
+                                   type='short1')
+                make_shortbond(atom, atoms, offset, neighbor, bond, list_of_bonds, bondlengths,
+                                   type='short2')
                 cnt += 1
     bpy.ops.object.select_all(action='DESELECT')
     bond.select_set(True)
@@ -104,8 +87,8 @@ def draw_bonds(atoms,resolution=16):
     return list_of_bonds,nl
 
 
-def draw_bonds_new(atoms,resolution=16):
-    #print("Using Longbond mech")
+def draw_longbonds(atoms,resolution=16, colorbonds=False):
+    cb = atomcolors()
     list_of_bonds=[]
     bondlengths=[] # for animation
     nl = ase.neighborlist.NeighborList([covalent_radii[atomic_number] * 0.9 for atomic_number in atoms.numbers],
@@ -141,76 +124,12 @@ def draw_bonds_new(atoms,resolution=16):
                 else:
                     is_same_unit_cell = True
                 if is_same_unit_cell:
-                    # print("Longbond")
-                    # Draw one complex bond between the atoms, assign two materials if necessary
-                    displacements = [0.5 * (atoms.positions[neighbor] - atom.position + np.dot(offset, atoms.cell)),
-                                     0.5 * (atom.position - np.dot(offset, atoms.cell) - atoms.positions[neighbor])]
-                    location = atom.position + (displacements[0] / 2)
-                    distance = atoms.get_distance(atom.index, neighbor, mic=True)
-                    ob = bond.copy()
-                    ob.data = bond.data.copy()
-                    bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
-                    ob.name = f'{atom.symbol}{atom.index}-{atoms[neighbor].symbol}{neighbor}+{atoms[neighbor].symbol}{neighbor}-{atom.symbol}{atom.index}'
-                    # This still needs changing for colorbond support
-                    assign_to_longbond(ob, f'{atom.symbol}-bond', f'{atoms[neighbor].symbol}-bond')
-                    ob.location = location
-                    ob.scale = (1, 1, 1)
-                    # if n == 0:
-                    ob.dimensions = (0.2, 0.2, distance)
-                    phi = np.arctan2(displacements[0][1], displacements[0][0])
-                    theta = np.arccos(displacements[0][2] / (distance / 2))
-                    ob.rotation_euler[1] = theta
-                    ob.rotation_euler[2] = phi
-                    list_of_bonds.append(ob)#anim
-                    bondlengths.append('long')#anim
-                    bpy.ops.object.transform_apply(location=False,rotation=True,scale=True) 
+                    make_longbond(atom, atoms, offset, neighbor, bond, list_of_bonds, bondlengths, cb, colorbonds=colorbonds)
                 else:
-                    # print("Shortbond")
-                    # create two bon fragments on either end
-                    # atom to neighbor
-                    displacements = [0.5 * (atoms.positions[neighbor] - atom.position + np.dot(offset, atoms.cell)),
-                                     0.5 * (atom.position - np.dot(offset, atoms.cell) - atoms.positions[neighbor])]
-                    location = atom.position + (displacements[0] / 2)
-                    distance = atoms.get_distance(atom.index, neighbor, mic=True) / 2
-                    ob = hbond.copy()
-                    ob.data = hbond.data.copy()
-                    bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
-                    ob.name = f'{atom.symbol}{atom.index}-{atoms[neighbor].symbol}{neighbor}'
-                    bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
-                        bpy.data.materials[f'{atom.symbol}-bond'])
-                    ob.location = location
-                    ob.scale = (1, 1, 1)
-                    # if n == 0:
-                    ob.dimensions = (0.2, 0.2, distance)
-                    phi = np.arctan2(displacements[0][1], displacements[0][0])
-                    theta = np.arccos(displacements[0][2] / distance)
-                    ob.rotation_euler[1] = theta
-                    ob.rotation_euler[2] = phi
-                    list_of_bonds.append(ob) #anim
-                    bondlengths.append('short1') #anim
-                    # neighbor to atom
-                    displacements = [0.5 * (atom.position - atoms.positions[neighbor] - np.dot(offset, atoms.cell)),
-                                     0.5 * (atoms.positions[neighbor] + np.dot(offset, atoms.cell) + atom.position)]
-                    location = atoms.positions[neighbor] + (displacements[0] / 2)
-                    distance = atoms.get_distance(atom.index, neighbor, mic=True) / 2
-                    ob = hbond.copy()
-                    ob.data = hbond.data.copy()
-                    bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
-                    ob.name = f'{atoms[neighbor].symbol}{neighbor}-{atom.symbol}{atom.index}'
-                    # This still needs changing for colorbond support
-                    bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
-                        bpy.data.materials[f'{atom.symbol}-bond'])
-                    ob.location = location
-                    ob.scale = (1, 1, 1)
-                    # if n == 0:
-                    ob.dimensions = (0.2, 0.2, distance)
-                    phi = np.arctan2(displacements[0][1], displacements[0][0])
-                    theta = np.arccos(displacements[0][2] / distance)
-                    ob.rotation_euler[1] = theta
-                    ob.rotation_euler[2] = phi
-                    list_of_bonds.append(ob)#anim
-                    bondlengths.append('short2')
-                    bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
+                    make_shortbond(atom, atoms, offset, neighbor, hbond, list_of_bonds, bondlengths,
+                                   type='short1', colorbonds=colorbonds)
+                    make_shortbond(atom, atoms, offset, neighbor, hbond, list_of_bonds, bondlengths,
+                                   type='short2', colorbonds=colorbonds)
             cnt += 1
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_bond'].select_set(True)
@@ -218,6 +137,60 @@ def draw_bonds_new(atoms,resolution=16):
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
     return list_of_bonds,nl,bondlengths
+
+def make_longbond(atom, atoms, offset, neighbor, bond, list_of_bonds, bondlengths, cb, colorbonds=False):
+    # print("Longbond")
+    # Draw one complex bond between the atoms, assign two materials if necessary
+    displacements = [0.5 * (atoms.positions[neighbor] - atom.position + np.dot(offset, atoms.cell)),
+                        0.5 * (atom.position - np.dot(offset, atoms.cell) - atoms.positions[neighbor])]
+    location = atom.position + (displacements[0] / 2)
+    distance = atoms.get_distance(atom.index, neighbor, mic=True)
+    ob = bond.copy()
+    ob.data = bond.data.copy()
+    bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
+    ob.name = f'{atom.symbol}{atom.index}-{atoms[neighbor].symbol}{neighbor}+{atoms[neighbor].symbol}{neighbor}-{atom.symbol}{atom.index}'
+    # This still needs changing for colorbond support
+    create_bond_mat(cb, ob, atom.symbol, atoms[neighbor].symbol, smooth=True, colorbond=colorbonds)
+    ob.location = location
+    ob.scale = (1, 1, 1)
+    # if n == 0:
+    ob.dimensions = (0.2, 0.2, distance)
+    phi = np.arctan2(displacements[0][1], displacements[0][0])
+    theta = np.arccos(displacements[0][2] / (distance / 2))
+    ob.rotation_euler[1] = theta
+    ob.rotation_euler[2] = phi
+    list_of_bonds.append(ob)#anim
+    bondlengths.append('long')#anim
+    bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+
+def make_shortbond(atom, atoms, offset, neighbor, bond, list_of_bonds, bondlengths, type='short1', colorbonds=False):
+    if type == "short1":
+        displacements = [0.5 * (atoms.positions[neighbor] - atom.position + np.dot(offset, atoms.cell)),
+                                        0.5 * (atom.position - np.dot(offset, atoms.cell) - atoms.positions[neighbor])]
+        location = atom.position + (displacements[0] / 2)
+    else:
+        displacements = [0.5 * (atom.position - atoms.positions[neighbor] - np.dot(offset, atoms.cell)),
+                                     0.5 * (atoms.positions[neighbor] + np.dot(offset, atoms.cell) + atom.position)]
+        location = atoms.positions[neighbor] + (displacements[0] / 2)
+    distance = atoms.get_distance(atom.index, neighbor, mic=True) / 2
+    ob = bond.copy()
+    ob.data = bond.data.copy()
+    bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
+    ob.name = f'{atom.symbol}{atom.index}-{atoms[neighbor].symbol}{neighbor}'
+    if colorbonds:
+        ob.data.materials.append(bpy.data.materials[f'{atom.symbol}-bond'])
+    else:
+        ob.data.materials.append(bpy.data.materials['Gray-bond'])
+    ob.location = location
+    ob.scale = (1, 1, 1)
+    # if n == 0:
+    ob.dimensions = (0.2, 0.2, distance)
+    phi = np.arctan2(displacements[0][1], displacements[0][0])
+    theta = np.arccos(displacements[0][2] / distance)
+    ob.rotation_euler[1] = theta
+    ob.rotation_euler[2] = phi
+    list_of_bonds.append(ob) #anim
+    bondlengths.append('short1') #anim
 
 
 def draw_unit_cell(atoms):
@@ -274,7 +247,6 @@ def draw_unit_cell(atoms):
     bpy.ops.object.select_all(action='DESELECT')
     return None
 
-
 def create_half_bond(resolution=16):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_cylinder_add(vertices=resolution)
@@ -288,20 +260,25 @@ def create_half_bond(resolution=16):
     bpy.ops.mesh.select_mode(type="FACE")
     bpy.ops.mesh.select_all(action='DESELECT')
     bpy.ops.object.mode_set(mode='OBJECT')
-    # Inset upper face:
-    bond.data.polygons[14].select = True
+
     bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_mode(type='FACE')
+    bm = bmesh.from_edit_mesh(bond.data)
+    z = Vector((0.0, 0.0, 1.0))
+    tol = 1e-3
+
+    for f in bm.faces:
+        n = f.normal.normalized() if f.normal.length > tol else f.normal
+        dot = n.dot(z)
+        # Select faces whose normals are nearly +Z or -Z
+        if abs(abs(dot) - 1.0) <= tol:
+            f.select = True
+        else:
+            f.select = False
     bpy.ops.mesh.inset(thickness=0.1)
-    bpy.ops.mesh.select_all(action='DESELECT')
-    # Inset lower face:
-    bpy.ops.object.mode_set(mode='OBJECT')
-    bond.data.polygons[17].select = True
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.inset(thickness=0.1)
-    bpy.ops.mesh.select_all(action='DESELECT')
+    bmesh.update_edit_mesh(bond.data, loop_triangles=False, destructive=False)
     bpy.ops.object.mode_set(mode='OBJECT')
     return bond
-
 
 def create_full_bond(resolution=16):
     bpy.ops.object.select_all(action='DESELECT')
@@ -316,18 +293,33 @@ def create_full_bond(resolution=16):
     bpy.ops.mesh.select_mode(type="FACE")
     bpy.ops.mesh.select_all(action='DESELECT')
     bpy.ops.object.mode_set(mode='OBJECT')
-    # Inset upper face:
-    bond.data.polygons[14].select = True
+
     bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_mode(type='FACE')
+    bm = bmesh.from_edit_mesh(bond.data)
+    z = Vector((0.0, 0.0, 1.0))
+    tol = 1e-3
+
+    for f in bm.faces:
+        n = f.normal.normalized() if f.normal.length > tol else f.normal
+        dot = n.dot(z)
+        # Select faces whose normals are nearly +Z or -Z
+        if abs(dot - 1.0) <= tol:
+            f.select = True
+        else:
+            f.select = False
     bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, 2)})
     bpy.ops.mesh.inset(thickness=0.1)
-    bpy.ops.mesh.select_all(action='DESELECT')
-    # Inset lower face:
-    bpy.ops.object.mode_set(mode='OBJECT')
-    bond.data.polygons[17].select = True
-    bpy.ops.object.mode_set(mode='EDIT')
+    for f in bm.faces:
+        n = f.normal.normalized() if f.normal.length > tol else f.normal
+        dot = n.dot(z)
+        # Select faces whose normals are nearly +Z or -Z
+        if abs(dot + 1.0) <= tol:
+            f.select = True
+        else:
+            f.select = False
     bpy.ops.mesh.inset(thickness=0.1)
-    bpy.ops.mesh.select_all(action='DESELECT')
+    bmesh.update_edit_mesh(bond.data, loop_triangles=False, destructive=False)
     bpy.ops.object.mode_set(mode='OBJECT')
     return bond
 
@@ -346,17 +338,10 @@ def is_inside_cell(pos, cell):
     return all(0 <= coord <= 1 for coord in fractional_coords)
 
 
-def assign_to_longbond(bond, mat1, mat2):
-    mat1_r = bpy.data.materials.get(mat1)
-    mat2_r = bpy.data.materials.get(mat2)
-    bond.data.materials.append(mat1_r)
-    bond.data.materials.append(mat2_r)
-    list_bottom = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
-                   61, 62, 63, 64, 65]
-    list_top = [14, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
-                43, 44, 45, 46, 47, 48, 49]
-    for face in list_bottom:
-        bond.data.polygons[face].material_index = 0
-    for face in list_top:
-        bond.data.polygons[face].material_index = 1
-
+def create_bond_mat(cb, bond, atom_1, atom_2, smooth, colorbond=False):
+    if colorbond:
+        mat = cb.create_bondmat(atom_1, atom_2, smooth, name=f'{atom_1}-{atom_2}-bond')
+        bond.data.materials.append(mat)
+    else:
+        mat = bpy.data.materials['Gray-bond']
+        bond.data.materials.append(mat)

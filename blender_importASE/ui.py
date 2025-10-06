@@ -4,7 +4,7 @@ import ase.io
 from ase import Atoms
 from .import_cubefiles import cube2vol
 from .utils import atomcolors, group_atoms
-from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
+from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_longbonds
 from .trajectory import move_atoms, move_bonds,move_longbonds
 from .node_networks.nodes_atoms_and_bonds import set_atoms_node_group, atoms_and_bonds, read_structure
 from .node_networks.supercell import make_supercell
@@ -55,7 +55,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
 
     # Set up materials
     atomcolor=atomcolors()
-    atomcolor.setup_materials(atoms, colorbonds=colorbonds, color=color)        
+    atomcolor.setup_materials(atoms, colorbonds=colorbonds)        
     my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
     bpy.context.scene.collection.children.link(my_coll)
     layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
@@ -67,7 +67,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         if representation != 'VDW':
             if long_bonds:
-                list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
+                list_of_bonds,nl,bondlengths=draw_longbonds(atoms,resolution=resolution, colorbonds=colorbonds)
             else:
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
     if representation == 'nodes':
