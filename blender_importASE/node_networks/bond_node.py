@@ -1,15 +1,23 @@
 import bpy
+from .. import __version__
 
 #initialize bonds node group
 def bonds_geometry_node_group():
-    if 'BONDS_GEOMETRY' not in bpy.data.node_groups:
-        print("Work")
-        bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "BONDS_GEOMETRY")
+    if 'BONDS_GEOMETRY' in bpy.data.node_groups:
+        # check the version and update if necessary
+        node = bpy.data.node_groups["BONDS_GEOMETRY"]
+        desc = node.description
+        if desc != __version__:
+            node.name = "BONDS_GEOMETRY_old"
+            node = create_bonds_geometry_node_group()
     else:
-        return
-
+        node = create_bonds_geometry_node_group()
+    return node
+    
+def create_bonds_geometry_node_group():
+    bonds = bpy.data.node_groups.new(type='GeometryNodeTree', name="BONDS_GEOMETRY")
     bonds.color_tag = 'NONE'
-    bonds.description = ""
+    bonds.description = __version__
     bonds.default_group_node_width = 140
     
 
@@ -649,7 +657,7 @@ def bonds_geometry_node_group():
     curve_to_mesh = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh.name = "Curve to Mesh"
     #Fill Caps
-    curve_to_mesh.inputs[2].default_value = False
+    curve_to_mesh.inputs[2].default_value = True
 
     #node Reroute.021
     reroute_021 = bonds.nodes.new("NodeReroute")
@@ -669,7 +677,7 @@ def bonds_geometry_node_group():
     curve_to_mesh_001 = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh_001.name = "Curve to Mesh.001"
     #Fill Caps
-    curve_to_mesh_001.inputs[2].default_value = False
+    curve_to_mesh_001.inputs[2].default_value = True
 
     #node Group Input.003
     group_input_003 = bonds.nodes.new("NodeGroupInput")
@@ -1439,11 +1447,9 @@ def make_bonds(modifier='GeometryNodes'):
         mat.use_nodes = True
     else:
         mat = bpy.data.materials["BONDS_MAT"]
-    
     bonds_node_group(mat)
     bonds=bonds_geometry_node_group()
     bonds_obj.data.materials.append(mat)
-    bpy.context.view_layer.objects.active = bonds_obj
-    bpy.ops.object.modifier_add(type='NODES')
-    bpy.context.object.modifiers[modifier].node_group = bonds
+    bonds_obj.modifiers.new(name=modifier, type='NODES')
+    bonds_obj.modifiers[modifier].node_group = bonds
     return bonds_obj
