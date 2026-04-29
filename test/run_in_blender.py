@@ -6,7 +6,6 @@ Run as:
 
 Exits 0 and prints "OK" on success.
 """
-import sys
 import os
 import bpy
 
