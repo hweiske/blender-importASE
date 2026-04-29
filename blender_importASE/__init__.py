@@ -147,23 +147,35 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self,'imageslice')
 
     def execute(self, context):
-        
-        for file in self.files:
-            filepath = join(self.directory, file.name)
-            # this section causes the representation to be ignored when overwrite is checked
-            # we should come up with something else for now set default to false
+        # When invoked from the GUI file dialog, ImportHelper populates
+        # self.files + self.directory.  When called programmatically with
+        # bpy.ops.import_mesh.ase(filepath=...) — the documented single-file
+        # form — only self.filepath is populated and self.files stays empty.
+        # Normalise both into a (directory, [name, ...]) pair before the loop.
+        if self.files:
+            directory = self.directory
+            names = [f.name for f in self.files]
+        elif self.filepath:
+            directory, name = os.path.split(self.filepath)
+            names = [name]
+        else:
+            self.report({'ERROR'}, "No filepath or files provided")
+            return {'CANCELLED'}
 
-            from .ui import import_ase_molecule
-            import_ase_molecule(filepath, file.name,
-                            
-                                resolution=self.resolution,
-                                color=self.color, colorbonds=self.colorbonds, long_bonds=self.long_bonds, scale=self.scale,
-                                unit_cell=self.unit_cell, representation=self.representation,
-                                read_density=self.read_density, 
-                                shift_cell=self.zero_cell, imageslice=self.imageslice,
-                                animate=self.animate, outline=self.outline,
-                                overwrite=self.overwrite, add_supercell=self.add_supercell
-                                )
+        from .ui import import_ase_molecule
+        for name in names:
+            filepath = join(directory, name)
+            import_ase_molecule(
+                filepath, name,
+                resolution=self.resolution,
+                color=self.color, colorbonds=self.colorbonds,
+                long_bonds=self.long_bonds, scale=self.scale,
+                unit_cell=self.unit_cell, representation=self.representation,
+                read_density=self.read_density,
+                shift_cell=self.zero_cell, imageslice=self.imageslice,
+                animate=self.animate, outline=self.outline,
+                overwrite=self.overwrite, add_supercell=self.add_supercell,
+            )
         return {"FINISHED"}
 
     def invoke(self, context, event):
