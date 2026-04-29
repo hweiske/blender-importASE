@@ -701,10 +701,6 @@ def supercell_node_group(atoms):
     reroute_element = supercell.nodes.new("NodeReroute")
     reroute_element.name = "Reroute.008"
     reroute_element.socket_idname = "NodeSocketGeometry"
-    #node Reroute.009
-    reroute_009 = supercell.nodes.new("NodeReroute")
-    reroute_009.name = "Reroute.009"
-    reroute_009.socket_idname = "NodeSocketGeometry"
     #node Switch.006
     switch_vectorcutoff = supercell.nodes.new("GeometryNodeSwitch")
     switch_vectorcutoff.name = "Switch.006"
@@ -799,7 +795,6 @@ def supercell_node_group(atoms):
     supercell.links.new(realize_instances_beforevectorcutoff.outputs[0], switch_vectorcutoff.inputs[1])
     supercell.links.new(realize_instances_beforevectorcutoff.outputs[0], cutoff_group_check.inputs[0])
     supercell.links.new(group_input_vectorcutoff.outputs[7], switch_vectorcutoff.inputs[0])
-    supercell.links.new(reroute_009.outputs[0], switch_vectorcutoff.inputs[2])
 
 
     #Set parents
@@ -873,7 +868,6 @@ def supercell_node_group(atoms):
     join_geometry.location = (2189.292724609375, 361.0550842285156)
     merge_by_distance.location = (2605.523193359375, 482.2424011230469)
     reroute_element.location = (909.9058227539062, 92.05680084228516)
-    reroute_009.location = (1616.8719482421875, -223.92974853515625)
     switch_vectorcutoff.location = (1843.2039794921875, 658.1240234375)
     group_input_vectorcutoff.location = (1098.405029296875, 399.9941101074219)
 
@@ -924,7 +918,6 @@ def supercell_node_group(atoms):
     join_geometry.width, join_geometry.height = 140.0, 100.0
     merge_by_distance.width, merge_by_distance.height = 140.0, 100.0
     reroute_element.width, reroute_element.height = 14.5, 100.0
-    reroute_009.width, reroute_009.height = 14.5, 100.0
     switch_vectorcutoff.width, switch_vectorcutoff.height = 140.0, 100.0
     group_input_vectorcutoff.width, group_input_vectorcutoff.height = 140.0, 100.0
 
@@ -1023,14 +1016,10 @@ def supercell_node_group(atoms):
     supercell.links.new(vector_x.outputs[0], reroute_005.inputs[0])
     #join_geometry.Geometry -> realize_instances_001.Geometry
     supercell.links.new(join_geometry.outputs[0], realize_instances_001.inputs[0])
-    #reroute_009.Output -> join_geometry.Geometry
-    supercell.links.new(reroute_009.outputs[0], join_geometry.inputs[0])
     #realize_instances_001.Geometry -> merge_by_distance.Geometry
     supercell.links.new(realize_instances_001.outputs[0], merge_by_distance.inputs[0])
     #instance_on_points.Instances -> reroute_008.Input
     supercell.links.new(instance_on_points.outputs[0], reroute_element.inputs[0])
-    #group_input_1.Geometry -> reroute_009.Input
-    supercell.links.new(group_input_1.outputs[0], reroute_009.inputs[0])
     #group_001.Geometry -> switch_006.True
     supercell.links.new(cutoff_group_check.outputs[0], switch_vectorcutoff.inputs[2])
     #reroute_008.Output -> realize_instances.Geometry
@@ -1499,10 +1488,7 @@ def supercell_atoms_node_group(atoms):
     reroute_008 = supercell_atoms.nodes.new("NodeReroute")
     reroute_008.name = "Reroute.008"
     reroute_008.socket_idname = "NodeSocketGeometry"
-    #node Reroute.009
-    reroute_009 = supercell_atoms.nodes.new("NodeReroute")
-    reroute_009.name = "Reroute.009"
-    reroute_009.socket_idname = "NodeSocketGeometry"
+
     #node Switch.006
     switch_006 = supercell_atoms.nodes.new("GeometryNodeSwitch")
     switch_006.name = "Switch.006"
@@ -1612,7 +1598,6 @@ def supercell_atoms_node_group(atoms):
     join_geometry.location = (2189.292724609375, 361.0550842285156)
     merge_by_distance.location = (2605.523193359375, 482.2424011230469)
     reroute_008.location = (909.9058227539062, 92.05680084228516)
-    reroute_009.location = (1616.8719482421875, -223.92974853515625)
     switch_006.location = (1843.2039794921875, 658.1240234375)
     group_input_004.location = (1087.9091796875, 835.0838012695312)
     compare_004_1.location = (0.0, 0.0)
@@ -1663,7 +1648,6 @@ def supercell_atoms_node_group(atoms):
     join_geometry.width, join_geometry.height = 140.0, 100.0
     merge_by_distance.width, merge_by_distance.height = 140.0, 100.0
     reroute_008.width, reroute_008.height = 10.0, 100.0
-    reroute_009.width, reroute_009.height = 10.0, 100.0
     switch_006.width, switch_006.height = 140.0, 100.0
     group_input_004.width, group_input_004.height = 140.0, 100.0
     compare_004_1.width, compare_004_1.height = 140.0, 100.0
@@ -1747,8 +1731,6 @@ def supercell_atoms_node_group(atoms):
     supercell_atoms.links.new(reroute_001.outputs[0], switch_004.inputs[1])
     #switch_005.Output -> math_002.Value
     supercell_atoms.links.new(switch_005.outputs[0], math_002.inputs[0])
-    #reroute_001.Output -> switch_005.False
-    supercell_atoms.links.new(reroute_001.outputs[0], switch_005.inputs[1])
     #group_input_002.global -> switch_003.Switch
     supercell_atoms.links.new(group_input_002.outputs[6], switch_003.inputs[0])
     #group_input_002.global -> switch_004.Switch
@@ -1763,14 +1745,10 @@ def supercell_atoms_node_group(atoms):
     supercell_atoms.links.new(reroute_007.outputs[0], vector_math_002.inputs[0])
     #vector.Vector -> reroute_005.Input
     supercell_atoms.links.new(vector_x.outputs[0], reroute_005.inputs[0])
-    #reroute_009.Output -> join_geometry.Geometry
-    supercell_atoms.links.new(reroute_009.outputs[0], join_geometry.inputs[0])
     #join_geometry.Geometry -> merge_by_distance.Geometry
     supercell_atoms.links.new(join_geometry.outputs[0], merge_by_distance.inputs[0])
     #instance_on_points.Instances -> reroute_008.Input
     supercell_atoms.links.new(instance_on_points.outputs[0], reroute_008.inputs[0])
-    #group_input_1.Geometry -> reroute_009.Input
-    supercell_atoms.links.new(group_input_1.outputs[0], reroute_009.inputs[0])
     #group_001.Geometry -> switch_006.True
     supercell_atoms.links.new(group_001.outputs[0], switch_006.inputs[2])
     #group_input_004.+x -> group_001.+x
