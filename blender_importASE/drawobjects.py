@@ -1,6 +1,6 @@
 import bpy
 import ase
-from ase.data import covalent_radii
+from ase.data import covalent_radii, vdw_alvarez
 import numpy as np
 import ase.neighborlist
 
@@ -27,9 +27,9 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
                                                                                                atom.number]  * scale, ] * 3
         elif representation == 'Licorice':
             bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [0.1] * 3
-        else:
-            bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [covalent_radii[
-                                                                                               atom.number] * scale, ] * 3
+        elif representation == 'VDW':
+            bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [vdw_alvarez.vdw_radii[
+                                                                                               atom.number]] * 3
         # sprint(bpy.data.node_groups)
         bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
             bpy.data.materials[atom.symbol])

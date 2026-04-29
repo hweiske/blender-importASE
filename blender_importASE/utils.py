@@ -6,6 +6,7 @@ class atomcolors():
         self.default_roughness=0.7
         self.color_dict={
     'H'     :(      1,1,1                   ),
+    'Na'    :(      0.67, 0.36, 0.95        ),
     'C'     :(      0.05, 0.05, 0.05        ),
     'Al'    :(      0.6,0.42,0.42           ),#
     'B'     :(      0.8,0.33,0.43           ),#
