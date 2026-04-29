@@ -2,6 +2,197 @@ import bpy
 from ..utils import atomcolors
 from ase.data import covalent_radii, chemical_symbols, colors, vdw_alvarez
 
+import bpy
+import mathutils
+import os
+import typing
+
+
+def cut_bond_1_node_group(node_tree_names: dict[typing.Callable, str]):
+    """Initialize cut_bond node group"""
+    cut_bond_1 = bpy.data.node_groups.new(type='GeometryNodeTree', name="cut_bond")
+
+    cut_bond_1.color_tag = 'NONE'
+    cut_bond_1.description = ""
+    cut_bond_1.default_group_node_width = 140
+
+    # cut_bond_1 interface
+
+    # Socket Output
+    output_socket = cut_bond_1.interface.new_socket(name="Output", in_out='OUTPUT', socket_type='NodeSocketBool')
+    output_socket.default_value = False
+    output_socket.attribute_domain = 'POINT'
+
+    # Socket Switch
+    switch_socket = cut_bond_1.interface.new_socket(name="Switch", in_out='INPUT', socket_type='NodeSocketBool')
+    switch_socket.default_value = False
+    switch_socket.attribute_domain = 'POINT'
+
+    # Socket B
+    b_socket = cut_bond_1.interface.new_socket(name="B", in_out='INPUT', socket_type='NodeSocketInt')
+    b_socket.default_value = 11
+    b_socket.min_value = -2147483648
+    b_socket.max_value = 2147483647
+    b_socket.subtype = 'NONE'
+    b_socket.attribute_domain = 'POINT'
+
+    # Socket B
+    b_socket_1 = cut_bond_1.interface.new_socket(name="B", in_out='INPUT', socket_type='NodeSocketInt')
+    b_socket_1.default_value = 11
+    b_socket_1.min_value = -2147483648
+    b_socket_1.max_value = 2147483647
+    b_socket_1.subtype = 'NONE'
+    b_socket_1.attribute_domain = 'POINT'
+
+    # Initialize cut_bond_1 nodes
+
+    # Node Group Output
+    group_output = cut_bond_1.nodes.new("NodeGroupOutput")
+    group_output.name = "Group Output"
+    group_output.is_active_output = True
+
+    # Node Group Input
+    group_input = cut_bond_1.nodes.new("NodeGroupInput")
+    group_input.name = "Group Input"
+
+    # Node Named Attribute.007
+    named_attribute_007 = cut_bond_1.nodes.new("GeometryNodeInputNamedAttribute")
+    named_attribute_007.name = "Named Attribute.007"
+    named_attribute_007.data_type = 'INT'
+    # Name
+    named_attribute_007.inputs[0].default_value = "start_el"
+
+    # Node Compare.008
+    compare_008 = cut_bond_1.nodes.new("FunctionNodeCompare")
+    compare_008.name = "Compare.008"
+    compare_008.hide = True
+    compare_008.data_type = 'INT'
+    compare_008.mode = 'ELEMENT'
+    compare_008.operation = 'EQUAL'
+
+    # Node Boolean Math.002
+    boolean_math_002 = cut_bond_1.nodes.new("FunctionNodeBooleanMath")
+    boolean_math_002.name = "Boolean Math.002"
+    boolean_math_002.operation = 'AND'
+
+    # Node Compare.009
+    compare_009 = cut_bond_1.nodes.new("FunctionNodeCompare")
+    compare_009.name = "Compare.009"
+    compare_009.hide = True
+    compare_009.data_type = 'INT'
+    compare_009.mode = 'ELEMENT'
+    compare_009.operation = 'EQUAL'
+
+    # Node Named Attribute.013
+    named_attribute_013 = cut_bond_1.nodes.new("GeometryNodeInputNamedAttribute")
+    named_attribute_013.name = "Named Attribute.013"
+    named_attribute_013.data_type = 'INT'
+    # Name
+    named_attribute_013.inputs[0].default_value = "end_el"
+
+    # Node Switch.002
+    switch_002 = cut_bond_1.nodes.new("GeometryNodeSwitch")
+    switch_002.name = "Switch.002"
+    switch_002.input_type = 'BOOLEAN'
+    # False
+    switch_002.inputs[1].default_value = False
+
+    # Set locations
+    cut_bond_1.nodes["Group Output"].location = (483.3470458984375, 0.0)
+    cut_bond_1.nodes["Group Input"].location = (-493.3470458984375, 0.0)
+    cut_bond_1.nodes["Named Attribute.007"].location = (-288.3507080078125, 62.3369140625)
+    cut_bond_1.nodes["Compare.008"].location = (-42.0068359375, 14.00439453125)
+    cut_bond_1.nodes["Boolean Math.002"].location = (114.824951171875, -8.916748046875)
+    cut_bond_1.nodes["Compare.009"].location = (-61.99267578125, -88.592529296875)
+    cut_bond_1.nodes["Named Attribute.013"].location = (-293.3470458984375, -76.544189453125)
+    cut_bond_1.nodes["Switch.002"].location = (293.3470458984375, 88.5927734375)
+
+    # Set dimensions
+    cut_bond_1.nodes["Group Output"].width  = 140.0
+    cut_bond_1.nodes["Group Output"].height = 100.0
+
+    cut_bond_1.nodes["Group Input"].width  = 140.0
+    cut_bond_1.nodes["Group Input"].height = 100.0
+
+    cut_bond_1.nodes["Named Attribute.007"].width  = 140.0
+    cut_bond_1.nodes["Named Attribute.007"].height = 100.0
+
+    cut_bond_1.nodes["Compare.008"].width  = 140.0
+    cut_bond_1.nodes["Compare.008"].height = 100.0
+
+    cut_bond_1.nodes["Boolean Math.002"].width  = 140.0
+    cut_bond_1.nodes["Boolean Math.002"].height = 100.0
+
+    cut_bond_1.nodes["Compare.009"].width  = 138.7508544921875
+    cut_bond_1.nodes["Compare.009"].height = 100.0
+
+    cut_bond_1.nodes["Named Attribute.013"].width  = 140.0
+    cut_bond_1.nodes["Named Attribute.013"].height = 100.0
+
+    cut_bond_1.nodes["Switch.002"].width  = 140.0
+    cut_bond_1.nodes["Switch.002"].height = 100.0
+
+
+    # Initialize cut_bond_1 links
+
+    # compare_008.Result -> boolean_math_002.Boolean
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Compare.008"].outputs[0],
+        cut_bond_1.nodes["Boolean Math.002"].inputs[0]
+    )
+    # boolean_math_002.Boolean -> switch_002.True
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Boolean Math.002"].outputs[0],
+        cut_bond_1.nodes["Switch.002"].inputs[2]
+    )
+    # named_attribute_007.Attribute -> compare_008.A
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Named Attribute.007"].outputs[0],
+        cut_bond_1.nodes["Compare.008"].inputs[2]
+    )
+    # named_attribute_013.Attribute -> compare_009.A
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Named Attribute.013"].outputs[0],
+        cut_bond_1.nodes["Compare.009"].inputs[2]
+    )
+    # compare_009.Result -> boolean_math_002.Boolean
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Compare.009"].outputs[0],
+        cut_bond_1.nodes["Boolean Math.002"].inputs[1]
+    )
+    # switch_002.Output -> group_output.Output
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Switch.002"].outputs[0],
+        cut_bond_1.nodes["Group Output"].inputs[0]
+    )
+    # group_input.Switch -> switch_002.Switch
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Group Input"].outputs[0],
+        cut_bond_1.nodes["Switch.002"].inputs[0]
+    )
+    # group_input.B -> compare_008.B
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Group Input"].outputs[1],
+        cut_bond_1.nodes["Compare.008"].inputs[3]
+    )
+    # group_input.B -> compare_009.B
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Group Input"].outputs[2],
+        cut_bond_1.nodes["Compare.009"].inputs[3]
+    )
+
+    return cut_bond_1
+
+
+if __name__ == "__main__":
+    # Maps node tree creation functions to the node tree 
+    # name, such that we don't recreate node trees unnecessarily
+    node_tree_names : dict[typing.Callable, str] = {}
+
+    cut_bond = cut_bond_1_node_group(node_tree_names)
+    node_tree_names[cut_bond_1_node_group] = cut_bond.name
+
+
 
 
 def read_structure(atoms,name, animate=True):
@@ -197,6 +388,10 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
 
     atoms_and_bonds.is_modifier = True
 
+    numbers = sorted(set(atoms.get_atomic_numbers()))
+    if "cut_bond" not in bpy.data.node_groups:
+        cut_bond_1_node_group({})
+
     #atoms_from_verts interface
     #Socket Geometry
     geometry_socket = atoms_and_bonds.interface.new_socket(name = "Geometry", in_out='OUTPUT', socket_type = 'NodeSocketGeometry')
@@ -231,6 +426,35 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     resolution.socket_type = 'NodeSocketInt'
     resolution.attribute_domain = 'POINT'
 
+    radius_menu_input_indices = {}
+    radius_menu_sockets = {}
+    for element in numbers:
+        sym = chemical_symbols[element]
+        try:
+            radius_mode_socket = atoms_and_bonds.interface.new_socket(name=f"{sym}", in_out='INPUT', socket_type='NodeSocketMenu')
+        except Exception:
+            radius_mode_socket = atoms_and_bonds.interface.new_socket(name=f"{sym}", in_out='INPUT', socket_type='NodeSocketInt')
+            radius_mode_socket.min_value = 0
+            radius_mode_socket.max_value = 1
+            radius_mode_socket.default_value = 0
+        radius_mode_socket.attribute_domain = 'POINT'
+        radius_menu_sockets[element] = radius_mode_socket
+        radius_menu_input_indices[element] = 4 + len(radius_menu_input_indices)
+
+    cut_bond_pairs = []
+    cut_bond_inputs_offset = 4 + len(radius_menu_input_indices)
+    for element_i in numbers:
+        for element_j in numbers:
+            # Skip mirrored duplicates (j-i) and keep i-i / i-j once.
+            if element_j < element_i:
+                continue
+            pair_name = f"{chemical_symbols[element_i]}-{chemical_symbols[element_j]}"
+            pair_socket = atoms_and_bonds.interface.new_socket(name=pair_name, in_out='INPUT', socket_type='NodeSocketBool')
+            pair_socket.default_value = False
+            pair_socket.attribute_domain = 'POINT'
+            input_index = cut_bond_inputs_offset + len(cut_bond_pairs)
+            cut_bond_pairs.append((element_i, element_j, input_index))
+
     #initialize atoms_from_verts nodes
     #node Group Input
     group_input_at_atoms = atoms_and_bonds.nodes.new("NodeGroupInput")
@@ -246,6 +470,13 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #Name
     radius_attribute.inputs[0].default_value = "atom_radius"
 
+    vdw_radius_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    vdw_radius_attribute.label = "vdw_radius_attribute"
+    vdw_radius_attribute.name = "Named Attribute.vdw"
+    vdw_radius_attribute.data_type = 'FLOAT'
+    #Name
+    vdw_radius_attribute.inputs[0].default_value = "vdw_radius"
+
     #node Named Attribute.001
     element_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
     element_attribute.label = "element_attribute"
@@ -259,7 +490,6 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     join_geometry_atoms.name = "Join Geometry"
     
     #node Compare Elements
-    numbers=list(set(atoms.get_atomic_numbers()))
 
     #setup up color attribute
     #color attribute
@@ -316,10 +546,67 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
             set_material.inputs[2].default_value = bpy.data.materials[sym]
         set_material.location = (-268.2143249511719, -100+140*n)
         set_material.width, set_material.height = 140.0, 100.0
+
+        radius_menu_switch = atoms_and_bonds.nodes.new("GeometryNodeMenuSwitch")
+        radius_menu_switch.name = f"{sym}"
+        radius_menu_switch.label = f"{sym}"
+        radius_menu_switch.data_type = 'FLOAT'
+        radius_menu_switch.location = (-760.0, -420.0 + 200 * n)
+        radius_menu_switch.width, radius_menu_switch.height = 160.0, 100.0
+
+        enum_items = None
+        if hasattr(radius_menu_switch, "enum_items"):
+            enum_items = radius_menu_switch.enum_items
+        elif hasattr(radius_menu_switch, "enum_definition") and hasattr(radius_menu_switch.enum_definition, "enum_items"):
+            enum_items = radius_menu_switch.enum_definition.enum_items
+
+        if enum_items is not None:
+            try:
+                while len(enum_items) > 0:
+                    enum_items.remove(enum_items[0])
+            except Exception:
+                pass
+            try:
+                enum_items.new("covalent_radii")
+                enum_items.new("vdw_radius")
+            except TypeError:
+                try:
+                    enum_items.new("COVALENT", "covalent_radii", "")
+                    enum_items.new("VDW", "vdw_radius", "")
+                except Exception:
+                    pass
+
+        try:
+            radius_menu_switch.active_index = 0
+        except Exception:
+            pass
+        try:
+            radius_menu_switch.inputs[0].default_value = "covalent_radii"
+        except Exception:
+            try:
+                radius_menu_switch.inputs[0].default_value = 0
+            except Exception:
+                pass
+
+        if len(radius_menu_switch.inputs) > 2:
+            try:
+                radius_menu_switch.inputs[1].name = "covalent_radii"
+                radius_menu_switch.inputs[2].name = "vdw_radius"
+            except Exception:
+                pass
         
         atoms_and_bonds.links.new(compare.outputs[0], group.inputs[1])
         atoms_and_bonds.links.new(color_attribute.outputs[0], group.inputs[0])
-        atoms_and_bonds.links.new(radius_attribute.outputs[0], group.inputs[2])
+        atoms_and_bonds.links.new(group_input_at_atoms.outputs[radius_menu_input_indices[number]], radius_menu_switch.inputs[0])
+        atoms_and_bonds.links.new(radius_attribute.outputs[0], radius_menu_switch.inputs[1])
+        atoms_and_bonds.links.new(vdw_radius_attribute.outputs[0], radius_menu_switch.inputs[2])
+        atoms_and_bonds.links.new(radius_menu_switch.outputs[0], group.inputs[2])
+        # Set the group interface socket default to covalent_radii after the link is established
+        if number in radius_menu_sockets:
+            try:
+                radius_menu_sockets[number].default_value = "covalent_radii"
+            except Exception:
+                pass
         atoms_and_bonds.links.new(element_attribute.outputs[0], compare.inputs[2])
         atoms_and_bonds.links.new(group.outputs[0], set_material.inputs[0])
         atoms_and_bonds.links.new(group_input_at_atoms.outputs[3], group.inputs[3])
@@ -358,12 +645,14 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #Set locations
     group_input_at_atoms.location = (-1500 , 63.91105270385742)
     radius_attribute.location = (-1200, -300)
+    vdw_radius_attribute.location = (-1200, -460)
     element_attribute.location = (-1500, -66.59099578857422)
     join_geometry_atoms.location = (0, 1.9488945007324219)
     color_attribute.location = (-600, 0)
     #Set dimensions
     group_input_at_atoms.width, group_input_at_atoms.height = 140.0, 100.0
     radius_attribute.width, radius_attribute.height = 140.0, 100.0
+    vdw_radius_attribute.width, vdw_radius_attribute.height = 140.0, 100.0
     element_attribute.width, element_attribute.height = 140.0, 100.0
     
     join_geometry_atoms.width, join_geometry_atoms.height = 140.0, 100.0
@@ -714,6 +1003,27 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     boolean_math.name = "Boolean Math"
     boolean_math.operation = 'OR'
 
+    cut_bond_groups = []
+    cut_bond_or_nodes = []
+    for pair_index, (element_i, element_j, input_index) in enumerate(cut_bond_pairs):
+        cut_bond_group = atoms_and_bonds.nodes.new("GeometryNodeGroup")
+        cut_bond_group.name = f"cut_bond_{chemical_symbols[element_i]}-{chemical_symbols[element_j]}"
+        cut_bond_group.label = cut_bond_group.name
+        cut_bond_group.node_tree = bpy.data.node_groups["cut_bond"]
+        cut_bond_group.inputs[1].default_value = element_i
+        cut_bond_group.inputs[2].default_value = element_j
+        cut_bond_group.parent = frame_018
+        cut_bond_group.location = (1830.0, -120.0 - pair_index * 120.0)
+        cut_bond_groups.append((cut_bond_group, input_index))
+
+        if pair_index > 0:
+            cut_bond_or = atoms_and_bonds.nodes.new("FunctionNodeBooleanMath")
+            cut_bond_or.name = f"Boolean Math Cut Bond {pair_index}"
+            cut_bond_or.operation = 'OR'
+            cut_bond_or.parent = frame_018
+            cut_bond_or.location = (2140.0, -120.0 - pair_index * 120.0)
+            cut_bond_or_nodes.append(cut_bond_or)
+
     #node Sample Index.008
     sample_index_008 = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
     sample_index_008.name = "Sample Index.008"
@@ -746,6 +1056,36 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     named_attribute_010.data_type = 'FLOAT'
     #Name
     named_attribute_010.inputs[0].default_value = "atom_radius"
+
+    #node Named Attribute.012
+    named_attribute_012 = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    named_attribute_012.name = "Named Attribute.012"
+    named_attribute_012.data_type = 'INT'
+    #Name
+    named_attribute_012.inputs[0].default_value = "element"
+
+    #node Sample Index.010
+    sample_index_010 = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+    sample_index_010.name = "Sample Index.010"
+    sample_index_010.clamp = False
+    sample_index_010.data_type = 'INT'
+    sample_index_010.domain = 'POINT'
+
+    #node Sample Index.011
+    sample_index_011 = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+    sample_index_011.name = "Sample Index.011"
+    sample_index_011.clamp = False
+    sample_index_011.data_type = 'INT'
+    sample_index_011.domain = 'POINT'
+
+    #node Reroute.032
+    reroute_032 = atoms_and_bonds.nodes.new("NodeReroute")
+    reroute_032.name = "Reroute.032"
+    reroute_032.socket_idname = "NodeSocketInt"
+    #node Reroute.033
+    reroute_033 = atoms_and_bonds.nodes.new("NodeReroute")
+    reroute_033.name = "Reroute.033"
+    reroute_033.socket_idname = "NodeSocketInt"
 
     #node Sample Index.004
     sample_index_004 = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
@@ -849,6 +1189,28 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     store_named_attribute_004.inputs[1].default_value = True
     #Name
     store_named_attribute_004.inputs[2].default_value = "end_rad"
+
+    #node Store Named Attribute.007
+    store_named_attribute_007 = atoms_and_bonds.nodes.new("GeometryNodeStoreNamedAttribute")
+    store_named_attribute_007.name = "Store Named Attribute.007"
+    store_named_attribute_007.hide = True
+    store_named_attribute_007.data_type = 'INT'
+    store_named_attribute_007.domain = 'POINT'
+    #Selection
+    store_named_attribute_007.inputs[1].default_value = True
+    #Name
+    store_named_attribute_007.inputs[2].default_value = "start_el"
+
+    #node Store Named Attribute.008
+    store_named_attribute_008 = atoms_and_bonds.nodes.new("GeometryNodeStoreNamedAttribute")
+    store_named_attribute_008.name = "Store Named Attribute.008"
+    store_named_attribute_008.hide = True
+    store_named_attribute_008.data_type = 'INT'
+    store_named_attribute_008.domain = 'POINT'
+    #Selection
+    store_named_attribute_008.inputs[1].default_value = True
+    #Name
+    store_named_attribute_008.inputs[2].default_value = "end_el"
 
     #node Group Output
     group_output = atoms_and_bonds.nodes.new("NodeGroupOutput")
@@ -1152,6 +1514,11 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     reroute_031.parent = frame_014
     reroute_018.parent = frame_014
     named_attribute_010.parent = frame_014
+    named_attribute_012.parent = frame_014
+    sample_index_010.parent = frame_014
+    sample_index_011.parent = frame_014
+    reroute_032.parent = frame_014
+    reroute_033.parent = frame_014
     sample_index_004.parent = frame_012
     sample_index_005.parent = frame_012
     reroute_016.parent = frame_012
@@ -1164,6 +1531,8 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     store_named_attribute_002.parent = frame_019
     store_named_attribute_006.parent = frame_019
     store_named_attribute_004.parent = frame_019
+    store_named_attribute_007.parent = frame_019
+    store_named_attribute_008.parent = frame_019
     vector_math.parent = frame_018
     math_002.parent = frame_018
     math_001.parent = frame_018
@@ -1251,6 +1620,11 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     reroute_031.location = (460.463134765625, -462.0830078125)
     reroute_018.location = (285.13818359375, -282.128173828125)
     named_attribute_010.location = (29.1884765625, -253.385498046875)
+    named_attribute_012.location = (39.0, -497.0)
+    sample_index_010.location = (518.0, -536.0)
+    sample_index_011.location = (518.0, -654.0)
+    reroute_032.location = (447.0, -590.0)
+    reroute_033.location = (463.0, -711.0)
     sample_index_004.location = (274.17578125, -39.73193359375)
     sample_index_005.location = (271.994140625, -287.56689453125)
     reroute_016.location = (44.02978515625, -282.32763671875)
@@ -1264,6 +1638,8 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     store_named_attribute_002.location = (29.202880859375, -116.4759521484375)
     store_named_attribute_006.location = (30.53125, -202.8370361328125)
     store_named_attribute_004.location = (32.62939453125, -246.1605224609375)
+    store_named_attribute_007.location = (31.0, -292.0)
+    store_named_attribute_008.location = (31.0, -337.0)
     group_output.location = (4869.4736328125, 111.9588623046875)
     vector_math.location = (686.83447265625, -39.308837890625)
     math_002.location = (857.7833251953125, -41.7724609375)
@@ -1361,6 +1737,11 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     reroute_031.width, reroute_031.height = 14.5, 100.0
     reroute_018.width, reroute_018.height = 14.5, 100.0
     named_attribute_010.width, named_attribute_010.height = 140.0, 100.0
+    named_attribute_012.width, named_attribute_012.height = 140.0, 100.0
+    sample_index_010.width, sample_index_010.height = 140.0, 100.0
+    sample_index_011.width, sample_index_011.height = 140.0, 100.0
+    reroute_032.width, reroute_032.height = 14.5, 100.0
+    reroute_033.width, reroute_033.height = 14.5, 100.0
     sample_index_004.width, sample_index_004.height = 140.0, 100.0
     sample_index_005.width, sample_index_005.height = 140.0, 100.0
     reroute_016.width, reroute_016.height = 14.5, 100.0
@@ -1374,6 +1755,8 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     store_named_attribute_002.width, store_named_attribute_002.height = 140.0, 100.0
     store_named_attribute_006.width, store_named_attribute_006.height = 140.0, 100.0
     store_named_attribute_004.width, store_named_attribute_004.height = 140.0, 100.0
+    store_named_attribute_007.width, store_named_attribute_007.height = 140.0, 100.0
+    store_named_attribute_008.width, store_named_attribute_008.height = 140.0, 100.0
     group_output.width, group_output.height = 140.0, 100.0
     vector_math.width, vector_math.height = 140.0, 100.0
     math_002.width, math_002.height = 100.0, 100.0
@@ -1568,8 +1951,6 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     atoms_and_bonds.links.new(instance_on_points_002.outputs[0], join_geometry_001.inputs[0])
     #group_input_003.Radius -> curve_circle_001.Radius
     atoms_and_bonds.links.new(group_input_003.outputs[2], curve_circle_001.inputs[4])
-    #boolean_math.Boolean -> delete_geometry.Selection
-    atoms_and_bonds.links.new(boolean_math.outputs[0], delete_geometry.inputs[1])
     #delete_geometry.Geometry -> instance_on_points.Points
     atoms_and_bonds.links.new(delete_geometry.outputs[0], instance_on_points.inputs[0])
     #compare_005.Result -> boolean_math.Boolean
@@ -1578,26 +1959,46 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     atoms_and_bonds.links.new(store_named_attribute_006.outputs[0], store_named_attribute_004.inputs[0])
     #store_named_attribute_003.Geometry -> store_named_attribute_006.Geometry
     atoms_and_bonds.links.new(store_named_attribute_003.outputs[0], store_named_attribute_006.inputs[0])
-    #store_named_attribute_004.Geometry -> delete_geometry.Geometry
-    atoms_and_bonds.links.new(store_named_attribute_004.outputs[0], delete_geometry.inputs[0])
+    #store_named_attribute_004.Geometry -> store_named_attribute_007.Geometry
+    atoms_and_bonds.links.new(store_named_attribute_004.outputs[0], store_named_attribute_007.inputs[0])
+    #store_named_attribute_007.Geometry -> store_named_attribute_008.Geometry
+    atoms_and_bonds.links.new(store_named_attribute_007.outputs[0], store_named_attribute_008.inputs[0])
+    #store_named_attribute_008.Geometry -> delete_geometry.Geometry
+    atoms_and_bonds.links.new(store_named_attribute_008.outputs[0], delete_geometry.inputs[0])
     #named_attribute_010.Attribute -> sample_index_009.Value
     atoms_and_bonds.links.new(named_attribute_010.outputs[0], sample_index_009.inputs[1])
     #named_attribute_010.Attribute -> sample_index_008.Value
     atoms_and_bonds.links.new(named_attribute_010.outputs[0], sample_index_008.inputs[1])
+    #named_attribute_012.Attribute -> sample_index_010.Value
+    atoms_and_bonds.links.new(named_attribute_012.outputs[0], sample_index_010.inputs[1])
+    #named_attribute_012.Attribute -> sample_index_011.Value
+    atoms_and_bonds.links.new(named_attribute_012.outputs[0], sample_index_011.inputs[1])
     #reroute_018.Output -> sample_index_009.Geometry
     atoms_and_bonds.links.new(reroute_018.outputs[0], sample_index_009.inputs[0])
     #reroute_031.Output -> sample_index_009.Index
     atoms_and_bonds.links.new(reroute_031.outputs[0], sample_index_009.inputs[2])
+    #reroute_033.Output -> sample_index_011.Index
+    atoms_and_bonds.links.new(reroute_033.outputs[0], sample_index_011.inputs[2])
     #reroute_030.Output -> sample_index_008.Index
     atoms_and_bonds.links.new(reroute_030.outputs[0], sample_index_008.inputs[2])
+    #reroute_032.Output -> sample_index_010.Index
+    atoms_and_bonds.links.new(reroute_032.outputs[0], sample_index_010.inputs[2])
     #reroute_018.Output -> sample_index_008.Geometry
     atoms_and_bonds.links.new(reroute_018.outputs[0], sample_index_008.inputs[0])
+    #reroute_018.Output -> sample_index_010.Geometry
+    atoms_and_bonds.links.new(reroute_018.outputs[0], sample_index_010.inputs[0])
+    #reroute_018.Output -> sample_index_011.Geometry
+    atoms_and_bonds.links.new(reroute_018.outputs[0], sample_index_011.inputs[0])
     #reroute_016.Output -> reroute_018.Input
     atoms_and_bonds.links.new(reroute_016.outputs[0], reroute_018.inputs[0])
     #reroute_025.Output -> reroute_030.Input
     atoms_and_bonds.links.new(reroute_025.outputs[0], reroute_030.inputs[0])
     #reroute_026.Output -> reroute_031.Input
     atoms_and_bonds.links.new(reroute_026.outputs[0], reroute_031.inputs[0])
+    #reroute_025.Output -> reroute_032.Input
+    atoms_and_bonds.links.new(reroute_025.outputs[0], reroute_032.inputs[0])
+    #reroute_026.Output -> reroute_033.Input
+    atoms_and_bonds.links.new(reroute_026.outputs[0], reroute_033.inputs[0])
     #vector_math.Value -> math_002.Value
     atoms_and_bonds.links.new(vector_math.outputs[1], math_002.inputs[0])
     #realize_instances_001.Geometry -> domain_size_001.Geometry
@@ -1615,6 +2016,10 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     atoms_and_bonds.links.new(sample_index_008.outputs[0], store_named_attribute_006.inputs[3])
     #sample_index_009.Value -> store_named_attribute_004.Value
     atoms_and_bonds.links.new(sample_index_009.outputs[0], store_named_attribute_004.inputs[3])
+    #sample_index_010.Value -> store_named_attribute_007.Value
+    atoms_and_bonds.links.new(sample_index_010.outputs[0], store_named_attribute_007.inputs[3])
+    #sample_index_011.Value -> store_named_attribute_008.Value
+    atoms_and_bonds.links.new(sample_index_011.outputs[0], store_named_attribute_008.inputs[3])
     #named_attribute_009.Attribute -> compare_003.A
     atoms_and_bonds.links.new(named_attribute_009.outputs[0], compare_003.inputs[0])
     #compare_003.Result -> switch_003.Switch
@@ -1645,6 +2050,32 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     atoms_and_bonds.links.new(group_input_002.outputs[1], math_007.inputs[1])
     #math.Value -> compare_005.B
     atoms_and_bonds.links.new(math.outputs[0], compare_005.inputs[1])
+
+    pair_chain_output = None
+    for pair_index, (cut_bond_group, input_index) in enumerate(cut_bond_groups):
+        atoms_and_bonds.links.new(group_input_002.outputs[input_index], cut_bond_group.inputs[0])
+
+        if pair_index == 0:
+            pair_chain_output = cut_bond_group.outputs[0]
+            continue
+
+        pair_or_node = cut_bond_or_nodes[pair_index - 1]
+        atoms_and_bonds.links.new(pair_chain_output, pair_or_node.inputs[0])
+        atoms_and_bonds.links.new(cut_bond_group.outputs[0], pair_or_node.inputs[1])
+        pair_chain_output = pair_or_node.outputs[0]
+
+    cutoff_selection = boolean_math.outputs[0]
+    if pair_chain_output is not None:
+        cut_bond_final_or = atoms_and_bonds.nodes.new("FunctionNodeBooleanMath")
+        cut_bond_final_or.name = "Boolean Math Cutoff and Cut Bonds"
+        cut_bond_final_or.operation = 'OR'
+        cut_bond_final_or.parent = frame_018
+        cut_bond_final_or.location = (2450.0, -170.0)
+        atoms_and_bonds.links.new(boolean_math.outputs[0], cut_bond_final_or.inputs[0])
+        atoms_and_bonds.links.new(pair_chain_output, cut_bond_final_or.inputs[1])
+        cutoff_selection = cut_bond_final_or.outputs[0]
+
+    atoms_and_bonds.links.new(cutoff_selection, delete_geometry.inputs[1])
 
     #reroute_001.Output -> join_geometry_001.Geometry
     atoms_and_bonds.links.new(reroute_001.outputs[0], join_geometry_001.inputs[0])
