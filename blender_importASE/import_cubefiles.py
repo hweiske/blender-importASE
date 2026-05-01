@@ -7,7 +7,10 @@ from ase.io.cube import read_cube
 try:
     import openvdb as vdb
 except ImportError:
-    import pyopenvdb as vdb
+    try:
+        import pyopenvdb as vdb
+    except ImportError:
+        vdb = None
 import os
 from .node_networks.electron_density_nodes import visualize_edensity_node_group
 from .utils import toggle

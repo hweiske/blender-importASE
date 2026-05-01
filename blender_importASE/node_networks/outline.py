@@ -85,7 +85,8 @@ def outline_node_group(mat=None):
     # Node Normal
     normal = outline.nodes.new("GeometryNodeInputNormal")
     normal.name = "Normal"
-    normal.legacy_corner_normals = True
+    if hasattr(normal, 'legacy_corner_normals'):
+        normal.legacy_corner_normals = True
 
     # Node Group Input
     group_input = outline.nodes.new("NodeGroupInput")

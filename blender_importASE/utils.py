@@ -165,7 +165,7 @@ class atomcolors():
                 if atom_type in self.color_dict:
                     COL=list(self.color_dict[atom_type]) + [1]
                 else:
-                    COL=list(colors.jmol_colors[atom_n[n]]) + [1]
+                    COL=list(colors.jmol_colors[atomic_numbers[atom_type]]) + [1]
                 if atom_type in self.metal_dict:
                     metal=self.metal_dict[atom_type]
                 else:
