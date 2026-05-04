@@ -171,4 +171,3 @@ testmaterials.xyz
 write_colors.py
 *.zip
 
-\n# Local dev tools (home-specific)\ntest_pipeline.py
