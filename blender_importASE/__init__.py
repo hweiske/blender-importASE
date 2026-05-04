@@ -11,7 +11,7 @@ from importlib import util
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.1" 
+__version__ = "2.2"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -19,7 +19,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (2, 1),
+    "version": (2, 2),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
