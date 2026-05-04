@@ -1,6 +1,11 @@
 # Collection of Blender Addons for Molecular Structures
 
+[![CI](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml/badge.svg)](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml)
+[![Latest release](https://img.shields.io/github/v/release/Tonner-Zech-Group/blender-importASE)](https://github.com/Tonner-Zech-Group/blender-importASE/releases/latest)
+[![Blender](https://img.shields.io/badge/blender-4.4%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
+[![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10776696.svg)](https://doi.org/10.5281/zenodo.10776696)
+[![Downloads](https://img.shields.io/github/downloads/Tonner-Zech-Group/blender-importASE/total)](https://github.com/Tonner-Zech-Group/blender-importASE/releases)
 
 ## Dependencies
 

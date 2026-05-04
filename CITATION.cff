@@ -10,6 +10,7 @@ authors:
 - family-names: "Thiemann"
   given-names: "Franz"
 title: "Blender Import ASE"
+license: CC-BY-4.0
 version: "2.2"
 doi: 10.5281/zenodo.10776696
 date-released: 2026-05-04
