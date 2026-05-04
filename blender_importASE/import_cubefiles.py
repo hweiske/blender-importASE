@@ -18,6 +18,11 @@ import os.path
 
 
 def cube2vol(filename, filepath=os.environ.get('HOME'),modifier='GeometryNodes'):
+    if vdb is None:
+        raise ImportError(
+            "Neither 'openvdb' nor 'pyopenvdb' is installed. "
+            "Please install one of them to import volumetric density files."
+        )
     with open(filename, 'r') as f:
         atoms = read_cube(f, read_data=True, verbose=True)
         ORIGIN = atoms['origin']
