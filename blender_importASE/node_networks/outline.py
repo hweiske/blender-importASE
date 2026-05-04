@@ -85,7 +85,8 @@ def outline_node_group(mat=None):
     # Node Normal
     normal = outline.nodes.new("GeometryNodeInputNormal")
     normal.name = "Normal"
-    normal.legacy_corner_normals = True
+    if hasattr(normal, 'legacy_corner_normals'):
+        normal.legacy_corner_normals = True
 
     # Node Group Input
     group_input = outline.nodes.new("NodeGroupInput")
@@ -156,8 +157,6 @@ def outline_node_group(mat=None):
 
     return outline
 
-
-outline = outline_node_group()
 
 
 def outline_color_node_group(mat):
@@ -278,6 +277,8 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
             node = outline_node_group(mat=mat)
     else:
         node = outline_node_group(mat=mat)
+    # Always ensure the material socket is set correctly
+    node.interface.items_tree["Outline-Mat"].default_value = mat
 
     node["Socket_1"] = 1
     node["Socket_2"] = False

@@ -7,7 +7,10 @@ from ase.io.cube import read_cube
 try:
     import openvdb as vdb
 except ImportError:
-    import pyopenvdb as vdb
+    try:
+        import pyopenvdb as vdb
+    except ImportError:
+        vdb = None
 import os
 from .node_networks.electron_density_nodes import visualize_edensity_node_group
 from .utils import toggle
@@ -15,6 +18,11 @@ import os.path
 
 
 def cube2vol(filename, filepath=os.environ.get('HOME'),modifier='GeometryNodes'):
+    if vdb is None:
+        raise ImportError(
+            "Neither 'openvdb' nor 'pyopenvdb' is installed. "
+            "Please install one of them to import volumetric density files."
+        )
     with open(filename, 'r') as f:
         atoms = read_cube(f, read_data=True, verbose=True)
         ORIGIN = atoms['origin']
