@@ -136,7 +136,6 @@ class atomcolors():
     
     def setup_materials(self,atoms,colorbonds=False):
         atom_types = set(atoms.get_chemical_symbols())
-        atom_n=list(set(atoms.numbers))
         atom_types.add('Gray')
         bpy.ops.object.select_all(action='DESELECT')
         bpy.ops.mesh.primitive_uv_sphere_add(location=(0,0,0),segments = 16 ,ring_count = 16)
