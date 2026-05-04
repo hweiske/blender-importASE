@@ -3,9 +3,6 @@ import numpy as np
 from ..utils import atomcolors
 from ase.data import covalent_radii, chemical_symbols, colors, vdw_alvarez
 
-import bpy
-import mathutils
-import os
 import typing
 
 
