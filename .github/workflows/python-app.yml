@@ -1,4 +1,7 @@
-# This workflow will install Python dependencies, run tests and ruff with a single version of Python
+# Lint runs on GitHub-hosted Ubuntu. Tests run on the group's self-hosted
+# runner (grafpeter, labels: self-hosted + blender), which provides Blender —
+# the Blender regression test is skipped wherever blender is not on the PATH,
+# so on GitHub-hosted runners the suite never actually executed it.
 
 name: Basic tests
 
@@ -13,7 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  lint:
 
     runs-on: ubuntu-latest
 
@@ -23,16 +26,34 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with Ruff
       run: |
         pip install ruff==0.15.12
         ruff check --output-format=github .
       continue-on-error: false
-    - name: Test with pytest
+
+  test:
+
+    runs-on: [self-hosted, blender]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check Blender is available
+      run: blender --version
+    - name: Install dependencies
+      # The self-hosted runner image has no actions tool cache for Python,
+      # so use its system python3 in a venv instead of actions/setup-python.
       run: |
-        pip install pytest
-        pytest
+        python3 -m venv .venv
+        .venv/bin/pip install --upgrade pip
+        .venv/bin/pip install pytest
+        if [ -f requirements.txt ]; then .venv/bin/pip install -r requirements.txt; fi
+    - name: Expose addon to Blender
+      # run_in_blender.py enables the addon by module name, so the checkout
+      # must be visible in Blender's user addon path ($BLENDER_USER_SCRIPTS/addons).
+      run: |
+        mkdir -p "$RUNNER_TEMP/blender-scripts/addons"
+        ln -sfn "$GITHUB_WORKSPACE/blender_importASE" "$RUNNER_TEMP/blender-scripts/addons/blender_importASE"
+        echo "BLENDER_USER_SCRIPTS=$RUNNER_TEMP/blender-scripts" >> "$GITHUB_ENV"
+    - name: Test with pytest
+      run: .venv/bin/pytest
