@@ -1,7 +1,14 @@
-# Lint runs on GitHub-hosted Ubuntu. Tests run on the group's self-hosted
-# runner (grafpeter, labels: self-hosted + blender), which provides Blender —
-# the Blender regression test is skipped wherever blender is not on the PATH,
-# so on GitHub-hosted runners the suite never actually executed it.
+# lint runs on every push/PR/merge on GitHub-hosted Ubuntu.
+#
+# The Blender regression test runs on the group's self-hosted runner (host:
+# grafpeter; ephemeral myoung34 container per job, labels: self-hosted +
+# blender). That runner's image bakes in Blender + ASE (see the
+# github-actions-runner service in the GrafPeterUllrichvonKellerstein repo), so
+# this job just uses `blender` off PATH — no per-job download. The runner has
+# passwordless sudo and org-network reach, so to avoid executing untrusted
+# fork-PR code on it the test job is gated to `push` and `merge_group` only
+# (post-review / write-access events) — pull requests get lint but NOT the
+# self-hosted test.
 
 name: Basic tests
 
@@ -34,20 +41,35 @@ jobs:
 
   test:
 
+    # Do NOT run untrusted fork-PR code on the self-hosted runner (passwordless
+    # sudo + org network). Only push-to-main and merge-queue candidates — both
+    # of which require write access / review — reach this job.
+    if: github.event_name != 'pull_request'
+
     runs-on: [self-hosted, blender]
 
     steps:
     - uses: actions/checkout@v4
-    - name: Check Blender is available
-      run: blender --version
-    - name: Install dependencies
-      # The self-hosted runner image has no actions tool cache for Python,
-      # so use its system python3 in a venv instead of actions/setup-python.
+
+    - name: Check Blender is available (>= 4.4.0)
+      # Provided by the runner image (github-actions-runner:blender). Guard
+      # loudly: without Blender the test would SKIP (skipif on blender-not-on-
+      # PATH) and the job would go green. Also assert the addon's bl_info floor,
+      # so a runner-image downgrade fails legibly here, not deep in pytest.
+      run: |
+        blender --version
+        ver=$(blender --version | sed -n 's/^Blender \([0-9][0-9.]*\).*/\1/p' | head -n1)
+        [ -n "$ver" ] || { echo "::error::could not parse Blender version"; exit 1; }
+        printf '%s\n%s\n' "4.4.0" "$ver" | sort -VC || { echo "::error::Blender $ver < 4.4.0 (addon bl_info minimum)"; exit 1; }
+
+    - name: Install test deps
+      # pytest runs in this host venv; the addon + ASE run inside Blender's
+      # bundled python (ASE is baked into the runner image), not in this venv.
       run: |
         python3 -m venv .venv
-        .venv/bin/pip install --upgrade pip
-        .venv/bin/pip install pytest
+        .venv/bin/pip install --upgrade pip pytest
         if [ -f requirements.txt ]; then .venv/bin/pip install -r requirements.txt; fi
+
     - name: Expose addon to Blender
       # run_in_blender.py enables the addon by module name, so the checkout
       # must be visible in Blender's user addon path ($BLENDER_USER_SCRIPTS/addons).
@@ -55,5 +77,6 @@ jobs:
         mkdir -p "$RUNNER_TEMP/blender-scripts/addons"
         ln -sfn "$GITHUB_WORKSPACE/blender_importASE" "$RUNNER_TEMP/blender-scripts/addons/blender_importASE"
         echo "BLENDER_USER_SCRIPTS=$RUNNER_TEMP/blender-scripts" >> "$GITHUB_ENV"
+
     - name: Test with pytest
       run: .venv/bin/pytest
