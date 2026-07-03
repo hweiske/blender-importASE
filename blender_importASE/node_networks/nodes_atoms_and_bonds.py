@@ -1,6 +1,7 @@
 import bpy
-from ..utils import atomcolors
-from ase.data import covalent_radii, chemical_symbols, colors, vdw_alvarez
+from ..utils import atomcolors, get_vdw_radius
+from .compat import setup_merge_by_distance
+from ase.data import covalent_radii, chemical_symbols, colors
 
 import bpy
 import mathutils
@@ -308,7 +309,7 @@ def read_structure(atoms,name, animate=True):
         value.value = covalent_radii[atom.number]
     for i, value in enumerate(rad_vdw):
         atom=atoms[i]
-        value.value = vdw_alvarez.vdw_radii[atom.number]
+        value.value = get_vdw_radius(atom.number)
 
     mesh.update()
     vertx=obj.data.vertices
@@ -1462,11 +1463,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #node Merge by Distance
     merge_by_distance = atoms_and_bonds.nodes.new("GeometryNodeMergeByDistance")
     merge_by_distance.name = "Merge by Distance"
-    merge_by_distance.mode = 'ALL'
-    #Selection
-    merge_by_distance.inputs[1].default_value = True
-    #Distance
-    merge_by_distance.inputs[2].default_value = 0.0010000020265579224
+    setup_merge_by_distance(merge_by_distance, mode='ALL', selection=True, distance=0.001)
 
     #node Named Attribute.009
     named_attribute_009 = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")

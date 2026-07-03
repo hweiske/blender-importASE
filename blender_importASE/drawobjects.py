@@ -1,6 +1,7 @@
 import bpy
 import ase
-from ase.data import covalent_radii, vdw_alvarez
+from ase.data import covalent_radii
+from .utils import get_vdw_radius
 import numpy as np
 import ase.neighborlist
 
@@ -10,7 +11,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
     list_of_atoms=[]
     # bpy.ops.surface.primitive_nurbs_surface_sphere_add(radius=1, enter_editmode=False, align='WORLD', location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), scale=(0.0, 0.0, 0.0))
     bpy.ops.mesh.primitive_uv_sphere_add(location=(0, 0, 0), segments=resolution, ring_count=resolution)
-    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+    if bpy.app.version < (4, 1, 0): #use_auto_smooth dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
     else:
         bpy.ops.object.shade_smooth()
@@ -28,8 +29,8 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         elif representation == 'Licorice':
             bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [0.1] * 3
         elif representation == 'VDW':
-            bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [vdw_alvarez.vdw_radii[
-                                                                                               atom.number]] * 3
+            bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale = [get_vdw_radius(
+                                                                                               atom.number)] * 3
         # sprint(bpy.data.node_groups)
         bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
             bpy.data.materials[atom.symbol])
@@ -229,7 +230,7 @@ def draw_unit_cell(atoms):
     COL = (0.1, 0.1, 0.1, 1)
     su.inputs[0].default_value = COL
     bpy.ops.mesh.primitive_cylinder_add(vertices=16)
-    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+    if bpy.app.version < (4, 1, 0): #use_auto_smooth dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
     else:
         bpy.ops.object.shade_smooth()
@@ -238,6 +239,7 @@ def draw_unit_cell(atoms):
     X = [0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0]
     Y = [0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0]
     Z = [0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1]
+    cylinders = []
     for n in range(1, len(X)):
         pos1 = np.array([X[n - 1], Y[n - 1], Z[n - 1]])
         pos2 = np.array([X[n], Y[n], Z[n]])
@@ -260,10 +262,16 @@ def draw_unit_cell(atoms):
         theta = np.arccos(displacement[2] / distance)
         ob.rotation_euler[1] = theta
         ob.rotation_euler[2] = phi
+        cylinders.append(ob)
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects['ref_cell'].select_set(True)
     bpy.ops.object.delete()
-    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.select_all(action='DESELECT')
+    # join only the cell cylinders; select_all('SELECT') would also join the
+    # atoms and bonds, and join() needs an active object in background mode
+    for ob in cylinders:
+        ob.select_set(True)
+    bpy.context.view_layer.objects.active = cylinders[-1]
     bpy.ops.object.join()
     bpy.ops.object.select_all(action='DESELECT')
     return None
@@ -272,7 +280,7 @@ def draw_unit_cell(atoms):
 def create_half_bond(resolution=16):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_cylinder_add(vertices=resolution)
-    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+    if bpy.app.version < (4, 1, 0): #use_auto_smooth dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
     else:
         bpy.ops.object.shade_smooth()
@@ -300,7 +308,7 @@ def create_half_bond(resolution=16):
 def create_full_bond(resolution=16):
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.mesh.primitive_cylinder_add(vertices=resolution)
-    if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+    if bpy.app.version < (4, 1, 0): #use_auto_smooth dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
     else:
         bpy.ops.object.shade_smooth()

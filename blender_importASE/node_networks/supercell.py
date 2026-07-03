@@ -1,5 +1,6 @@
 import bpy
 from ase.data import chemical_symbols
+from .compat import setup_merge_by_distance
 
 #initialize cutoff_group node group
 def cutoff_group_node_group():
@@ -691,11 +692,7 @@ def supercell_node_group(atoms):
     #node Merge by Distance
     merge_by_distance = supercell.nodes.new("GeometryNodeMergeByDistance")
     merge_by_distance.name = "Merge by Distance"
-    merge_by_distance.mode = 'ALL'
-    #Selection
-    merge_by_distance.inputs[1].default_value = True
-    #Distance
-    merge_by_distance.inputs[2].default_value = 0.0010000000474974513
+    setup_merge_by_distance(merge_by_distance, mode='ALL', selection=True, distance=0.001)
 
     #node Reroute.008
     reroute_element = supercell.nodes.new("NodeReroute")
@@ -1489,11 +1486,7 @@ def supercell_atoms_node_group(atoms):
     #node Merge by Distance
     merge_by_distance = supercell_atoms.nodes.new("GeometryNodeMergeByDistance")
     merge_by_distance.name = "Merge by Distance"
-    merge_by_distance.mode = 'ALL'
-    #Selection
-    merge_by_distance.inputs[1].default_value = True
-    #Distance
-    merge_by_distance.inputs[2].default_value = 0.0010000000474974513
+    setup_merge_by_distance(merge_by_distance, mode='ALL', selection=True, distance=0.001)
 
     #node Reroute.008
     reroute_008 = supercell_atoms.nodes.new("NodeReroute")

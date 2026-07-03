@@ -1,5 +1,18 @@
 import bpy
-from ase.data import colors
+import numpy as np
+from ase.data import colors, covalent_radii, vdw_alvarez
+
+
+def get_vdw_radius(number):
+    """vdW radius with a fallback for elements missing from the Alvarez table.
+
+    The table only covers Z <= 103 and contains NaN for some elements; fall
+    back to a covalent-radius based estimate there.
+    """
+    radii = vdw_alvarez.vdw_radii
+    if number < len(radii) and not np.isnan(radii[number]):
+        return float(radii[number])
+    return float(covalent_radii[number]) * 1.5
 
 class atomcolors():
     def __init__(self):
@@ -135,7 +148,7 @@ class atomcolors():
         atom_n=list(set(atoms.numbers))
         bpy.ops.object.select_all(action='DESELECT')
         bpy.ops.mesh.primitive_uv_sphere_add(location=(0,0,0),segments = 16 ,ring_count = 16)
-        if bpy.app.version[1] == 0: #use_auto_smoot dropped after 4.0
+        if bpy.app.version < (4, 1, 0): #use_auto_smooth dropped after 4.0
             bpy.ops.object.shade_smooth(use_auto_smooth=True)
         else:
             bpy.ops.object.shade_smooth()

@@ -1,4 +1,5 @@
 import bpy
+from .compat import setup_merge_by_distance
 
 #initialize bonds node group
 def bonds_geometry_node_group():
@@ -1089,7 +1090,7 @@ def bonds_geometry_node_group():
     #set_shade_smooth.Geometry -> group_output.Geometry
     merge_geometry = bonds.nodes.new("GeometryNodeMergeByDistance")
     merge_geometry.name = "fix shading"
-    merge_geometry.inputs[2].default_value = 0.001
+    setup_merge_by_distance(merge_geometry, distance=0.001)
     merge_geometry.location = (3500, -1165.5565185546875)
     bonds.links.new(set_shade_smooth.outputs[0], merge_geometry.inputs[0])
     bonds.links.new(merge_geometry.outputs[0], group_output.inputs[0])
