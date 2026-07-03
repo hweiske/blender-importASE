@@ -97,15 +97,45 @@ def cut_bond_1_node_group(node_tree_names: dict[typing.Callable, str]):
     # False
     switch_002.inputs[1].default_value = False
 
+    # Node Boolean Math
+    boolean_math = cut_bond_1.nodes.new("FunctionNodeBooleanMath")
+    boolean_math.name = "Boolean Math"
+    boolean_math.operation = 'OR'
+
+    # Node Compare.010
+    compare_010 = cut_bond_1.nodes.new("FunctionNodeCompare")
+    compare_010.name = "Compare.010"
+    compare_010.hide = True
+    compare_010.data_type = 'INT'
+    compare_010.mode = 'ELEMENT'
+    compare_010.operation = 'EQUAL'
+
+    # Node Boolean Math.004
+    boolean_math_004 = cut_bond_1.nodes.new("FunctionNodeBooleanMath")
+    boolean_math_004.name = "Boolean Math.004"
+    boolean_math_004.operation = 'AND'
+
+    # Node Compare.011
+    compare_011 = cut_bond_1.nodes.new("FunctionNodeCompare")
+    compare_011.name = "Compare.011"
+    compare_011.hide = True
+    compare_011.data_type = 'INT'
+    compare_011.mode = 'ELEMENT'
+    compare_011.operation = 'EQUAL'
+
     # Set locations
-    cut_bond_1.nodes["Group Output"].location = (483.3470458984375, 0.0)
+    cut_bond_1.nodes["Group Output"].location = (730.031005859375, 34.65874481201172)
     cut_bond_1.nodes["Group Input"].location = (-493.3470458984375, 0.0)
-    cut_bond_1.nodes["Named Attribute.007"].location = (-288.3507080078125, 62.3369140625)
-    cut_bond_1.nodes["Compare.008"].location = (-42.0068359375, 14.00439453125)
-    cut_bond_1.nodes["Boolean Math.002"].location = (114.824951171875, -8.916748046875)
-    cut_bond_1.nodes["Compare.009"].location = (-61.99267578125, -88.592529296875)
-    cut_bond_1.nodes["Named Attribute.013"].location = (-293.3470458984375, -76.544189453125)
-    cut_bond_1.nodes["Switch.002"].location = (293.3470458984375, 88.5927734375)
+    cut_bond_1.nodes["Named Attribute.007"].location = (-321.8140869140625, 103.78353881835938)
+    cut_bond_1.nodes["Compare.008"].location = (-49.95313262939453, 189.1499481201172)
+    cut_bond_1.nodes["Boolean Math.002"].location = (143.28746032714844, 169.91616821289062)
+    cut_bond_1.nodes["Compare.009"].location = (-41.459983825683594, 38.315399169921875)
+    cut_bond_1.nodes["Named Attribute.013"].location = (-424.63934326171875, -211.4298095703125)
+    cut_bond_1.nodes["Switch.002"].location = (540.031005859375, 123.25151824951172)
+    cut_bond_1.nodes["Boolean Math"].location = (319.2652587890625, -6.075885772705078)
+    cut_bond_1.nodes["Compare.010"].location = (-94.44700622558594, -202.4337158203125)
+    cut_bond_1.nodes["Boolean Math.004"].location = (98.79359436035156, -221.66751098632812)
+    cut_bond_1.nodes["Compare.011"].location = (-85.95384216308594, -353.2682800292969)
 
     # Set dimensions
     cut_bond_1.nodes["Group Output"].width  = 140.0
@@ -132,6 +162,18 @@ def cut_bond_1_node_group(node_tree_names: dict[typing.Callable, str]):
     cut_bond_1.nodes["Switch.002"].width  = 140.0
     cut_bond_1.nodes["Switch.002"].height = 100.0
 
+    cut_bond_1.nodes["Boolean Math"].width  = 140.0
+    cut_bond_1.nodes["Boolean Math"].height = 100.0
+
+    cut_bond_1.nodes["Compare.010"].width  = 140.0
+    cut_bond_1.nodes["Compare.010"].height = 100.0
+
+    cut_bond_1.nodes["Boolean Math.004"].width  = 140.0
+    cut_bond_1.nodes["Boolean Math.004"].height = 100.0
+
+    cut_bond_1.nodes["Compare.011"].width  = 138.7508544921875
+    cut_bond_1.nodes["Compare.011"].height = 100.0
+
 
     # Initialize cut_bond_1 links
 
@@ -140,10 +182,20 @@ def cut_bond_1_node_group(node_tree_names: dict[typing.Callable, str]):
         cut_bond_1.nodes["Compare.008"].outputs[0],
         cut_bond_1.nodes["Boolean Math.002"].inputs[0]
     )
-    # boolean_math_002.Boolean -> switch_002.True
+    # boolean_math.Boolean -> switch_002.True
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Boolean Math"].outputs[0],
+        cut_bond_1.nodes["Switch.002"].inputs[2]
+    )
+    # boolean_math_002.Boolean -> boolean_math.Boolean
     cut_bond_1.links.new(
         cut_bond_1.nodes["Boolean Math.002"].outputs[0],
-        cut_bond_1.nodes["Switch.002"].inputs[2]
+        cut_bond_1.nodes["Boolean Math"].inputs[0]
+    )
+    # boolean_math_004.Boolean -> boolean_math.Boolean
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Boolean Math.004"].outputs[0],
+        cut_bond_1.nodes["Boolean Math"].inputs[1]
     )
     # named_attribute_007.Attribute -> compare_008.A
     cut_bond_1.links.new(
@@ -179,6 +231,36 @@ def cut_bond_1_node_group(node_tree_names: dict[typing.Callable, str]):
     cut_bond_1.links.new(
         cut_bond_1.nodes["Group Input"].outputs[2],
         cut_bond_1.nodes["Compare.009"].inputs[3]
+    )
+    # named_attribute_007.Attribute -> compare_010.A
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Named Attribute.007"].outputs[0],
+        cut_bond_1.nodes["Compare.010"].inputs[2]
+    )
+    # group_input.B -> compare_010.B
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Group Input"].outputs[2],
+        cut_bond_1.nodes["Compare.010"].inputs[3]
+    )
+    # named_attribute_013.Attribute -> compare_011.A
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Named Attribute.013"].outputs[0],
+        cut_bond_1.nodes["Compare.011"].inputs[2]
+    )
+    # group_input.B -> compare_011.B
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Group Input"].outputs[1],
+        cut_bond_1.nodes["Compare.011"].inputs[3]
+    )
+    # compare_010.Result -> boolean_math_004.Boolean
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Compare.010"].outputs[0],
+        cut_bond_1.nodes["Boolean Math.004"].inputs[0]
+    )
+    # compare_011.Result -> boolean_math_004.Boolean
+    cut_bond_1.links.new(
+        cut_bond_1.nodes["Compare.011"].outputs[0],
+        cut_bond_1.nodes["Boolean Math.004"].inputs[1]
     )
 
     return cut_bond_1
