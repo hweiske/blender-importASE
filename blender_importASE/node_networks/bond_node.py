@@ -1,5 +1,5 @@
 import bpy
-from .compat import setup_merge_by_distance
+from .compat import setup_merge_by_distance, setup_curve_to_mesh
 
 #initialize bonds node group
 def bonds_geometry_node_group():
@@ -649,8 +649,7 @@ def bonds_geometry_node_group():
     #node Curve to Mesh
     curve_to_mesh = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh.name = "Curve to Mesh"
-    #Fill Caps
-    curve_to_mesh.inputs[2].default_value = False
+    curve_to_mesh_radius = setup_curve_to_mesh(bonds, curve_to_mesh, fill_caps=False, use_radius=True)
 
     #node Reroute.021
     reroute_021 = bonds.nodes.new("NodeReroute")
@@ -669,8 +668,7 @@ def bonds_geometry_node_group():
     #node Curve to Mesh.001
     curve_to_mesh_001 = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh_001.name = "Curve to Mesh.001"
-    #Fill Caps
-    curve_to_mesh_001.inputs[2].default_value = False
+    curve_to_mesh_001_radius = setup_curve_to_mesh(bonds, curve_to_mesh_001, fill_caps=False, use_radius=False)
 
     #node Group Input.003
     group_input_003 = bonds.nodes.new("NodeGroupInput")
@@ -959,6 +957,10 @@ def bonds_geometry_node_group():
     reroute_021.location = (376.4156494140625, -339.73040771484375)
     curve_circle.location = (427.6524658203125, -418.33843994140625)
     curve_to_mesh_001.location = (590.5220947265625, -220.72076416015625)
+    if curve_to_mesh_radius is not None:
+        curve_to_mesh_radius.location = (427.6524658203125, -480.0)
+    if curve_to_mesh_001_radius is not None:
+        curve_to_mesh_001_radius.location = (427.6524658203125, -160.0)
     group_input_003.location = (29.2069091796875, -130.22064208984375)
     curve_circle_001.location = (240.4832763671875, -39.6986083984375)
     set_curve_radius.location = (419.3665771484375, -290.44024658203125)

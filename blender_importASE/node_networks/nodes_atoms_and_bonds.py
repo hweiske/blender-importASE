@@ -1,6 +1,6 @@
 import bpy
 from ..utils import atomcolors, get_vdw_radius
-from .compat import setup_merge_by_distance
+from .compat import setup_merge_by_distance, setup_curve_to_mesh
 from ase.data import covalent_radii, chemical_symbols, colors
 
 import bpy
@@ -883,8 +883,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #node Curve to Mesh
     curve_to_mesh = atoms_and_bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh.name = "Curve to Mesh"
-    #Fill Caps
-    curve_to_mesh.inputs[2].default_value = False
+    curve_to_mesh_radius = setup_curve_to_mesh(atoms_and_bonds, curve_to_mesh, fill_caps=False, use_radius=True)
 
     #node Reroute.021
     reroute_021 = atoms_and_bonds.nodes.new("NodeReroute")
@@ -903,8 +902,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #node Curve to Mesh.001
     curve_to_mesh_001 = atoms_and_bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh_001.name = "Curve to Mesh.001"
-    #Fill Caps
-    curve_to_mesh_001.inputs[2].default_value = False
+    curve_to_mesh_001_radius = setup_curve_to_mesh(atoms_and_bonds, curve_to_mesh_001, fill_caps=False, use_radius=False)
 
     #node Reroute.007
     reroute_007 = atoms_and_bonds.nodes.new("NodeReroute")
@@ -1665,6 +1663,10 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     reroute_021.location = (376.3699951171875, -339.73040771484375)
     curve_circle.location = (427.6068115234375, -418.33843994140625)
     curve_to_mesh_001.location = (590.4764404296875, -220.72076416015625)
+    if curve_to_mesh_radius is not None:
+        curve_to_mesh_radius.location = (427.6068115234375, -480.0)
+    if curve_to_mesh_001_radius is not None:
+        curve_to_mesh_001_radius.location = (427.6068115234375, -160.0)
     reroute_007.location = (-2633.1083984375, -1548.634765625)
     switch_001.location = (567.9396362304688, -39.8232421875)
     math_005.location = (346.04608154296875, -61.42822265625)
