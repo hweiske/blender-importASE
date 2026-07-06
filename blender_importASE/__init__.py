@@ -4,6 +4,7 @@ import bpy
 from bpy_extras.io_utils import ImportHelper
 from os.path import join
 from .ui import import_ase_molecule
+from . import controls
 
 
 __author__ = "Hendrik Weiske"
@@ -175,9 +176,11 @@ def menu_func_import(self, context):
 def register():
     bpy.utils.register_class(ImportASEMolecule)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    controls.register()
 
 
 def unregister():
+    controls.unregister()
     bpy.utils.unregister_class(ImportASEMolecule)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
