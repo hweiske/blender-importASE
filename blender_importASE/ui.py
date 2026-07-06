@@ -1,9 +1,10 @@
 import bpy
 import ase
+import ase.io
 from ase import Atoms
-from .import_cubefiles import cube2vol
+from .import_cubefiles import cube2vol, chgcar2vol, is_vasp_density, read_vasp_density
 from .utils import atomcolors, group_atoms
-from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
+from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_longbonds
 from .trajectory import move_atoms, move_bonds,move_longbonds
 from .node_networks.nodes_atoms_and_bonds import set_atoms_node_group, atoms_and_bonds, read_structure
 from .node_networks.supercell import make_supercell
@@ -12,17 +13,29 @@ from .node_networks.outline import outline_objects
 from .node_networks.bond_node import make_bonds
 from .node_networks.hide_atoms import hide_atoms
 import time
-def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, resolution=16, colorbonds=False, fix_bonds=False, color=0.2, scale=1,
+
+
+def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, resolution=32, colorbonds=False, long_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks",
                         read_density=True, shift_cell=False, 
                         imageslice=1, animate = True, outline = True, **kwargs):
+    # Read in the structure
     start=time.time()
     modifier_counter = 0
     modifier_chosen=''
-    atoms = ase.io.read(filepath,index = ':')
+    vasp_density = None
+    if is_vasp_density(filename):
+        # CHGCAR-like files can't be read by ase.io.read (the POSCAR header
+        # is followed by the density grid); read atoms and grid in one pass
+        vasp_density = read_vasp_density(filepath)
+        atoms = list(vasp_density.atoms)
+    else:
+        atoms = ase.io.read(filepath,index = ':')
     end_read=time.time()
     print('Time to read file: ',end_read-start)
+    
+    # Handle trajectory files
     trajectory = False
     if isinstance(atoms[0],Atoms) and len(atoms) > 1:
         trajectory = True
@@ -36,38 +49,37 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
             bpy.data.scenes['Scene'].frame_current = 0
     elif len(atoms) == 1:
         atoms=atoms[0]
+    
+    # If overwrite is chosen, set representation to nodes for animations
     if overwrite and representation != 'nodes' and animate and trajectory:
         representation = 'nodes'
+    
     # When importing molecules from AMS, the resulting atoms do not lie in the unit cell since AMS uses unit cells centered around 0
     cell = atoms.cell
     shift_vector = 0.5 * cell[0] + 0.5 * cell[1] + 0.5 * cell[2]
     if shift_cell:
         atoms.positions += shift_vector
-    #    if SUPERCELL == True:
-    #        atoms=make_supercell(atoms,matrix)
-    atomcolor=atomcolors()
 
-    atomcolor.setup_materials(atoms, colorbonds=colorbonds, color=color)        
+    # Set up materials
+    atomcolor=atomcolors()
+    atomcolor.setup_materials(atoms, colorbonds=colorbonds)        
     my_coll = bpy.data.collections.new(name=atoms.get_chemical_formula() + '_' + filename.split('.')[0])
     bpy.context.scene.collection.children.link(my_coll)
     layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
     bpy.context.view_layer.active_layer_collection = layer_collection
+
+    # Draw the atoms and bonds
     if representation != 'bonds_fromnodes' and representation != 'nodes':
-       
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         if representation != 'VDW':
-            if fix_bonds:
-                list_of_bonds,nl,bondlengths=draw_bonds_new(atoms,resolution=resolution)
+            if long_bonds:
+                list_of_bonds,nl,bondlengths=draw_longbonds(atoms,resolution=resolution, colorbonds=colorbonds)
             else:
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
     if representation == 'nodes':
-        
         if animate and trajectory:
             obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True)
-
-            
-
         else:
             obj,mesh=read_structure(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=False)
         print(f'add hide modifier to GeometryNodes{modifier_chosen}')
@@ -103,37 +115,46 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         bpy.context.view_layer.active_layer_collection = seclayer_collection
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
-       
-        
-
         bpy.context.view_layer.active_layer_collection = layer_collection
         bonds_obj = make_bonds(modifier='GeometryNodes')
-        bpy.context.object.modifiers['GeometryNodes']["Socket_1"] = 0.66
-        bpy.context.object.modifiers['GeometryNodes']["Socket_2"] = 0.1
-        bpy.context.object.modifiers['GeometryNodes']["Socket_3"] = sec_coll
+        bonds_obj.modifiers['GeometryNodes']["Socket_1"] = 0.60
+        bonds_obj.modifiers['GeometryNodes']["Socket_2"] = 0.1
+        bonds_obj.modifiers['GeometryNodes']["Socket_3"] = sec_coll
         
 
-
+    # Draw the unit cell
     if unit_cell is True and atoms.pbc.all() is not False:
         draw_unit_cell(atoms)
+
+    # Read in density
     if read_density:
+        density_objs = []
         if 'cube' in filename:
-            density_obj = cube2vol(filepath,modifier='GeometryNodes')
+            density_objs = [cube2vol(filepath,modifier='GeometryNodes')]
+        elif vasp_density is not None:
+            # total charge density, plus the spin difference if spin-polarized
+            density_objs = chgcar2vol(filepath,modifier='GeometryNodes',density=vasp_density)
+        if density_objs:
             modifier_chosen=f'.00{modifier_counter}'
-            #print(density_obj)
             if shift_cell is True:
-                density_obj.location.x += shift_vector[0]
-                density_obj.location.y += shift_vector[1]
-                density_obj.location.z += shift_vector[2]
+                for density_obj in density_objs:
+                    density_obj.location.x += shift_vector[0]
+                    density_obj.location.y += shift_vector[1]
+                    density_obj.location.z += shift_vector[2]
+
+    # Handle animation
     if trajectory is True and animate is True:
         if representation != 'nodes' and representation != 'bonds_fromnodes':
             
             move_atoms(TRAJECTORY,list_of_atoms,imageslice)
             if representation != 'VDW':
-                if fix_bonds is True:
+                if long_bonds is True:
                     move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
                 else:
-                    move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)  
+                    move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
+        if representation == 'bonds_fromnodes':
+            print("generating trajectory for bonds_fromnodes")
+            move_atoms(TRAJECTORY,list_of_atoms,imageslice)
     end=time.time()
     print('Time to import atoms_object: ',end-end_read)
 

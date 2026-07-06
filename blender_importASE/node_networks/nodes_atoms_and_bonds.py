@@ -1,198 +1,8 @@
 import bpy
-from ..utils import atomcolors
-from ase.data import covalent_radii, chemical_symbols, colors, vdw_alvarez
-
-import bpy
-import mathutils
-import os
-import typing
-
-
-def cut_bond_1_node_group(node_tree_names: dict[typing.Callable, str]):
-    """Initialize cut_bond node group"""
-    cut_bond_1 = bpy.data.node_groups.new(type='GeometryNodeTree', name="cut_bond")
-
-    cut_bond_1.color_tag = 'NONE'
-    cut_bond_1.description = ""
-    cut_bond_1.default_group_node_width = 140
-
-    # cut_bond_1 interface
-
-    # Socket Output
-    output_socket = cut_bond_1.interface.new_socket(name="Output", in_out='OUTPUT', socket_type='NodeSocketBool')
-    output_socket.default_value = False
-    output_socket.attribute_domain = 'POINT'
-
-    # Socket Switch
-    switch_socket = cut_bond_1.interface.new_socket(name="Switch", in_out='INPUT', socket_type='NodeSocketBool')
-    switch_socket.default_value = False
-    switch_socket.attribute_domain = 'POINT'
-
-    # Socket B
-    b_socket = cut_bond_1.interface.new_socket(name="B", in_out='INPUT', socket_type='NodeSocketInt')
-    b_socket.default_value = 11
-    b_socket.min_value = -2147483648
-    b_socket.max_value = 2147483647
-    b_socket.subtype = 'NONE'
-    b_socket.attribute_domain = 'POINT'
-
-    # Socket B
-    b_socket_1 = cut_bond_1.interface.new_socket(name="B", in_out='INPUT', socket_type='NodeSocketInt')
-    b_socket_1.default_value = 11
-    b_socket_1.min_value = -2147483648
-    b_socket_1.max_value = 2147483647
-    b_socket_1.subtype = 'NONE'
-    b_socket_1.attribute_domain = 'POINT'
-
-    # Initialize cut_bond_1 nodes
-
-    # Node Group Output
-    group_output = cut_bond_1.nodes.new("NodeGroupOutput")
-    group_output.name = "Group Output"
-    group_output.is_active_output = True
-
-    # Node Group Input
-    group_input = cut_bond_1.nodes.new("NodeGroupInput")
-    group_input.name = "Group Input"
-
-    # Node Named Attribute.007
-    named_attribute_007 = cut_bond_1.nodes.new("GeometryNodeInputNamedAttribute")
-    named_attribute_007.name = "Named Attribute.007"
-    named_attribute_007.data_type = 'INT'
-    # Name
-    named_attribute_007.inputs[0].default_value = "start_el"
-
-    # Node Compare.008
-    compare_008 = cut_bond_1.nodes.new("FunctionNodeCompare")
-    compare_008.name = "Compare.008"
-    compare_008.hide = True
-    compare_008.data_type = 'INT'
-    compare_008.mode = 'ELEMENT'
-    compare_008.operation = 'EQUAL'
-
-    # Node Boolean Math.002
-    boolean_math_002 = cut_bond_1.nodes.new("FunctionNodeBooleanMath")
-    boolean_math_002.name = "Boolean Math.002"
-    boolean_math_002.operation = 'AND'
-
-    # Node Compare.009
-    compare_009 = cut_bond_1.nodes.new("FunctionNodeCompare")
-    compare_009.name = "Compare.009"
-    compare_009.hide = True
-    compare_009.data_type = 'INT'
-    compare_009.mode = 'ELEMENT'
-    compare_009.operation = 'EQUAL'
-
-    # Node Named Attribute.013
-    named_attribute_013 = cut_bond_1.nodes.new("GeometryNodeInputNamedAttribute")
-    named_attribute_013.name = "Named Attribute.013"
-    named_attribute_013.data_type = 'INT'
-    # Name
-    named_attribute_013.inputs[0].default_value = "end_el"
-
-    # Node Switch.002
-    switch_002 = cut_bond_1.nodes.new("GeometryNodeSwitch")
-    switch_002.name = "Switch.002"
-    switch_002.input_type = 'BOOLEAN'
-    # False
-    switch_002.inputs[1].default_value = False
-
-    # Set locations
-    cut_bond_1.nodes["Group Output"].location = (483.3470458984375, 0.0)
-    cut_bond_1.nodes["Group Input"].location = (-493.3470458984375, 0.0)
-    cut_bond_1.nodes["Named Attribute.007"].location = (-288.3507080078125, 62.3369140625)
-    cut_bond_1.nodes["Compare.008"].location = (-42.0068359375, 14.00439453125)
-    cut_bond_1.nodes["Boolean Math.002"].location = (114.824951171875, -8.916748046875)
-    cut_bond_1.nodes["Compare.009"].location = (-61.99267578125, -88.592529296875)
-    cut_bond_1.nodes["Named Attribute.013"].location = (-293.3470458984375, -76.544189453125)
-    cut_bond_1.nodes["Switch.002"].location = (293.3470458984375, 88.5927734375)
-
-    # Set dimensions
-    cut_bond_1.nodes["Group Output"].width  = 140.0
-    cut_bond_1.nodes["Group Output"].height = 100.0
-
-    cut_bond_1.nodes["Group Input"].width  = 140.0
-    cut_bond_1.nodes["Group Input"].height = 100.0
-
-    cut_bond_1.nodes["Named Attribute.007"].width  = 140.0
-    cut_bond_1.nodes["Named Attribute.007"].height = 100.0
-
-    cut_bond_1.nodes["Compare.008"].width  = 140.0
-    cut_bond_1.nodes["Compare.008"].height = 100.0
-
-    cut_bond_1.nodes["Boolean Math.002"].width  = 140.0
-    cut_bond_1.nodes["Boolean Math.002"].height = 100.0
-
-    cut_bond_1.nodes["Compare.009"].width  = 138.7508544921875
-    cut_bond_1.nodes["Compare.009"].height = 100.0
-
-    cut_bond_1.nodes["Named Attribute.013"].width  = 140.0
-    cut_bond_1.nodes["Named Attribute.013"].height = 100.0
-
-    cut_bond_1.nodes["Switch.002"].width  = 140.0
-    cut_bond_1.nodes["Switch.002"].height = 100.0
-
-
-    # Initialize cut_bond_1 links
-
-    # compare_008.Result -> boolean_math_002.Boolean
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Compare.008"].outputs[0],
-        cut_bond_1.nodes["Boolean Math.002"].inputs[0]
-    )
-    # boolean_math_002.Boolean -> switch_002.True
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Boolean Math.002"].outputs[0],
-        cut_bond_1.nodes["Switch.002"].inputs[2]
-    )
-    # named_attribute_007.Attribute -> compare_008.A
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Named Attribute.007"].outputs[0],
-        cut_bond_1.nodes["Compare.008"].inputs[2]
-    )
-    # named_attribute_013.Attribute -> compare_009.A
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Named Attribute.013"].outputs[0],
-        cut_bond_1.nodes["Compare.009"].inputs[2]
-    )
-    # compare_009.Result -> boolean_math_002.Boolean
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Compare.009"].outputs[0],
-        cut_bond_1.nodes["Boolean Math.002"].inputs[1]
-    )
-    # switch_002.Output -> group_output.Output
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Switch.002"].outputs[0],
-        cut_bond_1.nodes["Group Output"].inputs[0]
-    )
-    # group_input.Switch -> switch_002.Switch
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Group Input"].outputs[0],
-        cut_bond_1.nodes["Switch.002"].inputs[0]
-    )
-    # group_input.B -> compare_008.B
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Group Input"].outputs[1],
-        cut_bond_1.nodes["Compare.008"].inputs[3]
-    )
-    # group_input.B -> compare_009.B
-    cut_bond_1.links.new(
-        cut_bond_1.nodes["Group Input"].outputs[2],
-        cut_bond_1.nodes["Compare.009"].inputs[3]
-    )
-
-    return cut_bond_1
-
-
-if __name__ == "__main__":
-    # Maps node tree creation functions to the node tree 
-    # name, such that we don't recreate node trees unnecessarily
-    node_tree_names : dict[typing.Callable, str] = {}
-
-    cut_bond = cut_bond_1_node_group(node_tree_names)
-    node_tree_names[cut_bond_1_node_group] = cut_bond.name
-
-
+from ..utils import atomcolors, get_vdw_radius
+from ..controls import make_control_tables, PAIR_STRIDE
+from .compat import setup_merge_by_distance, setup_curve_to_mesh
+from ase.data import covalent_radii, chemical_symbols, colors
 
 
 def read_structure(atoms,name, animate=True):
@@ -212,21 +22,31 @@ def read_structure(atoms,name, animate=True):
         mesh.attributes.new(name="atom_radius", type='FLOAT', domain='POINT')
     if 'vdw_radius' not in mesh.attributes:
         mesh.attributes.new(name="vdw_radius", type='FLOAT', domain='POINT')
+    if 'color' not in mesh.attributes:
+        mesh.attributes.new(name="color", type='FLOAT_COLOR', domain='POINT')
 
     element = mesh.attributes["element"].data
     rad = mesh.attributes["atom_radius"].data
     rad_vdw=mesh.attributes["vdw_radius"].data
+    col = mesh.attributes["color"].data
 
+    atomcolor = atomcolors()
     for i, value in enumerate(element):
         atom=atoms[i]
         value.value = atom.number  # Example: setting index value
-        # Update the mesh   
+        # Update the mesh
     for i, value in enumerate(rad):
         atom=atoms[i]
         value.value = covalent_radii[atom.number]
     for i, value in enumerate(rad_vdw):
         atom=atoms[i]
-        value.value = vdw_alvarez.vdw_radii[atom.number]
+        value.value = get_vdw_radius(atom.number)
+    for i, value in enumerate(col):
+        sym = chemical_symbols[atoms[i].number]
+        if sym in atomcolor.color_dict:
+            value.color = list(atomcolor.color_dict[sym]) + [1]
+        else:
+            value.color = list(colors.jmol_colors[atoms[i].number]) + [1]
 
     mesh.update()
     vertx=obj.data.vertices
@@ -290,6 +110,12 @@ def set_atoms_node_group():
     resolution_socket.subtype = 'NONE'
     resolution_socket.attribute_domain = 'POINT'
 
+    #Socket material_index: object material slot the atom faces should use
+    material_index_socket = set_atoms.interface.new_socket(name = "material_index", in_out='INPUT', socket_type = 'NodeSocketInt')
+    material_index_socket.default_value = 0
+    material_index_socket.min_value = 0
+    material_index_socket.attribute_domain = 'POINT'
+
 
     #initialize set_atoms nodes
     #node Group Output
@@ -316,6 +142,15 @@ def set_atoms_node_group():
     uv_sphere.name = "UV Sphere"
     #Radius
     uv_sphere.inputs[2].default_value = 0.5
+
+    # tag the sphere faces with the material slot; converted to the actual
+    # material_index at the end of the atoms_and_bonds tree, so the object's
+    # material slots (Material Properties tab) stay in control
+    store_mat_slot = set_atoms.nodes.new("GeometryNodeStoreNamedAttribute")
+    store_mat_slot.name = "Store mat_slot"
+    store_mat_slot.data_type = 'INT'
+    store_mat_slot.domain = 'FACE'
+    store_mat_slot.inputs[2].default_value = "mat_slot"
 
     #node Shade Smooth
     shade_smooth = set_atoms.nodes.new("GeometryNodeSetShadeSmooth")
@@ -363,8 +198,10 @@ def set_atoms_node_group():
     set_atoms.links.new(instance_on_points.outputs[0], shade_smooth.inputs[0])
     #shade_smooth.Geometry -> group_output.Instances
     set_atoms.links.new(shade_smooth.outputs[0], group_output.inputs[0])
-    #uv_sphere.Mesh -> instance_on_points.Instance
-    set_atoms.links.new(uv_sphere.outputs[0], instance_on_points.inputs[2])
+    #uv_sphere.Mesh -> store_mat_slot -> instance_on_points.Instance
+    set_atoms.links.new(uv_sphere.outputs[0], store_mat_slot.inputs[0])
+    set_atoms.links.new(group_input.outputs[4], store_mat_slot.inputs['Value'])
+    set_atoms.links.new(store_mat_slot.outputs[0], instance_on_points.inputs[2])
     #group_input.Selection -> instance_on_points.Selection
     set_atoms.links.new(group_input.outputs[1], instance_on_points.inputs[1])
     #group_input.resolution -> math.Value
@@ -377,8 +214,7 @@ def set_atoms_node_group():
 
 #initialize atoms_from_verts node group
 def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
-    atomcolor=atomcolors()
-    
+
     atoms_and_bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = f"atoms_and_bonds_{atoms.get_chemical_formula()}")
 
     atoms_and_bonds.color_tag = 'NONE'
@@ -389,8 +225,6 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     atoms_and_bonds.is_modifier = True
 
     numbers = sorted(set(atoms.get_atomic_numbers()))
-    if "cut_bond" not in bpy.data.node_groups:
-        cut_bond_1_node_group({})
 
     #atoms_from_verts interface
     #Socket Geometry
@@ -426,34 +260,12 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     resolution.socket_type = 'NodeSocketInt'
     resolution.attribute_domain = 'POINT'
 
-    radius_menu_input_indices = {}
-    radius_menu_sockets = {}
-    for element in numbers:
-        sym = chemical_symbols[element]
-        try:
-            radius_mode_socket = atoms_and_bonds.interface.new_socket(name=f"{sym}", in_out='INPUT', socket_type='NodeSocketMenu')
-        except Exception:
-            radius_mode_socket = atoms_and_bonds.interface.new_socket(name=f"{sym}", in_out='INPUT', socket_type='NodeSocketInt')
-            radius_mode_socket.min_value = 0
-            radius_mode_socket.max_value = 1
-            radius_mode_socket.default_value = 0
-        radius_mode_socket.attribute_domain = 'POINT'
-        radius_menu_sockets[element] = radius_mode_socket
-        radius_menu_input_indices[element] = 4 + len(radius_menu_input_indices)
-
-    cut_bond_pairs = []
-    cut_bond_inputs_offset = 4 + len(radius_menu_input_indices)
-    for element_i in numbers:
-        for element_j in numbers:
-            # Skip mirrored duplicates (j-i) and keep i-i / i-j once.
-            if element_j < element_i:
-                continue
-            pair_name = f"{chemical_symbols[element_i]}-{chemical_symbols[element_j]}"
-            pair_socket = atoms_and_bonds.interface.new_socket(name=pair_name, in_out='INPUT', socket_type='NodeSocketBool')
-            pair_socket.default_value = False
-            pair_socket.attribute_domain = 'POINT'
-            input_index = cut_bond_inputs_offset + len(cut_bond_pairs)
-            cut_bond_pairs.append((element_i, element_j, input_index))
+    # Per-element radius modes and per-pair bond cutting are looked up from
+    # small table objects (see ..controls) instead of one socket + node
+    # sub-network per element/pair, which scaled quadratically with the
+    # number of distinct elements.
+    pair_table_socket = atoms_and_bonds.interface.new_socket(name="pair_table", in_out='INPUT', socket_type='NodeSocketObject')
+    element_table_socket = atoms_and_bonds.interface.new_socket(name="element_table", in_out='INPUT', socket_type='NodeSocketObject')
 
     #initialize atoms_from_verts nodes
     #node Group Input
@@ -489,19 +301,44 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     join_geometry_atoms = atoms_and_bonds.nodes.new("GeometryNodeJoinGeometry")
     join_geometry_atoms.name = "Join Geometry"
     
-    #node Compare Elements
+    # per-point atom radius: covalent + (vdw - covalent) * radius_mode,
+    # radius_mode looked up per element from the element table object
+    # (the 'color' attribute is written directly in read_structure)
+    element_table_info = atoms_and_bonds.nodes.new("GeometryNodeObjectInfo")
+    element_table_info.label = "element_table"
+    element_table_info.name = "Element Table Info"
 
-    #setup up color attribute
-    #color attribute
-    color_attribute = atoms_and_bonds.nodes.new("GeometryNodeStoreNamedAttribute")
-    color_attribute.label = "color_attribute"
-    color_attribute.name = "Named Attribute"
-    color_attribute.data_type = 'FLOAT_COLOR'
-    color_attribute.inputs[2].default_value = "color"
-    
+    radius_mode_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    radius_mode_attribute.label = "radius_mode_attribute"
+    radius_mode_attribute.name = "Named Attribute.radius_mode"
+    radius_mode_attribute.data_type = 'INT'
+    radius_mode_attribute.inputs[0].default_value = "radius_mode"
 
-    atoms_and_bonds.links.new(group_input_at_atoms.outputs[0], color_attribute.inputs[0])
-        
+    sample_radius_mode = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+    sample_radius_mode.label = "sample radius_mode"
+    sample_radius_mode.name = "Sample Radius Mode"
+    sample_radius_mode.data_type = 'INT'
+    sample_radius_mode.domain = 'POINT'
+
+    radius_span = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    radius_span.name = "Radius Span"
+    radius_span.operation = 'SUBTRACT'
+
+    radius_field = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    radius_field.name = "Radius Field"
+    radius_field.operation = 'MULTIPLY_ADD'
+
+    atoms_and_bonds.links.new(group_input_at_atoms.outputs['element_table'], element_table_info.inputs['Object'])
+    atoms_and_bonds.links.new(element_table_info.outputs['Geometry'], sample_radius_mode.inputs['Geometry'])
+    atoms_and_bonds.links.new(radius_mode_attribute.outputs[0], sample_radius_mode.inputs['Value'])
+    atoms_and_bonds.links.new(element_attribute.outputs[0], sample_radius_mode.inputs['Index'])
+    # (vdw - covalent)
+    atoms_and_bonds.links.new(vdw_radius_attribute.outputs[0], radius_span.inputs[0])
+    atoms_and_bonds.links.new(radius_attribute.outputs[0], radius_span.inputs[1])
+    # span * mode + covalent
+    atoms_and_bonds.links.new(radius_span.outputs[0], radius_field.inputs[0])
+    atoms_and_bonds.links.new(sample_radius_mode.outputs[0], radius_field.inputs[1])
+    atoms_and_bonds.links.new(radius_attribute.outputs[0], radius_field.inputs[2])
 
     for n,number in enumerate(numbers):
 
@@ -523,124 +360,16 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
         compare.width, compare.height = 140.0, 100.0
         group.width, group.height = 140.0, 100.0
 
-        #node color
-        color = atoms_and_bonds.nodes.new("FunctionNodeInputColor")
-        color.name = sym
-        if sym in atomcolor.color_dict:
-            color.value = list(atomcolor.color_dict[sym]) + [1]
-        else:
-            color.value = list(colors.jmol_colors[number]) + [1]
-        color.location = (-750, -800+200*n)
-        color.width, color.height = 140.0, 100.0
+        # the object material slot for this element: slots are appended in
+        # sorted(numbers) order at the end of this function, bond material last
+        group.inputs[4].default_value = n
 
-       
-        
-
-
-        #node Set Material
-        set_material = atoms_and_bonds.nodes.new("GeometryNodeSetMaterial")
-        set_material.name = f"Set Material - {sym}"
-        #Selection
-        set_material.inputs[1].default_value = True
-        if sym in bpy.data.materials:
-            set_material.inputs[2].default_value = bpy.data.materials[sym]
-        set_material.location = (-268.2143249511719, -100+140*n)
-        set_material.width, set_material.height = 140.0, 100.0
-
-        radius_menu_switch = atoms_and_bonds.nodes.new("GeometryNodeMenuSwitch")
-        radius_menu_switch.name = f"{sym}"
-        radius_menu_switch.label = f"{sym}"
-        radius_menu_switch.data_type = 'FLOAT'
-        radius_menu_switch.location = (-760.0, -420.0 + 200 * n)
-        radius_menu_switch.width, radius_menu_switch.height = 160.0, 100.0
-
-        enum_items = None
-        if hasattr(radius_menu_switch, "enum_items"):
-            enum_items = radius_menu_switch.enum_items
-        elif hasattr(radius_menu_switch, "enum_definition") and hasattr(radius_menu_switch.enum_definition, "enum_items"):
-            enum_items = radius_menu_switch.enum_definition.enum_items
-
-        if enum_items is not None:
-            try:
-                while len(enum_items) > 0:
-                    enum_items.remove(enum_items[0])
-            except Exception:
-                pass
-            try:
-                enum_items.new("covalent_radii")
-                enum_items.new("vdw_radius")
-            except TypeError:
-                try:
-                    enum_items.new("COVALENT", "covalent_radii", "")
-                    enum_items.new("VDW", "vdw_radius", "")
-                except Exception:
-                    pass
-
-        try:
-            radius_menu_switch.active_index = 0
-        except Exception:
-            pass
-        try:
-            radius_menu_switch.inputs[0].default_value = "covalent_radii"
-        except Exception:
-            try:
-                radius_menu_switch.inputs[0].default_value = 0
-            except Exception:
-                pass
-
-        if len(radius_menu_switch.inputs) > 2:
-            try:
-                radius_menu_switch.inputs[1].name = "covalent_radii"
-                radius_menu_switch.inputs[2].name = "vdw_radius"
-            except Exception:
-                pass
-        
         atoms_and_bonds.links.new(compare.outputs[0], group.inputs[1])
-        atoms_and_bonds.links.new(color_attribute.outputs[0], group.inputs[0])
-        atoms_and_bonds.links.new(group_input_at_atoms.outputs[radius_menu_input_indices[number]], radius_menu_switch.inputs[0])
-        atoms_and_bonds.links.new(radius_attribute.outputs[0], radius_menu_switch.inputs[1])
-        atoms_and_bonds.links.new(vdw_radius_attribute.outputs[0], radius_menu_switch.inputs[2])
-        atoms_and_bonds.links.new(radius_menu_switch.outputs[0], group.inputs[2])
-        # Set the group interface socket default to covalent_radii after the link is established
-        if number in radius_menu_sockets:
-            try:
-                radius_menu_sockets[number].default_value = "covalent_radii"
-            except Exception:
-                pass
+        atoms_and_bonds.links.new(group_input_at_atoms.outputs[0], group.inputs[0])
+        atoms_and_bonds.links.new(radius_field.outputs[0], group.inputs[2])
         atoms_and_bonds.links.new(element_attribute.outputs[0], compare.inputs[2])
-        atoms_and_bonds.links.new(group.outputs[0], set_material.inputs[0])
         atoms_and_bonds.links.new(group_input_at_atoms.outputs[3], group.inputs[3])
-        atoms_and_bonds.links.new(set_material.outputs[0], join_geometry_atoms.inputs[0])
-
-        
-        
-        #switches
-        if n > 0:
-            if n < len(numbers):
-                switch_color = atoms_and_bonds.nodes.new("GeometryNodeSwitch")
-                switch_color.name = f"Switch Color {sym}-{chemical_symbols[numbers[n-1]]}"
-                switch_color.label = f"Switch Color {sym}-{chemical_symbols[numbers[n-1]]}"
-                switch_color.inputs[0].default_value = False
-                switch_color.input_type = 'RGBA'
-                atoms_and_bonds.links.new(compare.outputs[0], switch_color.inputs[0]) #for every n 
-            if n == 1:
-                old=atoms_and_bonds.nodes[chemical_symbols[numbers[n-1]]]
-                atoms_and_bonds.links.new(old.outputs[0], switch_color.inputs[1]) #old is color n-1
-                atoms_and_bonds.links.new(color.outputs[0], switch_color.inputs[2]) #color is n
-            else:
-                old=atoms_and_bonds.nodes[f"Switch Color {chemical_symbols[numbers[n-1]]}-{chemical_symbols[numbers[n-2]]}"]
-                atoms_and_bonds.links.new(old.outputs[0], switch_color.inputs[1]) #old is switch_color n-1-2
-                atoms_and_bonds.links.new(color.outputs[0], switch_color.inputs[2]) #color is n
-            switch_color.location = (-500, -1000+200*n)
-        
-    if len(numbers) > 1:    
-        atoms_and_bonds.links.new(switch_color.outputs[0], color_attribute.inputs[3])
-    else:
-        atoms_and_bonds.links.new(color.outputs[0], color_attribute.inputs[3])
-
-
-    
-
+        atoms_and_bonds.links.new(group.outputs[0], join_geometry_atoms.inputs[0])
 
     #Set locations
     group_input_at_atoms.location = (-1500 , 63.91105270385742)
@@ -648,7 +377,11 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     vdw_radius_attribute.location = (-1200, -460)
     element_attribute.location = (-1500, -66.59099578857422)
     join_geometry_atoms.location = (0, 1.9488945007324219)
-    color_attribute.location = (-600, 0)
+    element_table_info.location = (-1200, -620)
+    radius_mode_attribute.location = (-1200, -770)
+    sample_radius_mode.location = (-1000, -620)
+    radius_span.location = (-1000, -420)
+    radius_field.location = (-800, -520)
     #Set dimensions
     group_input_at_atoms.width, group_input_at_atoms.height = 140.0, 100.0
     radius_attribute.width, radius_attribute.height = 140.0, 100.0
@@ -784,11 +517,16 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     set_curve_radius.inputs[2].default_value = 0.005
 
     #node Set Material.006
-    set_material_006 = atoms_and_bonds.nodes.new("GeometryNodeSetMaterial")
+    # tag bond faces with the bond material slot (appended after the element
+    # materials, see end of this function)
+    set_material_006 = atoms_and_bonds.nodes.new("GeometryNodeStoreNamedAttribute")
     set_material_006.name = "Set Material.006"
+    set_material_006.data_type = 'INT'
+    set_material_006.domain = 'FACE'
     #Selection
     set_material_006.inputs[1].default_value = True
-    set_material_006.inputs[2].default_value = bondmat
+    set_material_006.inputs[2].default_value = "mat_slot"
+    set_material_006.inputs['Value'].default_value = len(numbers)
 
     #node Switch.005
     switch_005 = atoms_and_bonds.nodes.new("GeometryNodeSwitch")
@@ -800,8 +538,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #node Curve to Mesh
     curve_to_mesh = atoms_and_bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh.name = "Curve to Mesh"
-    #Fill Caps
-    curve_to_mesh.inputs[2].default_value = False
+    curve_to_mesh_radius = setup_curve_to_mesh(atoms_and_bonds, curve_to_mesh, fill_caps=False, use_radius=True)
 
     #node Reroute.021
     reroute_021 = atoms_and_bonds.nodes.new("NodeReroute")
@@ -820,8 +557,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #node Curve to Mesh.001
     curve_to_mesh_001 = atoms_and_bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh_001.name = "Curve to Mesh.001"
-    #Fill Caps
-    curve_to_mesh_001.inputs[2].default_value = False
+    curve_to_mesh_001_radius = setup_curve_to_mesh(atoms_and_bonds, curve_to_mesh_001, fill_caps=False, use_radius=False)
 
     #node Reroute.007
     reroute_007 = atoms_and_bonds.nodes.new("NodeReroute")
@@ -1003,26 +739,63 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     boolean_math.name = "Boolean Math"
     boolean_math.operation = 'OR'
 
-    cut_bond_groups = []
-    cut_bond_or_nodes = []
-    for pair_index, (element_i, element_j, input_index) in enumerate(cut_bond_pairs):
-        cut_bond_group = atoms_and_bonds.nodes.new("GeometryNodeGroup")
-        cut_bond_group.name = f"cut_bond_{chemical_symbols[element_i]}-{chemical_symbols[element_j]}"
-        cut_bond_group.label = cut_bond_group.name
-        cut_bond_group.node_tree = bpy.data.node_groups["cut_bond"]
-        cut_bond_group.inputs[1].default_value = element_i
-        cut_bond_group.inputs[2].default_value = element_j
-        cut_bond_group.parent = frame_018
-        cut_bond_group.location = (1830.0, -120.0 - pair_index * 120.0)
-        cut_bond_groups.append((cut_bond_group, input_index))
+    # bond cutting: the pair id (min*119 + max of the endpoint elements) of
+    # each bond is looked up in the pair table object's 'cut' attribute -
+    # replaces one cut_bond group instance + OR node per element pair
+    pair_table_info = atoms_and_bonds.nodes.new("GeometryNodeObjectInfo")
+    pair_table_info.label = "pair_table"
+    pair_table_info.name = "Pair Table Info"
+    pair_table_info.parent = frame_018
+    pair_table_info.location = (1830.0, -120.0)
 
-        if pair_index > 0:
-            cut_bond_or = atoms_and_bonds.nodes.new("FunctionNodeBooleanMath")
-            cut_bond_or.name = f"Boolean Math Cut Bond {pair_index}"
-            cut_bond_or.operation = 'OR'
-            cut_bond_or.parent = frame_018
-            cut_bond_or.location = (2140.0, -120.0 - pair_index * 120.0)
-            cut_bond_or_nodes.append(cut_bond_or)
+    cut_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    cut_attribute.label = "cut_attribute"
+    cut_attribute.name = "Named Attribute.cut"
+    cut_attribute.data_type = 'BOOLEAN'
+    cut_attribute.inputs[0].default_value = "cut"
+    cut_attribute.parent = frame_018
+    cut_attribute.location = (1830.0, -280.0)
+
+    start_el_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    start_el_attribute.name = "Named Attribute.start_el"
+    start_el_attribute.data_type = 'INT'
+    start_el_attribute.inputs[0].default_value = "start_el"
+    start_el_attribute.parent = frame_018
+    start_el_attribute.location = (1830.0, -440.0)
+
+    end_el_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    end_el_attribute.name = "Named Attribute.end_el"
+    end_el_attribute.data_type = 'INT'
+    end_el_attribute.inputs[0].default_value = "end_el"
+    end_el_attribute.parent = frame_018
+    end_el_attribute.location = (1830.0, -600.0)
+
+    pair_min = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    pair_min.name = "Pair Min"
+    pair_min.operation = 'MINIMUM'
+    pair_min.parent = frame_018
+    pair_min.location = (2040.0, -440.0)
+
+    pair_max = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    pair_max.name = "Pair Max"
+    pair_max.operation = 'MAXIMUM'
+    pair_max.parent = frame_018
+    pair_max.location = (2040.0, -600.0)
+
+    pair_id_node = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    pair_id_node.name = "Pair Id"
+    pair_id_node.operation = 'MULTIPLY_ADD'
+    pair_id_node.inputs[1].default_value = PAIR_STRIDE
+    pair_id_node.parent = frame_018
+    pair_id_node.location = (2240.0, -520.0)
+
+    sample_cut = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+    sample_cut.label = "sample cut"
+    sample_cut.name = "Sample Cut"
+    sample_cut.data_type = 'BOOLEAN'
+    sample_cut.domain = 'POINT'
+    sample_cut.parent = frame_018
+    sample_cut.location = (2240.0, -280.0)
 
     #node Sample Index.008
     sample_index_008 = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
@@ -1380,11 +1153,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #node Merge by Distance
     merge_by_distance = atoms_and_bonds.nodes.new("GeometryNodeMergeByDistance")
     merge_by_distance.name = "Merge by Distance"
-    merge_by_distance.mode = 'ALL'
-    #Selection
-    merge_by_distance.inputs[1].default_value = True
-    #Distance
-    merge_by_distance.inputs[2].default_value = 0.0010000020265579224
+    setup_merge_by_distance(merge_by_distance, mode='ALL', selection=True, distance=0.001)
 
     #node Named Attribute.009
     named_attribute_009 = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
@@ -1586,6 +1355,10 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     reroute_021.location = (376.3699951171875, -339.73040771484375)
     curve_circle.location = (427.6068115234375, -418.33843994140625)
     curve_to_mesh_001.location = (590.4764404296875, -220.72076416015625)
+    if curve_to_mesh_radius is not None:
+        curve_to_mesh_radius.location = (427.6068115234375, -480.0)
+    if curve_to_mesh_001_radius is not None:
+        curve_to_mesh_001_radius.location = (427.6068115234375, -160.0)
     reroute_007.location = (-2633.1083984375, -1548.634765625)
     switch_001.location = (567.9396362304688, -39.8232421875)
     math_005.location = (346.04608154296875, -61.42822265625)
@@ -1795,8 +1568,25 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     realize_instances_002.width, realize_instances_002.height = 140.0, 100.0
 
     #initialize atoms_from_verts links
-    #realize_instances_002.Geometry -> group_output.Geometry
-    atoms_and_bonds.links.new(realize_instances_002.outputs[0], group_output.inputs[0])
+    # convert the mat_slot face attribute into the actual material index at
+    # the very end, when the geometry carries the object's material slot
+    # list - this keeps the Material Properties tab in control of what
+    # renders (Join Geometry would not preserve indices set earlier)
+    mat_slot_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    mat_slot_attribute.label = "mat_slot"
+    mat_slot_attribute.name = "Named Attribute.mat_slot"
+    mat_slot_attribute.data_type = 'INT'
+    mat_slot_attribute.inputs[0].default_value = "mat_slot"
+    mat_slot_attribute.location = (4685.3271484375, 20.0)
+
+    set_material_index = atoms_and_bonds.nodes.new("GeometryNodeSetMaterialIndex")
+    set_material_index.name = "Set Material Index"
+    set_material_index.inputs[1].default_value = True
+    set_material_index.location = (4885.0, 180.95066833496094)
+
+    atoms_and_bonds.links.new(realize_instances_002.outputs[0], set_material_index.inputs[0])
+    atoms_and_bonds.links.new(mat_slot_attribute.outputs[0], set_material_index.inputs['Material Index'])
+    atoms_and_bonds.links.new(set_material_index.outputs[0], group_output.inputs[0])
     #named_attribute.Attribute -> switch.False
     atoms_and_bonds.links.new(radius_attribute.outputs[0], switch.inputs[1])
     #compare_006.Result -> boolean_math.Boolean
@@ -2051,36 +1841,33 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     #math.Value -> compare_005.B
     atoms_and_bonds.links.new(math.outputs[0], compare_005.inputs[1])
 
-    pair_chain_output = None
-    for pair_index, (cut_bond_group, input_index) in enumerate(cut_bond_groups):
-        atoms_and_bonds.links.new(group_input_002.outputs[input_index], cut_bond_group.inputs[0])
+    # wire the pair-table cut lookup: pair_id = min(start_el, end_el) *
+    # PAIR_STRIDE + max(...), sampled from the table's 'cut' attribute
+    atoms_and_bonds.links.new(group_input_002.outputs['pair_table'], pair_table_info.inputs['Object'])
+    atoms_and_bonds.links.new(start_el_attribute.outputs[0], pair_min.inputs[0])
+    atoms_and_bonds.links.new(end_el_attribute.outputs[0], pair_min.inputs[1])
+    atoms_and_bonds.links.new(start_el_attribute.outputs[0], pair_max.inputs[0])
+    atoms_and_bonds.links.new(end_el_attribute.outputs[0], pair_max.inputs[1])
+    atoms_and_bonds.links.new(pair_min.outputs[0], pair_id_node.inputs[0])
+    atoms_and_bonds.links.new(pair_max.outputs[0], pair_id_node.inputs[2])
+    atoms_and_bonds.links.new(pair_table_info.outputs['Geometry'], sample_cut.inputs['Geometry'])
+    atoms_and_bonds.links.new(cut_attribute.outputs[0], sample_cut.inputs['Value'])
+    atoms_and_bonds.links.new(pair_id_node.outputs[0], sample_cut.inputs['Index'])
 
-        if pair_index == 0:
-            pair_chain_output = cut_bond_group.outputs[0]
-            continue
+    cut_bond_final_or = atoms_and_bonds.nodes.new("FunctionNodeBooleanMath")
+    cut_bond_final_or.name = "Boolean Math Cutoff and Cut Bonds"
+    cut_bond_final_or.operation = 'OR'
+    cut_bond_final_or.parent = frame_018
+    cut_bond_final_or.location = (2450.0, -170.0)
+    atoms_and_bonds.links.new(boolean_math.outputs[0], cut_bond_final_or.inputs[0])
+    atoms_and_bonds.links.new(sample_cut.outputs[0], cut_bond_final_or.inputs[1])
 
-        pair_or_node = cut_bond_or_nodes[pair_index - 1]
-        atoms_and_bonds.links.new(pair_chain_output, pair_or_node.inputs[0])
-        atoms_and_bonds.links.new(cut_bond_group.outputs[0], pair_or_node.inputs[1])
-        pair_chain_output = pair_or_node.outputs[0]
-
-    cutoff_selection = boolean_math.outputs[0]
-    if pair_chain_output is not None:
-        cut_bond_final_or = atoms_and_bonds.nodes.new("FunctionNodeBooleanMath")
-        cut_bond_final_or.name = "Boolean Math Cutoff and Cut Bonds"
-        cut_bond_final_or.operation = 'OR'
-        cut_bond_final_or.parent = frame_018
-        cut_bond_final_or.location = (2450.0, -170.0)
-        atoms_and_bonds.links.new(boolean_math.outputs[0], cut_bond_final_or.inputs[0])
-        atoms_and_bonds.links.new(pair_chain_output, cut_bond_final_or.inputs[1])
-        cutoff_selection = cut_bond_final_or.outputs[0]
-
-    atoms_and_bonds.links.new(cutoff_selection, delete_geometry.inputs[1])
+    atoms_and_bonds.links.new(cut_bond_final_or.outputs[0], delete_geometry.inputs[1])
 
     #reroute_001.Output -> join_geometry_001.Geometry
     atoms_and_bonds.links.new(reroute_001.outputs[0], join_geometry_001.inputs[0])
 
-    atoms_and_bonds.links.new(color_attribute.outputs[0], reroute_001.inputs[0])
+    atoms_and_bonds.links.new(group_input_at_atoms.outputs[0], reroute_001.inputs[0])
 
     atoms_and_bonds.links.new(join_geometry_atoms.outputs[0], join_geometry_001.inputs[0])
 
@@ -2088,8 +1875,15 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_add(type='NODES')
     obj.modifiers[modifier].node_group = atoms_and_bonds
-    #attach materials to atoms  
-    for number in set(atoms.get_atomic_numbers()):
+
+    # create the control tables and plug them into the modifier
+    pair_table_obj, element_table_obj = make_control_tables(obj.name, numbers)
+    obj.modifiers[modifier][pair_table_socket.identifier] = pair_table_obj
+    obj.modifiers[modifier][element_table_socket.identifier] = element_table_obj
+    obj['ase_elements'] = [int(z) for z in numbers]
+    #attach materials to atoms - order matters: face mat_slot values point at
+    #these slots (sorted elements first, bond material last)
+    for number in numbers:
         sym = chemical_symbols[number]
         obj.data.materials.append(bpy.data.materials[sym])
     obj.data.materials.append(bondmat)

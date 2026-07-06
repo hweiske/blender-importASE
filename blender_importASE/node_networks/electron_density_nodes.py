@@ -1,5 +1,6 @@
 import bpy
-    
+from .compat import setup_volume_to_mesh
+
 #initialize visualize_edensity node group
 def visualize_edensity_node_group(): #from node2python
     visualize_edensity= bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "visualize_edensity")
@@ -15,13 +16,8 @@ def visualize_edensity_node_group(): #from node2python
 
     #node Volume to Mesh.001
     volume_to_mesh_001 = visualize_edensity.nodes.new("GeometryNodeVolumeToMesh")
-    volume_to_mesh_001.resolution_mode = 'GRID'
-    #Voxel Size
-    volume_to_mesh_001.inputs[1].default_value = 0.30000001192092896
-    #Voxel Amount
-    volume_to_mesh_001.inputs[2].default_value = 64.0
-    #Adaptivity
-    volume_to_mesh_001.inputs[4].default_value = 0.0
+    setup_volume_to_mesh(volume_to_mesh_001, resolution_mode='GRID',
+                         voxel_size=0.3, voxel_amount=64.0, adaptivity=0.0)
 
     #node Join Geometry
     join_geometry = visualize_edensity.nodes.new("GeometryNodeJoinGeometry")
@@ -60,7 +56,7 @@ def visualize_edensity_node_group(): #from node2python
     #node Compare.005
     compare_005 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_005.data_type = 'FLOAT'
-    compare_005.operation = 'LESS_EQUAL'
+    compare_005.operation = 'LESS_THAN'
     compare_005.mode = 'ELEMENT'
     #A_INT
     compare_005.inputs[2].default_value = 0
@@ -88,7 +84,7 @@ def visualize_edensity_node_group(): #from node2python
     #node Compare.003
     compare_003 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_003.data_type = 'FLOAT'
-    compare_003.operation = 'LESS_EQUAL'
+    compare_003.operation = 'LESS_THAN'
     compare_003.mode = 'ELEMENT'
     #A_INT
     compare_003.inputs[2].default_value = 0
@@ -116,7 +112,7 @@ def visualize_edensity_node_group(): #from node2python
     #node Compare.004
     compare_004 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_004.data_type = 'FLOAT'
-    compare_004.operation = 'LESS_EQUAL'
+    compare_004.operation = 'LESS_THAN'
     compare_004.mode = 'ELEMENT'
     #A_INT
     compare_004.inputs[2].default_value = 0
@@ -149,7 +145,7 @@ def visualize_edensity_node_group(): #from node2python
     #node Compare
     compare = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare.data_type = 'FLOAT'
-    compare.operation = 'LESS_EQUAL'
+    compare.operation = 'LESS_THAN'
     compare.mode = 'ELEMENT'
     #A_INT
     compare.inputs[2].default_value = 0
@@ -177,7 +173,7 @@ def visualize_edensity_node_group(): #from node2python
     #node Compare.001
     compare_001 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_001.data_type = 'FLOAT'
-    compare_001.operation = 'LESS_EQUAL'
+    compare_001.operation = 'LESS_THAN'
     compare_001.mode = 'ELEMENT'
     #A_INT
     compare_001.inputs[2].default_value = 0
@@ -210,7 +206,7 @@ def visualize_edensity_node_group(): #from node2python
     #node Compare.002
     compare_002 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_002.data_type = 'FLOAT'
-    compare_002.operation = 'LESS_EQUAL'
+    compare_002.operation = 'LESS_THAN'
     compare_002.mode = 'ELEMENT'
     #A_INT
     compare_002.inputs[2].default_value = 0
@@ -361,13 +357,8 @@ def visualize_edensity_node_group(): #from node2python
 
     #node Volume to Mesh
     volume_to_mesh = visualize_edensity.nodes.new("GeometryNodeVolumeToMesh")
-    volume_to_mesh.resolution_mode = 'GRID'
-    #Voxel Size
-    volume_to_mesh.inputs[1].default_value = 0.30000001192092896
-    #Voxel Amount
-    volume_to_mesh.inputs[2].default_value = 64.0
-    #Adaptivity
-    volume_to_mesh.inputs[4].default_value = 0.0
+    setup_volume_to_mesh(volume_to_mesh, resolution_mode='GRID',
+                         voxel_size=0.3, voxel_amount=64.0, adaptivity=0.0)
 
     #node Math
     math = visualize_edensity.nodes.new("ShaderNodeMath")
@@ -466,9 +457,9 @@ def visualize_edensity_node_group(): #from node2python
     #group_input.isovalue -> math.Value
     visualize_edensity.links.new(group_input.outputs[1], math.inputs[0])
     #group_input.isovalue -> volume_to_mesh.Threshold
-    visualize_edensity.links.new(group_input.outputs[1], volume_to_mesh.inputs[3])
+    visualize_edensity.links.new(group_input.outputs[1], volume_to_mesh.inputs['Threshold'])
     #math.Value -> volume_to_mesh_001.Threshold
-    visualize_edensity.links.new(math.outputs[0], volume_to_mesh_001.inputs[3])
+    visualize_edensity.links.new(math.outputs[0], volume_to_mesh_001.inputs['Threshold'])
     #group_input.Geometry -> volume_to_mesh_001.Volume
     visualize_edensity.links.new(group_input.outputs[0], volume_to_mesh_001.inputs[0])
     #volume_to_mesh.Mesh -> set_material.Geometry

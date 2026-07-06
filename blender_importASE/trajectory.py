@@ -2,6 +2,14 @@ import bpy
 import numpy as np
 
 
+def insert_locrotscale_keyframe(ob):
+    # keyframe the object directly instead of bpy.ops.anim.keyframe_insert,
+    # which requires an animation-editor context and fails in background mode
+    ob.keyframe_insert(data_path='location')
+    ob.keyframe_insert(data_path='rotation_euler')
+    ob.keyframe_insert(data_path='scale')
+
+
 def move_atoms(trajectory,list_of_atoms,imageslice):
 #    view_layer=bpy.context.view_layer
     trajectory=trajectory[::imageslice]
@@ -47,7 +55,7 @@ def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice):
                         ob.rotation_euler[2] = phi
                         cnt+=1
                         #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
-                        bpy.ops.anim.keyframe_insert(type='LocRotScale')
+                        insert_locrotscale_keyframe(ob)
 #                        ob.keyframe_insert(data_path='LocRotScale')
                         break
     #print(f'plotted {cnt*len(trajectory)} bonds')
@@ -77,7 +85,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
                     #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
-                    bpy.ops.anim.keyframe_insert(type='LocRotScale')
+                    insert_locrotscale_keyframe(ob)
                     cnt+=1
                 else:
                     ob=list_of_bonds[cnt]
@@ -94,7 +102,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
                     #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
-                    bpy.ops.anim.keyframe_insert(type='LocRotScale')
+                    insert_locrotscale_keyframe(ob)
                     cnt += 1
                     # neighbor to atom
                     ob = list_of_bonds[cnt]
@@ -111,7 +119,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     ob.rotation_euler[1] = theta
                     ob.rotation_euler[2] = phi
                     #bpy.ops.object.transform_apply(location=False,rotation=True,scale=True)
-                    bpy.ops.anim.keyframe_insert(type='LocRotScale')
+                    insert_locrotscale_keyframe(ob)
                     cnt += 1
     #print(f'plotted {cnt*len(trajectory)} bonds')
     return None

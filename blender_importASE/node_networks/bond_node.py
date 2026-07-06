@@ -1,15 +1,24 @@
 import bpy
+from .compat import setup_merge_by_distance, setup_curve_to_mesh
+from .. import __version__
 
 #initialize bonds node group
 def bonds_geometry_node_group():
-    if 'BONDS_GEOMETRY' not in bpy.data.node_groups:
-        print("Work")
-        bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "BONDS_GEOMETRY")
+    if 'BONDS_GEOMETRY' in bpy.data.node_groups:
+        # check the version and update if necessary
+        node = bpy.data.node_groups["BONDS_GEOMETRY"]
+        desc = node.description
+        if desc != __version__:
+            node.name = "BONDS_GEOMETRY_old"
+            node = create_bonds_geometry_node_group()
     else:
-        return
-
+        node = create_bonds_geometry_node_group()
+    return node
+    
+def create_bonds_geometry_node_group():
+    bonds = bpy.data.node_groups.new(type='GeometryNodeTree', name="BONDS_GEOMETRY")
     bonds.color_tag = 'NONE'
-    bonds.description = ""
+    bonds.description = __version__
     bonds.default_group_node_width = 140
     
 
@@ -40,6 +49,14 @@ def bonds_geometry_node_group():
     #Socket bonded_collection
     bonded_collection_socket = bonds.interface.new_socket(name = "bonded_collection", in_out='INPUT', socket_type = 'NodeSocketCollection')
     bonded_collection_socket.attribute_domain = 'POINT'
+
+    #Socket Geometry (host object mesh; empty, but it carries the object's
+    #material slot list so Set Material Index resolves against the slots).
+    #It must be the first input socket or the modifier won't feed the host
+    #mesh in; moving it keeps the Socket_N identifiers of the other inputs.
+    geometry_in_socket = bonds.interface.new_socket(name = "Geometry", in_out='INPUT', socket_type = 'NodeSocketGeometry')
+    geometry_in_socket.attribute_domain = 'POINT'
+    bonds.interface.move(geometry_in_socket, 1)
 
 
     #initialize bonds nodes
@@ -631,12 +648,13 @@ def bonds_geometry_node_group():
     reroute_012.name = "Reroute.012"
     reroute_012.socket_idname = "NodeSocketFloat"
     #node Set Material.006
-    set_material_006 = bonds.nodes.new("GeometryNodeSetMaterial")
+    # material slot 0 of the bonds object (BONDS_MAT is appended in
+    # make_bonds), so the Material Properties tab controls the bond material
+    set_material_006 = bonds.nodes.new("GeometryNodeSetMaterialIndex")
     set_material_006.name = "Set Material.006"
     #Selection
     set_material_006.inputs[1].default_value = True
-    if "BONDS_MAT" in bpy.data.materials:
-        set_material_006.inputs[2].default_value = bpy.data.materials["BONDS_MAT"]
+    set_material_006.inputs[2].default_value = 0
 
     #node Switch.005
     switch_005 = bonds.nodes.new("GeometryNodeSwitch")
@@ -648,8 +666,7 @@ def bonds_geometry_node_group():
     #node Curve to Mesh
     curve_to_mesh = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh.name = "Curve to Mesh"
-    #Fill Caps
-    curve_to_mesh.inputs[2].default_value = False
+    curve_to_mesh_radius = setup_curve_to_mesh(bonds, curve_to_mesh, fill_caps=True, use_radius=True)
 
     #node Reroute.021
     reroute_021 = bonds.nodes.new("NodeReroute")
@@ -668,8 +685,7 @@ def bonds_geometry_node_group():
     #node Curve to Mesh.001
     curve_to_mesh_001 = bonds.nodes.new("GeometryNodeCurveToMesh")
     curve_to_mesh_001.name = "Curve to Mesh.001"
-    #Fill Caps
-    curve_to_mesh_001.inputs[2].default_value = False
+    curve_to_mesh_001_radius = setup_curve_to_mesh(bonds, curve_to_mesh_001, fill_caps=True, use_radius=False)
 
     #node Group Input.003
     group_input_003 = bonds.nodes.new("NodeGroupInput")
@@ -958,6 +974,10 @@ def bonds_geometry_node_group():
     reroute_021.location = (376.4156494140625, -339.73040771484375)
     curve_circle.location = (427.6524658203125, -418.33843994140625)
     curve_to_mesh_001.location = (590.5220947265625, -220.72076416015625)
+    if curve_to_mesh_radius is not None:
+        curve_to_mesh_radius.location = (427.6524658203125, -480.0)
+    if curve_to_mesh_001_radius is not None:
+        curve_to_mesh_001_radius.location = (427.6524658203125, -160.0)
     group_input_003.location = (29.2069091796875, -130.22064208984375)
     curve_circle_001.location = (240.4832763671875, -39.6986083984375)
     set_curve_radius.location = (419.3665771484375, -290.44024658203125)
@@ -1089,10 +1109,29 @@ def bonds_geometry_node_group():
     #set_shade_smooth.Geometry -> group_output.Geometry
     merge_geometry = bonds.nodes.new("GeometryNodeMergeByDistance")
     merge_geometry.name = "fix shading"
-    merge_geometry.inputs[2].default_value = 0.001
+    setup_merge_by_distance(merge_geometry, distance=0.001)
     merge_geometry.location = (3500, -1165.5565185546875)
     bonds.links.new(set_shade_smooth.outputs[0], merge_geometry.inputs[0])
-    bonds.links.new(merge_geometry.outputs[0], group_output.inputs[0])
+    # join the (empty) host mesh so the object's material list travels with
+    # the geometry; link order matters: last-linked joins first in the
+    # merged material list
+    group_input_host = bonds.nodes.new("NodeGroupInput")
+    group_input_host.name = "Group Input Host"
+    group_input_host.location = (3500, -1300)
+    join_host = bonds.nodes.new("GeometryNodeJoinGeometry")
+    join_host.name = "Join Host Materials"
+    join_host.location = (3700, -1165.5565185546875)
+    bonds.links.new(merge_geometry.outputs[0], join_host.inputs[0])
+    bonds.links.new(group_input_host.outputs['Geometry'], join_host.inputs[0])
+    # apply the slot index after the join: joining geometry without its own
+    # material list would otherwise remap the face indices
+    set_material_index_final = bonds.nodes.new("GeometryNodeSetMaterialIndex")
+    set_material_index_final.name = "Set Material Index Final"
+    set_material_index_final.inputs[1].default_value = True
+    set_material_index_final.inputs[2].default_value = 0
+    set_material_index_final.location = (3900, -1165.5565185546875)
+    bonds.links.new(join_host.outputs[0], set_material_index_final.inputs[0])
+    bonds.links.new(set_material_index_final.outputs[0], group_output.inputs[0])
 
 
 
@@ -1199,7 +1238,7 @@ def bonds_geometry_node_group():
     #math.Value -> compare_005.B
     bonds.links.new(math.outputs[0], compare_005.inputs[1])
     #group_input_003.bond radius -> curve_circle_001.Radius
-    bonds.links.new(group_input_003.outputs[1], curve_circle_001.inputs[4])
+    bonds.links.new(group_input_003.outputs['bond radius'], curve_circle_001.inputs[4])
     #boolean_math.Boolean -> delete_geometry.Selection
     bonds.links.new(boolean_math.outputs[0], delete_geometry.inputs[1])
     #delete_geometry.Geometry -> instance_on_points.Points
@@ -1221,7 +1260,7 @@ def bonds_geometry_node_group():
     #reroute_006.Output -> join_geometry.Geometry
     bonds.links.new(reroute_006.outputs[0], join_geometry.inputs[0])
     #group_input_001.bonded_collection -> collection_info.Collection
-    bonds.links.new(group_input_001.outputs[2], collection_info.inputs[0])
+    bonds.links.new(group_input_001.outputs['bonded_collection'], collection_info.inputs[0])
     #collection_info.Instances -> bounding_box.Geometry
     bonds.links.new(collection_info.outputs[0], bounding_box.inputs[0])
     #bounding_box.Bounding Box -> realize_instances_003.Geometry
@@ -1285,7 +1324,7 @@ def bonds_geometry_node_group():
     #math_001.Value -> math_006.Value
     bonds.links.new(math_001.outputs[0], math_006.inputs[0])
     #group_input_002.distance -> math.Value
-    bonds.links.new(group_input_002.outputs[0], math.inputs[0])
+    bonds.links.new(group_input_002.outputs['distance'], math.inputs[0])
     #curve_to_points.Points -> instance_on_points_001.Points
     bonds.links.new(curve_to_points.outputs[0], instance_on_points_001.inputs[0])
     #points.Points -> instance_on_points_001.Instance
@@ -1431,19 +1470,25 @@ def bonds_node_group(mat):
 
 
 def make_bonds(modifier='GeometryNodes'):
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0))
-    bonds_obj = bpy.context.object
-    bonds_obj.name = "bonds_object"
+    # host mesh with a single loose vertex: it renders nothing, but it must
+    # not be empty - completely empty geometry is dropped by the node tree,
+    # taking the object's material slot list (needed by Set Material Index)
+    # with it. (The old cube host would show up now that the tree joins the
+    # host mesh.)
+    bonds_mesh = bpy.data.meshes.new("bonds_object")
+    bonds_mesh.from_pydata([(0.0, 0.0, 0.0)], [], [])
+    bonds_obj = bpy.data.objects.new("bonds_object", bonds_mesh)
+    bpy.context.collection.objects.link(bonds_obj)
+    bpy.ops.object.select_all(action='DESELECT')
+    bonds_obj.select_set(True)
     if "BONDS_MAT" not in bpy.data.materials:
         mat = bpy.data.materials.new(name = "BONDS_MAT")
         mat.use_nodes = True
     else:
         mat = bpy.data.materials["BONDS_MAT"]
-    
     bonds_node_group(mat)
     bonds=bonds_geometry_node_group()
     bonds_obj.data.materials.append(mat)
-    bpy.context.view_layer.objects.active = bonds_obj
-    bpy.ops.object.modifier_add(type='NODES')
-    bpy.context.object.modifiers[modifier].node_group = bonds
+    bonds_obj.modifiers.new(name=modifier, type='NODES')
+    bonds_obj.modifiers[modifier].node_group = bonds
     return bonds_obj
