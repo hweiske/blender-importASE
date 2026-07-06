@@ -91,11 +91,11 @@ def run_import(path, **kw):
 step('nodes_crystal', lambda: run_import(f'{SCRATCH}/crystal.xyz',
      representation='nodes', animate=False))
 step('ballsnsticks_crystal', lambda: run_import(f'{SCRATCH}/crystal.xyz',
-     representation="Balls'n'Sticks", fix_bonds=True, unit_cell=True, animate=False))
+     representation="Balls'n'Sticks", long_bonds=True, unit_cell=True, animate=False))
 step('ballsnsticks_nolongbond', lambda: run_import(f'{SCRATCH}/crystal.xyz',
-     representation="Balls'n'Sticks", fix_bonds=False, animate=False))
+     representation="Balls'n'Sticks", long_bonds=False, animate=False))
 step('licorice', lambda: run_import(f'{SCRATCH}/crystal.xyz',
-     representation='Licorice', fix_bonds=True, animate=False))
+     representation='Licorice', long_bonds=True, animate=False))
 step('vdw', lambda: run_import(f'{SCRATCH}/crystal.xyz',
      representation='VDW', animate=False))
 step('bonds_fromnodes', lambda: run_import(f'{SCRATCH}/crystal.xyz',
@@ -103,9 +103,9 @@ step('bonds_fromnodes', lambda: run_import(f'{SCRATCH}/crystal.xyz',
 step('trajectory_nodes', lambda: run_import(f'{SCRATCH}/traj.xyz',
      representation='nodes', animate=True))
 step('trajectory_keyframes', lambda: run_import(f'{SCRATCH}/traj.xyz',
-     representation="Balls'n'Sticks", overwrite=False, fix_bonds=False, animate=True))
+     representation="Balls'n'Sticks", overwrite=False, long_bonds=False, animate=True))
 step('trajectory_longbonds', lambda: run_import(f'{SCRATCH}/traj.xyz',
-     representation="Balls'n'Sticks", overwrite=False, fix_bonds=True, animate=True))
+     representation="Balls'n'Sticks", overwrite=False, long_bonds=True, animate=True))
 step('cube_density', lambda: run_import(f'{SCRATCH}/water.cube',
      representation='nodes', animate=False, read_density=True))
 step('chgcar_density', lambda: run_import(f'{SCRATCH}/CHGCAR',

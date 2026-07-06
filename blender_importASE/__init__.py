@@ -1,15 +1,17 @@
 #!/usr/bin/env python
-
+import os.path
+import importlib
 import bpy
+import sys
+import subprocess
 from bpy_extras.io_utils import ImportHelper
 from os.path import join
-from .ui import import_ase_molecule
-from . import controls
+from importlib import util
 
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.0" 
+__version__ = "2.2"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -17,7 +19,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (1, 4),
+    "version": (2, 2),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
@@ -41,7 +43,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     resolution: bpy.props.IntProperty(
         name='resolution',
         description='resolution of bonds and atoms. Breaks for Balls\'n\'Sticks and Licorice with Longbonds',
-        default=16,
+        default=32,
     )
 
     colorbonds: bpy.props.BoolProperty(
@@ -49,7 +51,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         description="Color the bonds according to the connecting atoms",
         default=False,
     )
-    fix_bonds: bpy.props.BoolProperty(
+    long_bonds: bpy.props.BoolProperty(
         name='Use Longbonds',
         description="Mitigates lines in the middle of bonds where individual bonds meet,  relevant for Balls'n'Sticks and Licorice",
         default=True,
@@ -134,7 +136,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'outline')
         layout.prop(self, 'add_supercell')
         layout.prop(self, 'colorbonds')
-        layout.prop(self, 'fix_bonds')
+        layout.prop(self, 'long_bonds')
         layout.prop(self, 'representation')
         layout.prop(self, 'color')
         layout.prop(self, 'unit_cell')
@@ -145,44 +147,105 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self,'imageslice')
 
     def execute(self, context):
-        
-        for file in self.files:
-            filepath = join(self.directory, file.name)
-            # this section causes the representation to be ignored when overwrite is checked
-            # we should come up with something else for now set default to false
+        # When invoked from the GUI file dialog, ImportHelper populates
+        # self.files + self.directory.  When called programmatically with
+        # bpy.ops.import_mesh.ase(filepath=...) — the documented single-file
+        # form — only self.filepath is populated and self.files stays empty.
+        # Normalise both into a (directory, [name, ...]) pair before the loop.
+        if self.files:
+            directory = self.directory
+            names = [f.name for f in self.files]
+        elif self.filepath:
+            directory, name = os.path.split(self.filepath)
+            names = [name]
+        else:
+            self.report({'ERROR'}, "No filepath or files provided")
+            return {'CANCELLED'}
 
-            
-            import_ase_molecule(filepath, file.name,
-                            
-                                resolution=self.resolution,
-                                color=self.color, colorbonds=self.colorbonds, fix_bonds=self.fix_bonds, scale=self.scale,
-                                unit_cell=self.unit_cell, representation=self.representation,
-                                read_density=self.read_density, 
-                                shift_cell=self.zero_cell,imageslice=self.imageslice,
-                                animate=self.animate, outline=self.outline,
-                                overwrite=self.overwrite, add_supercell=self.add_supercell
-                                )
+        from .ui import import_ase_molecule
+        for name in names:
+            filepath = join(directory, name)
+            import_ase_molecule(
+                filepath, name,
+                resolution=self.resolution,
+                color=self.color, colorbonds=self.colorbonds,
+                long_bonds=self.long_bonds, scale=self.scale,
+                unit_cell=self.unit_cell, representation=self.representation,
+                read_density=self.read_density,
+                shift_cell=self.zero_cell, imageslice=self.imageslice,
+                animate=self.animate, outline=self.outline,
+                overwrite=self.overwrite, add_supercell=self.add_supercell,
+            )
         return {"FINISHED"}
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+class ASEAddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __name__
+
+    install_failed: bpy.props.BoolProperty(default=False)
+
+    def draw(self, context):
+        layout = self.layout
+        if self.install_failed:
+            layout.label(text="ASE installation failed. Please check your internet connection.", icon='ERROR')
+        else:
+            layout.label(text="ASE installation successful.", icon='CHECKMARK')
+
+
+def check_dependency():
+    if util.find_spec("ase") is not None:
+        return True
+    else:
+        print("ASE not present in Blender python. Attempting install. This could take a moment...")
+        try:
+            python_path = sys.executable
+            script_path = bpy.utils.script_path_user()
+            install_path = os.path.join(script_path, "modules")
+            subprocess.check_call([python_path, "-m", "pip", "install", "--target", install_path, "ase"])
+            if install_path not in sys.path:
+                sys.path.append(install_path)
+            importlib.invalidate_caches()
+            if util.find_spec("ase") is None:
+                print("ASE not found after installation, check your blender installation")
+                return False
+        except subprocess.CalledProcessError:
+            print("Failed to install ASE. Please check your internet connection and try again or install manually")
+            return False
+        print("Installed ASE")
+        return True
 
 def menu_func_import(self, context):
     self.layout.operator(ImportASEMolecule.bl_idname, text="ASE Molecule (.*)")
 
-
 def register():
-    bpy.utils.register_class(ImportASEMolecule)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
-    controls.register()
-
+    bpy.utils.register_class(ASEAddonPreferences)
+    dependency = check_dependency()
+    if dependency:
+        bpy.utils.register_class(ImportASEMolecule)
+        bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+        # deferred so the addon can load (and show its preferences) when
+        # ase is not installed yet - controls imports ase at module level
+        from . import controls
+        controls.register()
+    else:
+        prefs = bpy.context.preferences.addons[__name__].preferences
+        prefs.install_failed = True
 
 def unregister():
-    controls.unregister()
-    bpy.utils.unregister_class(ImportASEMolecule)
+    try:
+        from . import controls
+        controls.unregister()
+    except Exception:
+        print("ASE controls were not registered, skipping.")
+    try:
+        bpy.utils.unregister_class(ImportASEMolecule)
+    except RuntimeError:
+        print("ImportASEMolecule was not registered, skipping.")
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    bpy.utils.unregister_class(ASEAddonPreferences)
 
 
 if __name__ == "__main__":

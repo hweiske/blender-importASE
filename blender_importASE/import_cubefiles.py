@@ -9,7 +9,10 @@ from ase.calculators.vasp import VaspChargeDensity
 try:
     import openvdb as vdb
 except ImportError:
-    import pyopenvdb as vdb
+    try:
+        import pyopenvdb as vdb
+    except ImportError:
+        vdb = None
 import os
 from .node_networks.electron_density_nodes import visualize_edensity_node_group, newShader
 from .utils import toggle
@@ -38,6 +41,11 @@ def data2vol(volume, spacing, origin, filepath, modifier='GeometryNodes',
     plus_material/minus_material: materials for the +/- isosurfaces;
     defaults to the blue/red '+ material'/'- material' pair
     """
+    if vdb is None:
+        raise ImportError(
+            "Neither 'openvdb' nor 'pyopenvdb' is installed. "
+            "Please install one of them to import volumetric density files."
+        )
     GRID = vdb.FloatGrid()
     GRID.copyFromArray(np.ascontiguousarray(volume, dtype=float))
     SX = list(spacing[0]) + [0.]
