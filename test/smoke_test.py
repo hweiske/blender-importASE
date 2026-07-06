@@ -86,8 +86,7 @@ from blender_importASE.ui import import_ase_molecule
 
 def run_import(path, **kw):
     fresh_scene()
-    import_ase_molecule(path, path.split('/')[-1], **kw)
-
+    import_ase_molecule(path, os.path.basename(path), **kw)
 step('nodes_crystal', lambda: run_import(f'{SCRATCH}/crystal.xyz',
      representation='nodes', animate=False))
 step('ballsnsticks_crystal', lambda: run_import(f'{SCRATCH}/crystal.xyz',
