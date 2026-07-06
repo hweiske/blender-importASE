@@ -129,7 +129,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     # Read in density
     if read_density:
         density_objs = []
-        if 'cube' in filename:
+        if filename.lower().endswith('.cube'):
             density_objs = [cube2vol(filepath,modifier='GeometryNodes')]
         elif vasp_density is not None:
             # total charge density, plus the spin difference if spin-polarized
