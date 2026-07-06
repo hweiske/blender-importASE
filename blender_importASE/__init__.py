@@ -81,7 +81,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     )
     read_density: bpy.props.BoolProperty(
         name='load e-density',
-        description="load electron-density as volume and use a node-tree for the creation of isosurfaces (only .cube-files)",
+        description="load electron-density as volume and use a node-tree for the creation of isosurfaces (.cube files and VASP CHGCAR/PARCHG/AECCAR)",
         default=True,
     )
     zero_cell: bpy.props.BoolProperty(

@@ -1,7 +1,7 @@
 import bpy
 import ase
 from ase import Atoms
-from .import_cubefiles import cube2vol
+from .import_cubefiles import cube2vol, chgcar2vol, is_vasp_density, read_vasp_density
 from .utils import atomcolors, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_bonds_new
 from .trajectory import move_atoms, move_bonds,move_longbonds
@@ -20,7 +20,14 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     start=time.time()
     modifier_counter = 0
     modifier_chosen=''
-    atoms = ase.io.read(filepath,index = ':')
+    vasp_density = None
+    if is_vasp_density(filename):
+        # CHGCAR-like files can't be read by ase.io.read (the POSCAR header
+        # is followed by the density grid); read atoms and grid in one pass
+        vasp_density = read_vasp_density(filepath)
+        atoms = list(vasp_density.atoms)
+    else:
+        atoms = ase.io.read(filepath,index = ':')
     end_read=time.time()
     print('Time to read file: ',end_read-start)
     trajectory = False
@@ -117,14 +124,19 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     if unit_cell is True and atoms.pbc.all() is not False:
         draw_unit_cell(atoms)
     if read_density:
+        density_objs = []
         if 'cube' in filename:
-            density_obj = cube2vol(filepath,modifier='GeometryNodes')
+            density_objs = [cube2vol(filepath,modifier='GeometryNodes')]
+        elif vasp_density is not None:
+            # total charge density, plus the spin difference if spin-polarized
+            density_objs = chgcar2vol(filepath,modifier='GeometryNodes',density=vasp_density)
+        if density_objs:
             modifier_chosen=f'.00{modifier_counter}'
-            #print(density_obj)
             if shift_cell is True:
-                density_obj.location.x += shift_vector[0]
-                density_obj.location.y += shift_vector[1]
-                density_obj.location.z += shift_vector[2]
+                for density_obj in density_objs:
+                    density_obj.location.x += shift_vector[0]
+                    density_obj.location.y += shift_vector[1]
+                    density_obj.location.z += shift_vector[2]
     if trajectory is True and animate is True:
         if representation != 'nodes' and representation != 'bonds_fromnodes':
             
