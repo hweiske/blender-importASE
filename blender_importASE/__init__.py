@@ -182,6 +182,133 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
+    """Import a structure with coordination polyhedra: the convex hull of
+    every coordination shell is drawn as solid faces"""
+    bl_idname = "import_mesh.ase_polyhedra"
+    bl_label = "Import ASE Polyhedra"
+    bl_options = {"REGISTER", "UNDO"}
+
+    filename_ext = ".*"
+
+    expand_cutoff: bpy.props.FloatProperty(
+        name="expansion cutoff",
+        description="covalent-radius multiplier used to pull in periodic neighbor images so polyhedra at the cell boundary are closed",
+        default=1.2,
+        min=0.5,
+        soft_max=2.0,
+    )
+    trim_cutoff: bpy.props.FloatProperty(
+        name="trim cutoff",
+        description="covalent-radius multiplier below which expanded atoms without neighbors are removed again",
+        default=1.0,
+        min=0.5,
+        soft_max=2.0,
+    )
+    poly_cutoff: bpy.props.FloatProperty(
+        name="polyhedra cutoff",
+        description="covalent-radius multiplier defining the neighbor shell that forms a polyhedron",
+        default=1.1,
+        min=0.5,
+        soft_max=2.0,
+    )
+    min_neighbors: bpy.props.IntProperty(
+        name="min neighbors",
+        description="minimum number of neighbors an atom needs to get a coordination polyhedron",
+        default=4,
+        min=4,
+    )
+    include_hydrogen: bpy.props.BoolProperty(
+        name="include hydrogen",
+        description="also use hydrogen atoms as polyhedra centers and corners",
+        default=False,
+    )
+    resolution: bpy.props.IntProperty(
+        name='resolution',
+        description='resolution of bonds and atoms',
+        default=16,
+    )
+    colorbonds: bpy.props.BoolProperty(
+        name='colorbonds',
+        description="Color the bonds according to the connecting atoms",
+        default=True,
+    )
+    bond_distance: bpy.props.FloatProperty(
+        name="bond distance",
+        description="bond distance criterion passed to the atoms_and_bonds node group",
+        default=0.66,
+        min=0.0,
+        soft_max=2.0,
+    )
+    bond_radius: bpy.props.FloatProperty(
+        name="bond radius",
+        description="bond cylinder radius",
+        default=0.1,
+        min=0.0,
+        soft_max=1.0,
+    )
+    outline: bpy.props.BoolProperty(
+        name='outline',
+        description='add outline modifier',
+        default=False,
+    )
+    files: bpy.props.CollectionProperty(
+        type=bpy.types.OperatorFileListElement,
+        options={'HIDDEN', 'SKIP_SAVE'},
+        description='List of files to be imported'
+    )
+    directory: bpy.props.StringProperty(
+        name='folder',
+        description='directory of file',
+        subtype='DIR_PATH'
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'expand_cutoff')
+        layout.prop(self, 'trim_cutoff')
+        layout.prop(self, 'poly_cutoff')
+        layout.prop(self, 'min_neighbors')
+        layout.prop(self, 'include_hydrogen')
+        layout.prop(self, 'resolution')
+        layout.prop(self, 'colorbonds')
+        layout.prop(self, 'bond_distance')
+        layout.prop(self, 'bond_radius')
+        layout.prop(self, 'outline')
+
+    def execute(self, context):
+        if self.files:
+            directory = self.directory
+            names = [f.name for f in self.files]
+        elif self.filepath:
+            directory, name = os.path.split(self.filepath)
+            names = [name]
+        else:
+            self.report({'ERROR'}, "No filepath or files provided")
+            return {'CANCELLED'}
+
+        from .polyhedra import import_polyhedra
+        for name in names:
+            import_polyhedra(
+                join(directory, name), name,
+                expand_cutoff=self.expand_cutoff,
+                trim_cutoff=self.trim_cutoff,
+                poly_cutoff=self.poly_cutoff,
+                min_neighbors=self.min_neighbors,
+                include_hydrogen=self.include_hydrogen,
+                resolution=self.resolution,
+                colorbonds=self.colorbonds,
+                bond_distance=self.bond_distance,
+                bond_radius=self.bond_radius,
+                outline=self.outline,
+            )
+        return {"FINISHED"}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+
 class ASEAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
@@ -219,12 +346,14 @@ def check_dependency():
 
 def menu_func_import(self, context):
     self.layout.operator(ImportASEMolecule.bl_idname, text="ASE Molecule (.*)")
+    self.layout.operator(ImportASEPolyhedra.bl_idname, text="ASE Polyhedra (.*)")
 
 def register():
     bpy.utils.register_class(ASEAddonPreferences)
     dependency = check_dependency()
     if dependency:
         bpy.utils.register_class(ImportASEMolecule)
+        bpy.utils.register_class(ImportASEPolyhedra)
         bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
         # deferred so the addon can load (and show its preferences) when
         # ase is not installed yet - controls imports ase at module level
@@ -240,10 +369,11 @@ def unregister():
         controls.unregister()
     except Exception:
         print("ASE controls were not registered, skipping.")
-    try:
-        bpy.utils.unregister_class(ImportASEMolecule)
-    except RuntimeError:
-        print("ImportASEMolecule was not registered, skipping.")
+    for cls in (ImportASEMolecule, ImportASEPolyhedra):
+        try:
+            bpy.utils.unregister_class(cls)
+        except RuntimeError:
+            print(f"{cls.__name__} was not registered, skipping.")
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.utils.unregister_class(ASEAddonPreferences)
 

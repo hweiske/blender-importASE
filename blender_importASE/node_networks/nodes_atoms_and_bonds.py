@@ -5,7 +5,7 @@ from .compat import setup_merge_by_distance, setup_curve_to_mesh
 from ase.data import covalent_radii, chemical_symbols, colors
 
 
-def read_structure(atoms,name, animate=True):
+def read_structure(atoms,name, animate=True, faces=None):
     if animate:
         trajectory=atoms
         atoms=trajectory[0]
@@ -14,8 +14,9 @@ def read_structure(atoms,name, animate=True):
     mesh = bpy.data.meshes.new(name=object_name)
     obj = bpy.data.objects.new(name=object_name, object_data=mesh)
     bpy.context.collection.objects.link(obj)
-    # Create the mesh from the vertex list
-    mesh.from_pydata(vertices, [], [])  # No edges or faces
+    # Create the mesh from the vertex list (faces are used by the
+    # polyhedra importer, which draws coordination polyhedra as real faces)
+    mesh.from_pydata(vertices, [], faces if faces is not None else [])
     if "element" not in mesh.attributes:
         mesh.attributes.new(name="element", type='FLOAT', domain='POINT')
     if "atom_radius" not in mesh.attributes:
@@ -958,7 +959,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     store_named_attribute_004.hide = True
     store_named_attribute_004.data_type = 'FLOAT'
     store_named_attribute_004.domain = 'POINT'
-    #Selection
+    #Selectioncp im
     store_named_attribute_004.inputs[1].default_value = True
     #Name
     store_named_attribute_004.inputs[2].default_value = "end_rad"
