@@ -31,9 +31,13 @@ Import molecules, crystals, trajectories, and volumetric data (electron densitie
     </td>
   </tr>
   <tr>
-    <td align="center" colspan="2">
-      <img src="docs/images/charges.jpg" alt="Molecule colored by partial charges" width="480"/><br/>
+    <td align="center" width="50%">
+      <img src="docs/images/charges.jpg" alt="Molecule colored by partial charges"/><br/>
       <b>Partial charges</b> — per-atom charges from a csv file, red-white-blue on atoms and bonds
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/trajectory.gif" alt="Animated trajectory"/><br/>
+      <b>Trajectories</b> — any ASE-readable trajectory, animated via keyframes
     </td>
   </tr>
 </table>
@@ -88,3 +92,19 @@ the isovalues of any imported densities.
 The materials used by the geometry-node representations are the ones in the
 object's Material Properties tab (sorted by element, bond material last), so
 you can swap or edit them there and the viewport/render follows.
+
+### 3D printing
+
+The "3D print" representation (formerly `bonds_fromnodes`) imports real
+sphere meshes plus geometry-node bond tubes with icospheres at every atom
+position ("joint radius" on the modifier), so bonds fuse into a printable
+solid. File -> Export -> "ASE 3D print (.zip)" then writes one STL per
+element (atoms joined), the bonds, and simple resin supports (base plate +
+tapered pillars under the lowest atoms; skipped if the collection already
+contains your own "supports" object) into a single zip for the slicer.
+
+### Export to xyz
+
+File -> Export -> "ASE xyz (.xyz)" writes the active nodes-representation
+structure back to a plain xyz file, using the vertex positions (in world
+coordinates, i.e. including any edits) and the stored element numbers.
