@@ -4,7 +4,7 @@ import importlib
 import bpy
 import sys
 import subprocess
-from bpy_extras.io_utils import ImportHelper
+from bpy_extras.io_utils import ImportHelper, ExportHelper
 from os.path import join
 from importlib import util
 
@@ -76,7 +76,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
             ("Balls'n'Sticks", "Balls'n'Sticks", "Balls and sticks representaiton"),
             ("Licorice", "Licorice", "Licorice representation"),
             ('VDW', 'VDW', 'VDW Radii, no bonds'),
-            ('bonds_fromnodes', 'bonds_fromnodes', 'bonds from geometrynodes'),
+            ('3D_print', '3D print (spheres + bonds)', 'Real sphere meshes plus geometry-node bonds with icosphere joints - suited for 3D printing (was: bonds_fromnodes)'),
             ('nodes', 'nodes', 'Everything from geometrynodes. Fastest'),
         ],
         default="nodes"
@@ -487,6 +487,86 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
         return {'RUNNING_MODAL'}
 
 
+class ExportASEXyz(bpy.types.Operator, ExportHelper):
+    """Export the active nodes-representation structure to a .xyz file
+    (vertex positions with their stored element numbers as symbols)"""
+    bl_idname = "export_mesh.ase_xyz"
+    bl_label = "Export ASE xyz"
+
+    filename_ext = ".xyz"
+    filter_glob: bpy.props.StringProperty(default="*.xyz", options={'HIDDEN'})
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return (obj is not None and obj.type == 'MESH'
+                and 'element' in obj.data.attributes)
+
+    def execute(self, context):
+        from .exports import export_xyz
+        try:
+            n = export_xyz(context.active_object, self.filepath)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        self.report({'INFO'}, f'wrote {n} atoms to {self.filepath}')
+        return {'FINISHED'}
+
+
+class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
+    """Export the active structure's collection for 3D printing: one STL
+    per element (atoms joined), the bonds, and resin supports, zipped
+    into a single archive"""
+    bl_idname = "export_mesh.ase_3dprint"
+    bl_label = "Export ASE 3D print"
+
+    filename_ext = ".zip"
+    filter_glob: bpy.props.StringProperty(default="*.zip", options={'HIDDEN'})
+
+    generate_supports: bpy.props.BoolProperty(
+        name="generate supports",
+        description="generate a base plate with tapered pillars up to the lowest atoms (skipped when the collection already contains a 'supports' object)",
+        default=True,
+    )
+    pillar_radius: bpy.props.FloatProperty(
+        name="pillar radius",
+        description="support pillar radius (structure units, i.e. Angstrom)",
+        default=0.25,
+        min=0.01,
+        soft_max=1.0,
+    )
+    support_layer: bpy.props.FloatProperty(
+        name="support layer",
+        description="atoms whose lowest point lies within this distance of the structure bottom get a support pillar",
+        default=0.8,
+        min=0.0,
+        soft_max=5.0,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'generate_supports')
+        layout.prop(self, 'pillar_radius')
+        layout.prop(self, 'support_layer')
+
+    def execute(self, context):
+        from .exports import export_3dprint
+        try:
+            files = export_3dprint(context, self.filepath,
+                                   generate_supports=self.generate_supports,
+                                   pillar_radius=self.pillar_radius,
+                                   support_layer=self.support_layer)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        self.report({'INFO'}, f'wrote {", ".join(files)} to {self.filepath}')
+        return {'FINISHED'}
+
+
 class ASEAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
@@ -528,6 +608,10 @@ def menu_func_import(self, context):
     self.layout.operator(ImportASEDensityMesh.bl_idname, text="ASE Density as Mesh (.*)")
     self.layout.operator(ImportASECharges.bl_idname, text="ASE Charges (.*)")
 
+def menu_func_export(self, context):
+    self.layout.operator(ExportASEXyz.bl_idname, text="ASE xyz (.xyz)")
+    self.layout.operator(ExportASE3DPrint.bl_idname, text="ASE 3D print (.zip)")
+
 def register():
     bpy.utils.register_class(ASEAddonPreferences)
     dependency = check_dependency()
@@ -536,7 +620,10 @@ def register():
         bpy.utils.register_class(ImportASEPolyhedra)
         bpy.utils.register_class(ImportASEDensityMesh)
         bpy.utils.register_class(ImportASECharges)
+        bpy.utils.register_class(ExportASEXyz)
+        bpy.utils.register_class(ExportASE3DPrint)
         bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+        bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
         # deferred so the addon can load (and show its preferences) when
         # ase is not installed yet - controls imports ase at module level
         from . import controls
@@ -551,12 +638,14 @@ def unregister():
         controls.unregister()
     except Exception:
         print("ASE controls were not registered, skipping.")
-    for cls in (ImportASEMolecule, ImportASEPolyhedra, ImportASEDensityMesh, ImportASECharges):
+    for cls in (ImportASEMolecule, ImportASEPolyhedra, ImportASEDensityMesh,
+                ImportASECharges, ExportASEXyz, ExportASE3DPrint):
         try:
             bpy.utils.unregister_class(cls)
         except RuntimeError:
             print(f"{cls.__name__} was not registered, skipping.")
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     bpy.utils.unregister_class(ASEAddonPreferences)
 
 

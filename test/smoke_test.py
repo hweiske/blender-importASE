@@ -118,8 +118,8 @@ step('licorice', lambda: run_import(f'{SCRATCH}/crystal.xyz',
      representation='Licorice', long_bonds=True, animate=False))
 step('vdw', lambda: run_import(f'{SCRATCH}/crystal.xyz',
      representation='VDW', animate=False))
-step('bonds_fromnodes', lambda: run_import(f'{SCRATCH}/crystal.xyz',
-     representation='bonds_fromnodes', animate=False))
+step('3D_print', lambda: run_import(f'{SCRATCH}/crystal.xyz',
+     representation='3D_print', animate=False))
 step('trajectory_nodes', lambda: run_import(f'{SCRATCH}/traj.xyz',
      representation='nodes', animate=True))
 step('trajectory_keyframes', lambda: run_import(f'{SCRATCH}/traj.xyz',
@@ -166,6 +166,36 @@ def run_charges():
     assert 'charge_atoms' in slots and 'color_curve_charge' in slots, 'charge materials missing'
 
 step('charges', run_charges)
+
+def run_export_3dprint():
+    import zipfile
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/crystal.xyz', 'crystal.xyz',
+                        representation='3D_print', animate=False,
+                        read_density=False, outline=False, add_supercell=False)
+    atom = next(o for o in bpy.data.objects if o.name.split('.')[0] in ('Si', 'O'))
+    bpy.context.view_layer.objects.active = atom
+    zip_path = f'{SCRATCH}/print_export.zip'
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path)
+    with zipfile.ZipFile(zip_path) as z:
+        names = set(z.namelist())
+    assert names == {'atoms_O.stl', 'atoms_Si.stl', 'bonds.stl', 'supports.stl'}, names
+
+step('export_3dprint', run_export_3dprint)
+
+def run_export_xyz():
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/crystal.xyz', 'crystal.xyz',
+                        representation='nodes', animate=False,
+                        read_density=False, outline=False, add_supercell=False)
+    obj = bpy.data.objects['O4Si2_crystal']
+    bpy.context.view_layer.objects.active = obj
+    xyz_path = f'{SCRATCH}/roundtrip.xyz'
+    bpy.ops.export_mesh.ase_xyz(filepath=xyz_path)
+    back = ase.io.read(xyz_path)
+    assert back.get_chemical_formula() == 'O4Si2', back.get_chemical_formula()
+
+step('export_xyz', run_export_xyz)
 step('operator_via_ops', lambda: (
     fresh_scene(),
     bpy.ops.import_mesh.ase(directory=SCRATCH, files=[{"name": "crystal.xyz"}]),
