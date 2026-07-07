@@ -36,6 +36,10 @@ for i in range(5):
     traj.append(im)
 ase.io.write(f'{SCRATCH}/traj.xyz', traj)
 
+# rocksalt supercell for the coordination-polyhedra importer
+from ase.build import bulk
+ase.io.write(f'{SCRATCH}/nacl.extxyz', bulk('NaCl', 'rocksalt', a=5.64) * (2, 2, 2))
+
 # density grids: gaussian blob around a water molecule (.cube and CHGCAR)
 from ase.io.cube import write_cube
 from ase.calculators.vasp import VaspChargeDensity
@@ -109,6 +113,14 @@ step('cube_density', lambda: run_import(f'{SCRATCH}/water.cube',
      representation='nodes', animate=False, read_density=True))
 step('chgcar_density', lambda: run_import(f'{SCRATCH}/CHGCAR',
      representation='nodes', animate=False, read_density=True))
+def run_polyhedra():
+    fresh_scene()
+    from blender_importASE.polyhedra import import_polyhedra
+    import_polyhedra(f'{SCRATCH}/nacl.extxyz', 'nacl.extxyz')
+    obj = next(o for o in bpy.data.objects if 'polyhedra' in o.name)
+    assert len(obj.data.polygons) > 0, 'no polyhedra faces generated'
+
+step('polyhedra', run_polyhedra)
 step('operator_via_ops', lambda: (
     fresh_scene(),
     bpy.ops.import_mesh.ase(directory=SCRATCH, files=[{"name": "crystal.xyz"}]),
