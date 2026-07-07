@@ -385,6 +385,108 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         return {'RUNNING_MODAL'}
 
 
+class ImportASECharges(bpy.types.Operator, ImportHelper):
+    """Import a structure with per-atom partial charges from a csv file
+    (one charge per atom, same order as the structure file); atoms and
+    bonds can be colored by charge via the 'charge_colors' switch"""
+    bl_idname = "import_mesh.ase_charges"
+    bl_label = "Import ASE Charges"
+    bl_options = {"REGISTER", "UNDO"}
+
+    filename_ext = ".*"
+
+    charge_file: bpy.props.StringProperty(
+        name="charges csv",
+        description="csv file with one partial charge per atom, in the same order as the atoms in the structure file (bare numbers or rows whose last numeric field is the charge)",
+        subtype='FILE_PATH',
+        default='',
+    )
+    resolution: bpy.props.IntProperty(
+        name='resolution',
+        description='resolution of bonds and atoms',
+        default=16,
+    )
+    colorbonds: bpy.props.BoolProperty(
+        name='colorbonds',
+        description="Color the bonds according to the connecting atoms (used when charge colors are switched off)",
+        default=True,
+    )
+    bond_distance: bpy.props.FloatProperty(
+        name="bond distance",
+        description="bond distance criterion passed to the atoms_and_bonds node group",
+        default=0.66,
+        min=0.0,
+        soft_max=2.0,
+    )
+    bond_radius: bpy.props.FloatProperty(
+        name="bond radius",
+        description="bond cylinder radius",
+        default=0.1,
+        min=0.0,
+        soft_max=1.0,
+    )
+    outline: bpy.props.BoolProperty(
+        name='outline',
+        description='add outline modifier',
+        default=False,
+    )
+    files: bpy.props.CollectionProperty(
+        type=bpy.types.OperatorFileListElement,
+        options={'HIDDEN', 'SKIP_SAVE'},
+        description='List of files to be imported'
+    )
+    directory: bpy.props.StringProperty(
+        name='folder',
+        description='directory of file',
+        subtype='DIR_PATH'
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'charge_file')
+        layout.prop(self, 'resolution')
+        layout.prop(self, 'colorbonds')
+        layout.prop(self, 'bond_distance')
+        layout.prop(self, 'bond_radius')
+        layout.prop(self, 'outline')
+
+    def execute(self, context):
+        if self.files:
+            directory = self.directory
+            names = [f.name for f in self.files]
+        elif self.filepath:
+            directory, name = os.path.split(self.filepath)
+            names = [name]
+        else:
+            self.report({'ERROR'}, "No filepath or files provided")
+            return {'CANCELLED'}
+        if not self.charge_file:
+            self.report({'ERROR'}, "No charges csv file provided")
+            return {'CANCELLED'}
+
+        from .charges import import_charges
+        charge_filepath = bpy.path.abspath(self.charge_file)
+        for name in names:
+            try:
+                import_charges(
+                    join(directory, name), name,
+                    charge_filepath=charge_filepath,
+                    resolution=self.resolution,
+                    colorbonds=self.colorbonds,
+                    bond_distance=self.bond_distance,
+                    bond_radius=self.bond_radius,
+                    outline=self.outline,
+                )
+            except ValueError as exc:
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
+        return {"FINISHED"}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+
 class ASEAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
@@ -424,6 +526,7 @@ def menu_func_import(self, context):
     self.layout.operator(ImportASEMolecule.bl_idname, text="ASE Molecule (.*)")
     self.layout.operator(ImportASEPolyhedra.bl_idname, text="ASE Polyhedra (.*)")
     self.layout.operator(ImportASEDensityMesh.bl_idname, text="ASE Density as Mesh (.*)")
+    self.layout.operator(ImportASECharges.bl_idname, text="ASE Charges (.*)")
 
 def register():
     bpy.utils.register_class(ASEAddonPreferences)
@@ -432,6 +535,7 @@ def register():
         bpy.utils.register_class(ImportASEMolecule)
         bpy.utils.register_class(ImportASEPolyhedra)
         bpy.utils.register_class(ImportASEDensityMesh)
+        bpy.utils.register_class(ImportASECharges)
         bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
         # deferred so the addon can load (and show its preferences) when
         # ase is not installed yet - controls imports ase at module level
@@ -447,7 +551,7 @@ def unregister():
         controls.unregister()
     except Exception:
         print("ASE controls were not registered, skipping.")
-    for cls in (ImportASEMolecule, ImportASEPolyhedra, ImportASEDensityMesh):
+    for cls in (ImportASEMolecule, ImportASEPolyhedra, ImportASEDensityMesh, ImportASECharges):
         try:
             bpy.utils.unregister_class(cls)
         except RuntimeError:
