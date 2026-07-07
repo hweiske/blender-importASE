@@ -58,6 +58,15 @@ def create_bonds_geometry_node_group():
     geometry_in_socket.attribute_domain = 'POINT'
     bonds.interface.move(geometry_in_socket, 1)
 
+    #Socket joint radius: icospheres instanced at every atom position so the
+    #bond tubes fuse into a watertight solid for 3D printing
+    joint_radius_socket = bonds.interface.new_socket(name = "joint radius", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    joint_radius_socket.default_value = 0.15
+    joint_radius_socket.min_value = 0.0
+    joint_radius_socket.max_value = 3.4028234663852886e+38
+    joint_radius_socket.subtype = 'DISTANCE'
+    joint_radius_socket.attribute_domain = 'POINT'
+
 
     #initialize bonds nodes
     #node Frame.005
@@ -1111,7 +1120,38 @@ def create_bonds_geometry_node_group():
     merge_geometry.name = "fix shading"
     setup_merge_by_distance(merge_geometry, distance=0.001)
     merge_geometry.location = (3500, -1165.5565185546875)
-    bonds.links.new(set_shade_smooth.outputs[0], merge_geometry.inputs[0])
+
+    # icosphere joints at every atom position (collection instances sit at
+    # the atom object origins), so tubes fuse into a printable solid
+    joint_points = bonds.nodes.new("GeometryNodeInstancesToPoints")
+    joint_points.name = "Joint Points"
+    joint_points.location = (3050, -1400)
+    joint_sphere = bonds.nodes.new("GeometryNodeMeshIcoSphere")
+    joint_sphere.name = "Joint Ico Sphere"
+    joint_sphere.inputs['Subdivisions'].default_value = 3
+    joint_sphere.location = (3050, -1560)
+    joint_instance = bonds.nodes.new("GeometryNodeInstanceOnPoints")
+    joint_instance.name = "Joint Instance"
+    joint_instance.location = (3230, -1400)
+    joint_realize = bonds.nodes.new("GeometryNodeRealizeInstances")
+    joint_realize.name = "Joint Realize"
+    joint_realize.location = (3380, -1400)
+    join_joints = bonds.nodes.new("GeometryNodeJoinGeometry")
+    join_joints.name = "Join Joints"
+    join_joints.location = (3350, -1200)
+    group_input_joint = bonds.nodes.new("NodeGroupInput")
+    group_input_joint.name = "Group Input Joint"
+    group_input_joint.hide = True
+    group_input_joint.location = (2870, -1560)
+
+    bonds.links.new(collection_info.outputs[0], joint_points.inputs[0])
+    bonds.links.new(group_input_joint.outputs['joint radius'], joint_sphere.inputs['Radius'])
+    bonds.links.new(joint_points.outputs[0], joint_instance.inputs[0])
+    bonds.links.new(joint_sphere.outputs[0], joint_instance.inputs[2])
+    bonds.links.new(joint_instance.outputs[0], joint_realize.inputs[0])
+    bonds.links.new(joint_realize.outputs[0], join_joints.inputs[0])
+    bonds.links.new(set_shade_smooth.outputs[0], join_joints.inputs[0])
+    bonds.links.new(join_joints.outputs[0], merge_geometry.inputs[0])
     # join the (empty) host mesh so the object's material list travels with
     # the geometry; link order matters: last-linked joins first in the
     # merged material list

@@ -30,7 +30,7 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         size = bpy.context.view_layer.active_layer_collection.collection.objects[-1].scale
         if representation == "Balls'n'Sticks":
             size = [covalent_radii[atom.number]  * scale, ] * 3
-        if representation == "bonds_fromnodes":
+        if representation == '3D_print':
             size = [covalent_radii[atom.number]  * scale, ] * 3
         elif representation == 'Licorice':
             size = [0.1] * 3
