@@ -30,6 +30,12 @@ Import molecules, crystals, trajectories, and volumetric data (electron densitie
       <b>Density as mesh</b> — marching-cubes isosurfaces, optionally colored by a second density file
     </td>
   </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="docs/images/charges.jpg" alt="Molecule colored by partial charges" width="480"/><br/>
+      <b>Partial charges</b> — per-atom charges from a csv file, red-white-blue on atoms and bonds
+    </td>
+  </tr>
 </table>
 
 ## Dependencies
