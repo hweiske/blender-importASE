@@ -47,6 +47,12 @@ with open(f'{SCRATCH}/mo.cube', 'w') as f:
 with open(f'{SCRATCH}/colordens.cube', 'w') as f:
     _write_cube(f, mo_cell, data=np.exp(-((mz - 4)**2) / 8.0))
 
+# bonded chain + charges csv for the partial-charges importer
+chain = Atoms('OHC', positions=[(0, 0, 0), (0.5, 0, 0), (1.0, 0, 0)])
+ase.io.write(f'{SCRATCH}/chargemol.xyz', chain)
+with open(f'{SCRATCH}/charges.csv', 'w') as f:
+    f.write('element,charge\nO,-0.6\nH,0.25\nC,0.35\n')
+
 # rocksalt supercell for the coordination-polyhedra importer
 from ase.build import bulk
 ase.io.write(f'{SCRATCH}/nacl.extxyz', bulk('NaCl', 'rocksalt', a=5.64) * (2, 2, 2))
@@ -147,6 +153,19 @@ def run_density_mesh():
     assert 'density_color' in obj.data.color_attributes, 'missing color attribute'
 
 step('density_mesh', run_density_mesh)
+
+def run_charges():
+    fresh_scene()
+    from blender_importASE.charges import import_charges
+    import_charges(f'{SCRATCH}/chargemol.xyz', 'chargemol.xyz',
+                   charge_filepath=f'{SCRATCH}/charges.csv')
+    obj = next(o for o in bpy.data.objects if 'charges' in o.name)
+    charge_vals = [d.value for d in obj.data.attributes['charge'].data]
+    assert charge_vals and abs(charge_vals[0] + 0.6) < 1e-5, 'charge attribute wrong'
+    slots = [s.material.name for s in obj.material_slots if s.material]
+    assert 'charge_atoms' in slots and 'color_curve_charge' in slots, 'charge materials missing'
+
+step('charges', run_charges)
 step('operator_via_ops', lambda: (
     fresh_scene(),
     bpy.ops.import_mesh.ase(directory=SCRATCH, files=[{"name": "crystal.xyz"}]),
