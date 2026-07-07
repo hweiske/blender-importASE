@@ -7,6 +7,31 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10776696.svg)](https://doi.org/10.5281/zenodo.10776696)
 [![Downloads](https://img.shields.io/github/downloads/Tonner-Zech-Group/blender-importASE/total)](https://github.com/Tonner-Zech-Group/blender-importASE/releases)
 
+Import molecules, crystals, trajectories, and volumetric data (electron densities, molecular orbitals) into Blender through [ASE](https://gitlab.com/ase/ase) — with geometry-nodes representations, coordination polyhedra, and isosurfaces.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/molecule.jpg" alt="Molecule with colored bonds"/><br/>
+      <b>Molecules</b> — geometry-nodes atoms with gray or element-colored bonds
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/polyhedra.jpg" alt="Crystal with coordination polyhedra"/><br/>
+      <b>Coordination polyhedra</b> — convex hulls of coordination shells as solid faces
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/orbital_volume.jpg" alt="Molecular orbital isosurface"/><br/>
+      <b>Molecular orbitals &amp; densities</b> — .cube / VASP volumes with node-based isosurfaces
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/density_mesh.jpg" alt="Density isosurface as mesh, colored by a second density"/><br/>
+      <b>Density as mesh</b> — marching-cubes isosurfaces, optionally colored by a second density file
+    </td>
+  </tr>
+</table>
+
 ## Dependencies
 
 Dependencies are automatically installed upon activation of the addon using `pip` if an internet connection is present.

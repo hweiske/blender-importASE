@@ -112,6 +112,9 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03):
 
 
 def _density_mesh_material():
+    """Material mapping the density_color attribute through a
+    blue-white-red ramp (ESP-map style; the +/- lobes of a plain import
+    come out blue and red)."""
     mat = newMaterial(DENSITY_MESH_MATERIAL)
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
@@ -120,9 +123,19 @@ def _density_mesh_material():
     if color_attr is None:
         color_attr = nodes.new('ShaderNodeVertexColor')
         color_attr.name = 'Color Attribute'
-        color_attr.location = (-300, 200)
+        color_attr.location = (-500, 200)
     color_attr.layer_name = COLOR_ATTRIBUTE
-    links.new(color_attr.outputs['Color'], principled.inputs['Base Color'])
+    ramp = nodes.get('Color Ramp')
+    if ramp is None:
+        ramp = nodes.new('ShaderNodeValToRGB')
+        ramp.name = 'Color Ramp'
+        ramp.location = (-300, 200)
+        ramp.color_ramp.elements[0].color = (0.85, 0.10, 0.10, 1)  # low -> red
+        ramp.color_ramp.elements[1].color = (0.05, 0.15, 0.85, 1)  # high -> blue
+        mid = ramp.color_ramp.elements.new(0.5)
+        mid.color = (0.95, 0.95, 0.95, 1)
+    links.new(color_attr.outputs['Color'], ramp.inputs['Fac'])
+    links.new(ramp.outputs['Color'], principled.inputs['Base Color'])
     return mat
 
 
