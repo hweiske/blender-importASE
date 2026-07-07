@@ -309,6 +309,82 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         return {'RUNNING_MODAL'}
 
 
+class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
+    """Import the +/- isosurfaces of a density file as a real mesh
+    (marching cubes), optionally colored by a second density file"""
+    bl_idname = "import_mesh.ase_density_mesh"
+    bl_label = "Import ASE Density as Mesh"
+    bl_options = {"REGISTER", "UNDO"}
+
+    filename_ext = ".*"
+
+    iso_value: bpy.props.FloatProperty(
+        name="isovalue",
+        description="isosurface level; both +isovalue and -isovalue surfaces are generated when present in the data",
+        default=0.03,
+        precision=4,
+        soft_min=0.0001,
+        soft_max=10.0,
+    )
+    color_file: bpy.props.StringProperty(
+        name="color density",
+        description="optional second density file (.cube or CHGCAR-like); its values are sampled on the isosurface and stored as the 'density_color' color attribute (black to white)",
+        subtype='FILE_PATH',
+        default='',
+    )
+    shade_smooth: bpy.props.BoolProperty(
+        name="shade smooth",
+        description="smooth-shade the isosurface",
+        default=True,
+    )
+    files: bpy.props.CollectionProperty(
+        type=bpy.types.OperatorFileListElement,
+        options={'HIDDEN', 'SKIP_SAVE'},
+        description='List of files to be imported'
+    )
+    directory: bpy.props.StringProperty(
+        name='folder',
+        description='directory of file',
+        subtype='DIR_PATH'
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'iso_value')
+        layout.prop(self, 'color_file')
+        layout.prop(self, 'shade_smooth')
+
+    def execute(self, context):
+        if self.files:
+            directory = self.directory
+            names = [f.name for f in self.files]
+        elif self.filepath:
+            directory, name = os.path.split(self.filepath)
+            names = [name]
+        else:
+            self.report({'ERROR'}, "No filepath or files provided")
+            return {'CANCELLED'}
+
+        from .density_mesh import import_density_mesh
+        color_filepath = bpy.path.abspath(self.color_file) if self.color_file else None
+        for name in names:
+            try:
+                import_density_mesh(
+                    join(directory, name), name,
+                    color_filepath=color_filepath,
+                    iso_value=self.iso_value,
+                    shade_smooth=self.shade_smooth,
+                )
+            except ValueError as exc:
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
+        return {"FINISHED"}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+
 class ASEAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
@@ -347,6 +423,7 @@ def check_dependency():
 def menu_func_import(self, context):
     self.layout.operator(ImportASEMolecule.bl_idname, text="ASE Molecule (.*)")
     self.layout.operator(ImportASEPolyhedra.bl_idname, text="ASE Polyhedra (.*)")
+    self.layout.operator(ImportASEDensityMesh.bl_idname, text="ASE Density as Mesh (.*)")
 
 def register():
     bpy.utils.register_class(ASEAddonPreferences)
@@ -354,6 +431,7 @@ def register():
     if dependency:
         bpy.utils.register_class(ImportASEMolecule)
         bpy.utils.register_class(ImportASEPolyhedra)
+        bpy.utils.register_class(ImportASEDensityMesh)
         bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
         # deferred so the addon can load (and show its preferences) when
         # ase is not installed yet - controls imports ase at module level
@@ -369,7 +447,7 @@ def unregister():
         controls.unregister()
     except Exception:
         print("ASE controls were not registered, skipping.")
-    for cls in (ImportASEMolecule, ImportASEPolyhedra):
+    for cls in (ImportASEMolecule, ImportASEPolyhedra, ImportASEDensityMesh):
         try:
             bpy.utils.unregister_class(cls)
         except RuntimeError:
