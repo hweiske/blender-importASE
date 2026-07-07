@@ -36,6 +36,17 @@ for i in range(5):
     traj.append(im)
 ase.io.write(f'{SCRATCH}/traj.xyz', traj)
 
+# MO-like cube with +/- lobes and a color-density cube for the
+# marching-cubes density-mesh importer
+mo_cell = Atoms('OH2', positions=[(4, 4, 4), (4.76, 4.59, 4), (3.24, 4.59, 4)], cell=[8, 8, 8])
+mx, my, mz = np.mgrid[0:8:24j, 0:8:24j, 0:8:24j]
+mo_data = (mx - 4) * np.exp(-((mx - 4)**2 + (my - 4)**2 + (mz - 4)**2) / 2.5)
+from ase.io.cube import write_cube as _write_cube
+with open(f'{SCRATCH}/mo.cube', 'w') as f:
+    _write_cube(f, mo_cell, data=mo_data)
+with open(f'{SCRATCH}/colordens.cube', 'w') as f:
+    _write_cube(f, mo_cell, data=np.exp(-((mz - 4)**2) / 8.0))
+
 # rocksalt supercell for the coordination-polyhedra importer
 from ase.build import bulk
 ase.io.write(f'{SCRATCH}/nacl.extxyz', bulk('NaCl', 'rocksalt', a=5.64) * (2, 2, 2))
@@ -121,6 +132,21 @@ def run_polyhedra():
     assert len(obj.data.polygons) > 0, 'no polyhedra faces generated'
 
 step('polyhedra', run_polyhedra)
+
+def run_density_mesh():
+    from importlib import util
+    if util.find_spec('skimage') is None:
+        print('scikit-image not installed - skipping the actual import')
+        return
+    fresh_scene()
+    from blender_importASE.density_mesh import import_density_mesh
+    import_density_mesh(f'{SCRATCH}/mo.cube', 'mo.cube', iso_value=0.05,
+                        color_filepath=f'{SCRATCH}/colordens.cube')
+    obj = bpy.data.objects['mo_isomesh']
+    assert len(obj.data.polygons) > 0, 'no isosurface faces generated'
+    assert 'density_color' in obj.data.color_attributes, 'missing color attribute'
+
+step('density_mesh', run_density_mesh)
 step('operator_via_ops', lambda: (
     fresh_scene(),
     bpy.ops.import_mesh.ase(directory=SCRATCH, files=[{"name": "crystal.xyz"}]),
