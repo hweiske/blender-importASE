@@ -634,7 +634,7 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
     )
     plate_holes: bpy.props.BoolProperty(
         name="plate holes",
-        description="build the plate as a beam lattice with drainage holes instead of a solid slab (plate pillars snap to the nearest beam)",
+        description="punch a regular grid of square holes into the base plate to save material (pillars landing on a hole are moved onto material)",
         default=True,
     )
 

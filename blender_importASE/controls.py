@@ -199,7 +199,7 @@ class ASE_OT_rebuild_supports(bpy.types.Operator):
         name="plate thickness", default=0.6, min=0.1, soft_max=3.0)
     plate_holes: bpy.props.BoolProperty(
         name="plate holes", default=True,
-        description="beam lattice with drainage holes instead of a solid slab")
+        description="regular grid of square holes in the plate to save material")
 
     def execute(self, context):
         from .exports import rebuild_supports

@@ -55,8 +55,9 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
 
     A pillar whose vertical path would run through another atom sphere
     starts on top of the highest blocking sphere instead of the plate
-    (support stacking). With plate_holes, the plate is a lattice of beams
-    with drainage holes, and plate pillars snap to the nearest beam.
+    (support stacking). With plate_holes, a regular grid of square holes
+    is punched into the plate to save material; pillars that would land
+    on a hole are moved onto material.
 
     base_radius/tip_radius: pillar radius at the plate and at the atom
     contact point. Returns the created object.
@@ -136,34 +137,44 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         faces.append([top + k for k in range(segments)][::-1])
         faces.append([bottom + k for k in range(segments)])
 
-    # plate layout (beam lattice with drainage holes, or a solid slab)
+    # plate layout: a solid slab, optionally with a regular grid of square
+    # holes punched in to save material
     xs = [p[0] for p in plate_pillars] or [c[0] for c in centers]
     ys = [p[1] for p in plate_pillars] or [c[1] for c in centers]
     x0, x1 = min(xs) - plate_margin, max(xs) + plate_margin
     y0, y1 = min(ys) - plate_margin, max(ys) + plate_margin
-    beam = max(0.6, 2 * base_radius)
-    pitch = 3 * beam
+    hole = max(0.6, 2 * base_radius)   # hole edge length
+    pitch = 2.2 * hole                 # hole spacing (majority stays material)
 
-    def snap_to_lattice(x, y):
-        """Nearest point on the beam centerlines (frame + slats)."""
-        slat_xs = [x0 + beam / 2, x1 - beam / 2]
-        sx = x0 + beam / 2 + pitch
-        while sx < x1 - beam / 2:
-            slat_xs.append(sx)
-            sx += pitch
-        slat_ys = [y0 + beam / 2, y1 - beam / 2]
-        sy = y0 + beam / 2 + pitch
-        while sy < y1 - beam / 2:
-            slat_ys.append(sy)
-            sy += pitch
-        nearest_x = min(slat_xs, key=lambda s: abs(s - x))
-        nearest_y = min(slat_ys, key=lambda s: abs(s - y))
-        # snapping one coordinate onto a slat centerline is enough
-        if abs(nearest_x - x) <= abs(nearest_y - y):
-            return nearest_x, y, slat_xs, slat_ys
-        return x, nearest_y, slat_xs, slat_ys
+    def hole_grid():
+        """Regularly spaced square holes, kept clear of the plate border."""
+        holes_x, holes_y = [], []
+        hx = x0 + pitch - hole / 2
+        while hx + hole < x1 - (pitch - hole):
+            holes_x.append(hx)
+            hx += pitch
+        hy = y0 + pitch - hole / 2
+        while hy + hole < y1 - (pitch - hole):
+            holes_y.append(hy)
+            hy += pitch
+        return holes_x, holes_y
+
+    def push_off_holes(x, y, holes_x, holes_y):
+        """Move a pillar base off any hole so it lands on material."""
+        margin = base_radius + 0.05
+        for hx in holes_x:
+            for hy in holes_y:
+                if hx - margin < x < hx + hole + margin and hy - margin < y < hy + hole + margin:
+                    # push out through the nearest hole edge
+                    moves = [(hx - margin - x, 0), (hx + hole + margin - x, 0),
+                             (0, hy - margin - y), (0, hy + hole + margin - y)]
+                    dx, dy = min(moves, key=lambda m: abs(m[0]) + abs(m[1]))
+                    return x + dx, y + dy
+        return x, y
 
     def add_box(bx0, bx1, by0, by1, bz0, bz1):
+        if bx1 <= bx0 or by1 <= by0:
+            return
         base = len(verts)
         verts.extend([(bx0, by0, bz0), (bx1, by0, bz0), (bx1, by1, bz0), (bx0, by1, bz0),
                       (bx0, by0, bz1), (bx1, by0, bz1), (bx1, by1, bz1), (bx0, by1, bz1)])
@@ -177,14 +188,19 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     z0, z1 = plate_top - plate_thickness, plate_top
     if plate_pillars:
         if plate_holes:
-            slat_xs = slat_ys = None
+            holes_x, holes_y = hole_grid()
             for x, y, target_z in plate_pillars:
-                bx, by, slat_xs, slat_ys = snap_to_lattice(x, y)
+                bx, by = push_off_holes(x, y, holes_x, holes_y)
                 add_pillar(bx, by, plate_top, x, y, target_z)
-            for sx in slat_xs:
-                add_box(sx - beam / 2, sx + beam / 2, y0, y1, z0, z1)
-            for sy in slat_ys:
-                add_box(x0, x1, sy - beam / 2, sy + beam / 2, z0, z1)
+            # full-width strips between the hole rows...
+            y_edges = [y0] + [e for hy in holes_y for e in (hy, hy + hole)] + [y1]
+            for yA, yB in zip(y_edges[0::2], y_edges[1::2]):
+                add_box(x0, x1, yA, yB, z0, z1)
+            # ...and the pieces between holes within each hole row
+            x_edges = [x0] + [e for hx in holes_x for e in (hx, hx + hole)] + [x1]
+            for hy in holes_y:
+                for xA, xB in zip(x_edges[0::2], x_edges[1::2]):
+                    add_box(xA, xB, hy, hy + hole, z0, z1)
         else:
             for x, y, target_z in plate_pillars:
                 add_pillar(x, y, plate_top, x, y, target_z)
