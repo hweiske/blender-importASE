@@ -81,8 +81,11 @@ def read_density_grid(filepath):
     return volume, spacing, origin
 
 
+PROBE_DEPTH = 10  # voxels probed along +/- surface normal for sample_interior
+
+
 def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
-                         color_min=None, color_max=None):
+                         color_min=None, color_max=None, sample_interior=False):
     """Run marching cubes on the +/- isosurfaces of a density file.
 
     Returns (vertices, faces, colors): cartesian vertex positions, face
@@ -95,30 +98,37 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
     two values (clamped) instead of the sampled min/max - lets colors stay
     comparable between imports. Left equal/unset, the sampled range is
     used.
+
+    sample_interior: instead of the color value directly on the surface,
+    use the strongest (largest magnitude) value within PROBE_DEPTH voxels
+    along the surface normal - projects features buried inside the
+    isosurface (e.g. LED energies) onto it.
     """
     marching_cubes = _ensure_skimage()
     volume, spacing, origin = read_density_grid(filepath)
 
-    surfaces = []  # (index-space verts, faces, constant color)
+    surfaces = []  # (index-space verts, faces, normals, constant color)
     for level, const_color in ((abs(iso_value), 1.0), (-abs(iso_value), 0.0)):
         if not (volume.min() < level < volume.max()):
             continue  # e.g. total densities have no negative lobe
-        verts, faces, _, _ = marching_cubes(volume, level=level)
-        surfaces.append((verts, faces, const_color))
+        verts, faces, normals, _ = marching_cubes(volume, level=level)
+        surfaces.append((verts, faces, normals, const_color))
     if not surfaces:
         raise ValueError(
             f'isovalue {iso_value} is outside the data range '
             f'[{volume.min():.3g}, {volume.max():.3g}] of {filepath}')
 
     offset = 0
-    all_verts, all_faces, const_colors = [], [], []
-    for verts, faces, const_color in surfaces:
+    all_verts, all_faces, all_normals, const_colors = [], [], [], []
+    for verts, faces, normals, const_color in surfaces:
         all_verts.append(verts)
         all_faces.append(faces + offset)
+        all_normals.append(normals)
         const_colors.append(np.full(len(verts), const_color))
         offset += len(verts)
     verts_index = np.vstack(all_verts)
     faces = np.vstack(all_faces)
+    normals_index = np.vstack(all_normals)
 
     # marching_cubes returns vertices in grid-index space; grid point i
     # sits at origin + i @ spacing
@@ -126,9 +136,24 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
 
     if color_filepath:
         color_volume, _, _ = read_density_grid(color_filepath)
-        idx = np.round(verts_index).astype(int)
-        idx = np.clip(idx, 0, np.array(color_volume.shape) - 1)
-        vals = color_volume[idx[:, 0], idx[:, 1], idx[:, 2]]
+        shape_max = np.array(color_volume.shape) - 1
+
+        def sample_at(points):
+            idx = np.clip(np.round(points).astype(int), 0, shape_max)
+            return color_volume[idx[:, 0], idx[:, 1], idx[:, 2]]
+
+        vals = sample_at(verts_index)
+        if sample_interior:
+            # strongest value within +/- PROBE_DEPTH voxels along the normal
+            lengths = np.linalg.norm(normals_index, axis=1, keepdims=True)
+            directions = normals_index / np.maximum(lengths, 1e-12)
+            best_abs = np.abs(vals)
+            for step in range(1, PROBE_DEPTH + 1):
+                for sign in (1.0, -1.0):
+                    probed = sample_at(verts_index + directions * (sign * step))
+                    stronger = np.abs(probed) > best_abs
+                    vals[stronger] = probed[stronger]
+                    best_abs[stronger] = np.abs(probed[stronger])
         if color_min is not None and color_max is not None and color_min != color_max:
             vals = np.clip((vals - color_min) / (color_max - color_min), 0.0, 1.0)
         else:
@@ -173,7 +198,7 @@ def _density_mesh_material(preset='DEFAULT'):
 def import_density_mesh(filepath, filename, color_filepath=None,
                         iso_value=0.03, shade_smooth=True, preset='DEFAULT',
                         import_atoms=True, color_min=None, color_max=None,
-                        **kwargs):
+                        sample_interior=False, **kwargs):
     if import_atoms:
         # the structure from the same file, as the nodes representation;
         # this also creates the collection the isomesh is linked into
@@ -184,7 +209,8 @@ def import_density_mesh(filepath, filename, color_filepath=None,
 
     verts, faces, colors = density_to_mesh_data(
         filepath, color_filepath=color_filepath, iso_value=iso_value,
-        color_min=color_min, color_max=color_max)
+        color_min=color_min, color_max=color_max,
+        sample_interior=sample_interior)
     print(f'density mesh: {len(verts)} verts, {len(faces)} faces')
 
     name = filename.split('.')[0] + '_isomesh'
