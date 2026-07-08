@@ -362,6 +362,18 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         subtype='FILE_PATH',
         default='',
     )
+    color_min: bpy.props.FloatProperty(
+        name="color min",
+        description="value of the color density mapped to the low end of the color ramp; leave min = max for automatic normalization to the sampled range",
+        default=0.0,
+        precision=4,
+    )
+    color_max: bpy.props.FloatProperty(
+        name="color max",
+        description="value of the color density mapped to the high end of the color ramp; values outside the range are clamped",
+        default=0.0,
+        precision=4,
+    )
     shade_smooth: bpy.props.BoolProperty(
         name="shade smooth",
         description="smooth-shade the isosurface",
@@ -398,6 +410,9 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'iso_value')
         layout.prop(self, 'color_choice')
         layout.prop(self, 'color_file')
+        row = layout.row(align=True)
+        row.prop(self, 'color_min')
+        row.prop(self, 'color_max')
         layout.prop(self, 'preset')
         layout.prop(self, 'import_atoms')
         layout.prop(self, 'shade_smooth')
@@ -429,6 +444,8 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
                     shade_smooth=self.shade_smooth,
                     preset=self.preset,
                     import_atoms=self.import_atoms,
+                    color_min=self.color_min,
+                    color_max=self.color_max,
                 )
             except ValueError as exc:
                 self.report({'ERROR'}, str(exc))
