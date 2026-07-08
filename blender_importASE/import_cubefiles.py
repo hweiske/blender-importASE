@@ -26,8 +26,59 @@ def is_vasp_density(filename):
 
 
 def read_vasp_density(filepath):
-    """Read a VASP charge density file once (atoms and grid)."""
-    return VaspChargeDensity(filepath)
+    """Read a VASP charge density file once (atoms and grid).
+
+    Robust against real-world files: transparently decompresses gzipped
+    files, retries with a sanitized species line when the header carries
+    POTCAR-style slashes (e.g. 'Fe/', which some ase versions cannot
+    parse), and turns ase's silent empty result into a clear error.
+    """
+    import tempfile
+
+    tmp_path = None
+    path = filepath
+    with open(filepath, 'rb') as fh:
+        gzipped = fh.read(2) == b'\x1f\x8b'
+    if gzipped:
+        import gzip
+        with tempfile.NamedTemporaryFile(delete=False, suffix='_CHGCAR',
+                                         mode='wb') as tmp:
+            with gzip.open(filepath, 'rb') as src:
+                tmp.write(src.read())
+            tmp_path = tmp.name
+        path = tmp_path
+
+    lines = []
+    try:
+        density = VaspChargeDensity(path)
+
+        if not density.atoms:
+            # retry with '/' stripped from the comment and species lines
+            with open(path, errors='replace') as fh:
+                lines = fh.readlines()
+            if len(lines) > 5 and ('/' in lines[0] or '/' in lines[5]):
+                lines[0] = lines[0].replace('/', ' ')
+                lines[5] = lines[5].replace('/', ' ')
+                with tempfile.NamedTemporaryFile(delete=False, suffix='_CHGCAR',
+                                                 mode='w') as tmp:
+                    tmp.writelines(lines)
+                    retry_path = tmp.name
+                try:
+                    density = VaspChargeDensity(retry_path)
+                finally:
+                    os.remove(retry_path)
+
+        if not density.atoms:
+            header = [line.rstrip() for line in lines[:8]]
+            raise ValueError(
+                f"could not read a structure from '{os.path.basename(filepath)}': "
+                "ase could not parse the POSCAR-style header (for VASP-4 style "
+                "files the first line must list the element symbols). "
+                "Header read:\n  " + "\n  ".join(header))
+    finally:
+        if tmp_path is not None:
+            os.remove(tmp_path)
+    return density
 
 
 def data2vol(volume, spacing, origin, filepath, modifier='GeometryNodes',

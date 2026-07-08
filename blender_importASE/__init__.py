@@ -165,17 +165,21 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         from .ui import import_ase_molecule
         for name in names:
             filepath = join(directory, name)
-            import_ase_molecule(
-                filepath, name,
-                resolution=self.resolution,
-                color=self.color, colorbonds=self.colorbonds,
-                long_bonds=self.long_bonds, scale=self.scale,
-                unit_cell=self.unit_cell, representation=self.representation,
-                read_density=self.read_density,
-                shift_cell=self.zero_cell, imageslice=self.imageslice,
-                animate=self.animate, outline=self.outline,
-                overwrite=self.overwrite, add_supercell=self.add_supercell,
-            )
+            try:
+                import_ase_molecule(
+                    filepath, name,
+                    resolution=self.resolution,
+                    color=self.color, colorbonds=self.colorbonds,
+                    long_bonds=self.long_bonds, scale=self.scale,
+                    unit_cell=self.unit_cell, representation=self.representation,
+                    read_density=self.read_density,
+                    shift_cell=self.zero_cell, imageslice=self.imageslice,
+                    animate=self.animate, outline=self.outline,
+                    overwrite=self.overwrite, add_supercell=self.add_supercell,
+                )
+            except ValueError as exc:
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
         return {"FINISHED"}
 
     def invoke(self, context, event):
@@ -472,12 +476,6 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
             self, _csv_file_items_cache,
             lambda f: f.lower().endswith(('.csv', '.txt', '.dat'))),
     )
-    charge_file: bpy.props.StringProperty(
-        name="charges csv path",
-        description="alternative to the dropdown for a csv file in another folder (absolute path)",
-        subtype='FILE_PATH',
-        default='',
-    )
     resolution: bpy.props.IntProperty(
         name='resolution',
         description='resolution of bonds and atoms',
@@ -521,7 +519,6 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'charge_choice')
-        layout.prop(self, 'charge_file')
         layout.prop(self, 'resolution')
         layout.prop(self, 'colorbonds')
         layout.prop(self, 'bond_distance')
@@ -540,10 +537,8 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
             return {'CANCELLED'}
         if self.charge_choice and self.charge_choice != 'NONE':
             charge_filepath = join(directory, self.charge_choice)
-        elif self.charge_file:
-            charge_filepath = bpy.path.abspath(self.charge_file)
         else:
-            self.report({'ERROR'}, "No charges csv file provided")
+            self.report({'ERROR'}, "No charges csv file selected")
             return {'CANCELLED'}
 
         from .charges import import_charges
