@@ -80,9 +80,15 @@ step('chgcar_density', lambda: run_import(f'{SCRATCH}/CHGCAR',
 def run_polyhedra():
     fresh_scene()
     from blender_importASE.polyhedra import import_polyhedra
-    import_polyhedra(f'{SCRATCH}/nacl.extxyz', 'nacl.extxyz')
-    obj = next(o for o in bpy.data.objects if 'polyhedra' in o.name)
-    assert len(obj.data.polygons) > 0, 'no polyhedra faces generated'
+    import_polyhedra(f'{SCRATCH}/nacl.extxyz', 'nacl.extxyz', outline=True)
+    faces_obj = next(o for o in bpy.data.objects if o.name.endswith('_faces'))
+    assert len(faces_obj.data.polygons) > 0, 'no polyhedra faces generated'
+    assert not faces_obj.modifiers, 'polyhedra faces must stay modifier-free'
+    structure = next(o for o in bpy.data.objects
+                     if 'polyhedra' in o.name and o.type == 'MESH'
+                     and not o.name.endswith(('_faces', '_table')))
+    names = [m.node_group.name for m in structure.modifiers if m.node_group]
+    assert any(n.startswith('outline') for n in names), names
 
 step('polyhedra', run_polyhedra)
 

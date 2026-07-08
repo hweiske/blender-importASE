@@ -148,9 +148,8 @@ def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
     layer_collection = bpy.context.view_layer.layer_collection.children[my_coll.name]
     bpy.context.view_layer.active_layer_collection = layer_collection
 
-    obj, mesh = read_structure(new_atoms,
-                               atoms.get_chemical_formula() + '_polyhedra_' + filename.split('.')[0],
-                               animate=False, faces=faces)
+    name = atoms.get_chemical_formula() + '_polyhedra_' + filename.split('.')[0]
+    obj, mesh = read_structure(new_atoms, name, animate=False)
 
     set_atoms_node_group()
     elements_name = '_'.join(list(set(new_atoms.get_chemical_symbols())))
@@ -161,19 +160,23 @@ def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
     obj.modifiers['GeometryNodes']["Socket_3"] = bond_radius
     obj.modifiers['GeometryNodes']["Socket_4"] = resolution
 
-    # the polyhedra faces get their own (semi-transparent) material slot,
-    # appended after the element and bond materials; mat_slot is picked up
-    # by the Set Material Index node at the end of the atoms_and_bonds tree.
-    # The material reads the per-vertex 'atom_color' attribute, so each face is
-    # tinted by the element colors of its corner atoms.
-    poly_mat = _polyhedra_material()
-    obj.data.materials.append(poly_mat)
-    poly_slot = len(obj.data.materials) - 1
-    if 'mat_slot' not in mesh.attributes:
-        mesh.attributes.new(name='mat_slot', type='INT', domain='FACE')
-    mesh.attributes['mat_slot'].data.foreach_set('value', [poly_slot] * len(mesh.polygons))
-    mesh.update()
+    # the polyhedra faces live in their own object, so modifiers on the
+    # structure (like the outline) never touch them. The material reads
+    # the per-vertex 'atom_color' attribute, tinting each face by the
+    # element colors of its corner atoms.
+    poly_mesh = bpy.data.meshes.new(name + '_faces')
+    poly_mesh.from_pydata(new_atoms.get_positions(), [], faces)
+    color_attr = poly_mesh.attributes.new(name='atom_color', type='FLOAT_COLOR',
+                                          domain='POINT')
+    colors = np.empty(len(mesh.vertices) * 4)
+    mesh.attributes['atom_color'].data.foreach_get('color', colors)
+    color_attr.data.foreach_set('color', colors)
+    poly_mesh.materials.append(_polyhedra_material())
+    poly_mesh.update()
+    poly_obj = bpy.data.objects.new(poly_mesh.name, poly_mesh)
+    my_coll.objects.link(poly_obj)
 
     if outline:
+        # atoms and bonds only - the polyhedra object stays outline-free
         outline_objects([obj], modifier='GeometryNodes.001')
     return obj
