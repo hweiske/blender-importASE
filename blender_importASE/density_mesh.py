@@ -81,7 +81,8 @@ def read_density_grid(filepath):
     return volume, spacing, origin
 
 
-def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03):
+def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
+                         color_min=None, color_max=None):
     """Run marching cubes on the +/- isosurfaces of a density file.
 
     Returns (vertices, faces, colors): cartesian vertex positions, face
@@ -89,6 +90,11 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03):
     positive surface is white and the negative one black; with a color
     file its values are sampled at each vertex (nearest voxel) and
     normalized to a black-to-white gradient.
+
+    color_min/color_max: normalize the color-density values between these
+    two values (clamped) instead of the sampled min/max - lets colors stay
+    comparable between imports. Left equal/unset, the sampled range is
+    used.
     """
     marching_cubes = _ensure_skimage()
     volume, spacing, origin = read_density_grid(filepath)
@@ -123,7 +129,10 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03):
         idx = np.round(verts_index).astype(int)
         idx = np.clip(idx, 0, np.array(color_volume.shape) - 1)
         vals = color_volume[idx[:, 0], idx[:, 1], idx[:, 2]]
-        vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-12)
+        if color_min is not None and color_max is not None and color_min != color_max:
+            vals = np.clip((vals - color_min) / (color_max - color_min), 0.0, 1.0)
+        else:
+            vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-12)
     else:
         vals = np.concatenate(const_colors)
     colors = np.repeat(vals[:, None], 3, axis=1)
@@ -163,7 +172,8 @@ def _density_mesh_material(preset='DEFAULT'):
 
 def import_density_mesh(filepath, filename, color_filepath=None,
                         iso_value=0.03, shade_smooth=True, preset='DEFAULT',
-                        import_atoms=True, **kwargs):
+                        import_atoms=True, color_min=None, color_max=None,
+                        **kwargs):
     if import_atoms:
         # the structure from the same file, as the nodes representation;
         # this also creates the collection the isomesh is linked into
@@ -173,7 +183,8 @@ def import_density_mesh(filepath, filename, color_filepath=None,
                             add_supercell=False)
 
     verts, faces, colors = density_to_mesh_data(
-        filepath, color_filepath=color_filepath, iso_value=iso_value)
+        filepath, color_filepath=color_filepath, iso_value=iso_value,
+        color_min=color_min, color_max=color_max)
     print(f'density mesh: {len(verts)} verts, {len(faces)} faces')
 
     name = filename.split('.')[0] + '_isomesh'
