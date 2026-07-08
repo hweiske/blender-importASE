@@ -253,8 +253,8 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
     )
     outline: bpy.props.BoolProperty(
         name='outline',
-        description='add outline modifier',
-        default=False,
+        description='add outline modifier to the atoms and bonds (the polyhedra faces stay outline-free)',
+        default=True,
     )
     files: bpy.props.CollectionProperty(
         type=bpy.types.OperatorFileListElement,
