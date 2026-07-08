@@ -24,12 +24,12 @@ def read_structure(atoms,name, animate=True, faces=None):
     if 'vdw_radius' not in mesh.attributes:
         mesh.attributes.new(name="vdw_radius", type='FLOAT', domain='POINT')
     if 'color' not in mesh.attributes:
-        mesh.attributes.new(name="color", type='FLOAT_COLOR', domain='POINT')
+        mesh.attributes.new(name="atom_color", type='FLOAT_COLOR', domain='POINT')
 
     element = mesh.attributes["element"].data
     rad = mesh.attributes["atom_radius"].data
     rad_vdw=mesh.attributes["vdw_radius"].data
-    col = mesh.attributes["color"].data
+    col = mesh.attributes["atom_color"].data
 
     atomcolor = atomcolors()
     for i, value in enumerate(element):
@@ -884,7 +884,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
     named_attribute_002.name = "Named Attribute.002"
     named_attribute_002.data_type = 'FLOAT_COLOR'
     #Name
-    named_attribute_002.inputs[0].default_value = "color"
+    named_attribute_002.inputs[0].default_value = "atom_color"
 
     #node Reroute.025
     reroute_025 = atoms_and_bonds.nodes.new("NodeReroute")

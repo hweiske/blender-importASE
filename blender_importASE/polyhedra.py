@@ -17,10 +17,33 @@ from ase.data import covalent_radii
 from .utils import atomcolors
 from .node_networks.nodes_atoms_and_bonds import set_atoms_node_group, atoms_and_bonds, read_structure
 from .node_networks.bond_mat import create_bondmat
-from .node_networks.electron_density_nodes import newShader
+from .node_networks.electron_density_nodes import newMaterial
 from .node_networks.outline import outline_objects
 
 POLYHEDRA_MATERIAL = 'polyhedra material'
+
+
+def _polyhedra_material():
+    """Semi-transparent material reading the per-vertex 'atom_color' attribute,
+    so every polyhedron is tinted by the element colors of its corner
+    atoms (e.g. brown SbBr6 octahedra from the Br corners)."""
+    mat = newMaterial(POLYHEDRA_MATERIAL)
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    principled = nodes.get('Principled BSDF')
+    principled.inputs[1].default_value = 0.0   # metallic
+    principled.inputs[2].default_value = 0.6   # roughness
+    principled.inputs[3].default_value = 1.45  # IOR
+    principled.inputs[4].default_value = 0.6   # alpha
+    attr = nodes.get('Attribute')
+    if attr is None:
+        attr = nodes.new('ShaderNodeAttribute')
+        attr.name = 'Attribute'
+        attr.location = (-300, 200)
+    attr.attribute_name = 'atom_color'
+    attr.attribute_type = 'GEOMETRY'
+    links.new(attr.outputs['Color'], principled.inputs['Base Color'])
+    return mat
 
 
 def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
@@ -140,8 +163,10 @@ def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
 
     # the polyhedra faces get their own (semi-transparent) material slot,
     # appended after the element and bond materials; mat_slot is picked up
-    # by the Set Material Index node at the end of the atoms_and_bonds tree
-    poly_mat = newShader(POLYHEDRA_MATERIAL, 0.4, 0.55, 0.85)
+    # by the Set Material Index node at the end of the atoms_and_bonds tree.
+    # The material reads the per-vertex 'atom_color' attribute, so each face is
+    # tinted by the element colors of its corner atoms.
+    poly_mat = _polyhedra_material()
     obj.data.materials.append(poly_mat)
     poly_slot = len(obj.data.materials) - 1
     if 'mat_slot' not in mesh.attributes:
