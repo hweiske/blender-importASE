@@ -374,6 +374,11 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         default=0.0,
         precision=4,
     )
+    sample_interior: bpy.props.BoolProperty(
+        name="sample interior",
+        description="color each surface point with the strongest (largest magnitude) color-density value within ~10 voxels along the surface normal, instead of the value directly on the surface - projects buried features onto the isosurface",
+        default=False,
+    )
     shade_smooth: bpy.props.BoolProperty(
         name="shade smooth",
         description="smooth-shade the isosurface",
@@ -413,6 +418,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         row = layout.row(align=True)
         row.prop(self, 'color_min')
         row.prop(self, 'color_max')
+        layout.prop(self, 'sample_interior')
         layout.prop(self, 'preset')
         layout.prop(self, 'import_atoms')
         layout.prop(self, 'shade_smooth')
@@ -446,6 +452,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
                     import_atoms=self.import_atoms,
                     color_min=self.color_min,
                     color_max=self.color_max,
+                    sample_interior=self.sample_interior,
                 )
             except ValueError as exc:
                 self.report({'ERROR'}, str(exc))
