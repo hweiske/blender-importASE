@@ -81,9 +81,6 @@ def read_density_grid(filepath):
     return volume, spacing, origin
 
 
-PROBE_DEPTH = 10  # voxels probed along +/- surface normal for sample_interior
-
-
 def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
                          color_min=None, color_max=None, sample_interior=False):
     """Run marching cubes on the +/- isosurfaces of a density file.
@@ -100,9 +97,9 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
     used.
 
     sample_interior: instead of the color value directly on the surface,
-    use the strongest (largest magnitude) value within PROBE_DEPTH voxels
-    along the surface normal - projects features buried inside the
-    isosurface (e.g. LED energies) onto it.
+    use the strongest (largest magnitude) value found anywhere along the
+    surface normal through the volume - projects features buried inside
+    the isosurface (e.g. LED energies) onto it.
     """
     marching_cubes = _ensure_skimage()
     volume, spacing, origin = read_density_grid(filepath)
@@ -139,16 +136,22 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
         shape_max = np.array(color_volume.shape) - 1
 
         def sample_at(points):
-            idx = np.clip(np.round(points).astype(int), 0, shape_max)
-            return color_volume[idx[:, 0], idx[:, 1], idx[:, 2]]
+            idx = np.round(points).astype(int)
+            inside = np.all((idx >= 0) & (idx <= shape_max), axis=1)
+            idx = np.clip(idx, 0, shape_max)
+            values = color_volume[idx[:, 0], idx[:, 1], idx[:, 2]]
+            values[~inside] = 0.0  # never beats an in-volume maximum
+            return values
 
         vals = sample_at(verts_index)
         if sample_interior:
-            # strongest value within +/- PROBE_DEPTH voxels along the normal
+            # strongest value anywhere along the +/- normal ray through the
+            # whole volume
             lengths = np.linalg.norm(normals_index, axis=1, keepdims=True)
             directions = normals_index / np.maximum(lengths, 1e-12)
             best_abs = np.abs(vals)
-            for step in range(1, PROBE_DEPTH + 1):
+            max_steps = int(np.ceil(np.linalg.norm(color_volume.shape)))
+            for step in range(1, max_steps + 1):
                 for sign in (1.0, -1.0):
                     probed = sample_at(verts_index + directions * (sign * step))
                     stronger = np.abs(probed) > best_abs

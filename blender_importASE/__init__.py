@@ -356,12 +356,6 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
             self, _density_file_items_cache,
             lambda f: f.lower().endswith('.cube') or f.upper().startswith(('CHGCAR', 'CHG', 'PARCHG', 'AECCAR'))),
     )
-    color_file: bpy.props.StringProperty(
-        name="color density path",
-        description="alternative to the dropdown for a color density in another folder (absolute path)",
-        subtype='FILE_PATH',
-        default='',
-    )
     color_min: bpy.props.FloatProperty(
         name="color min",
         description="value of the color density mapped to the low end of the color ramp; leave min = max for automatic normalization to the sampled range",
@@ -376,7 +370,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
     )
     sample_interior: bpy.props.BoolProperty(
         name="sample interior",
-        description="color each surface point with the strongest (largest magnitude) color-density value within ~10 voxels along the surface normal, instead of the value directly on the surface - projects buried features onto the isosurface",
+        description="color each surface point with the strongest (largest magnitude) color-density value found along the surface normal through the whole volume, instead of the value directly on the surface - projects buried features onto the isosurface",
         default=False,
     )
     shade_smooth: bpy.props.BoolProperty(
@@ -414,7 +408,6 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         layout = self.layout
         layout.prop(self, 'iso_value')
         layout.prop(self, 'color_choice')
-        layout.prop(self, 'color_file')
         row = layout.row(align=True)
         row.prop(self, 'color_min')
         row.prop(self, 'color_max')
@@ -437,8 +430,6 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         from .density_mesh import import_density_mesh
         if self.color_choice and self.color_choice != 'NONE':
             color_filepath = join(directory, self.color_choice)
-        elif self.color_file:
-            color_filepath = bpy.path.abspath(self.color_file)
         else:
             color_filepath = None
         for name in names:
