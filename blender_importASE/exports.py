@@ -42,94 +42,169 @@ def export_xyz(obj, filepath):
     return len(atoms)
 
 
-def build_supports(atom_objects, collection, pillar_radius=0.25,
-                   support_layer=0.8, plate_thickness=0.6, plate_margin=1.0,
-                   tip_fraction=0.4, pillar_length=2.0, segments=12):
+def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
+                   support_layer=0.8, plate_thickness=0.6, plate_holes=True,
+                   plate_margin=1.0, pillar_length=2.0, segments=12):
     """Resin supports: a base plate below the model and tapered pillars up
-    to every atom that would print as an island. Working bottom-up, an
-    atom counts as supported when it is bonded (covalent radii * 1.2) to
-    an already-supported atom that is at most 'support_layer' higher -
-    everything else gets a pillar, so floating fragments and upward-only
-    branches are supported too. Returns the created object."""
+    to every atom that would print as an island.
+
+    Working bottom-up, an atom counts as supported when it is bonded
+    (covalent radii * 1.2) to an already-supported atom at most
+    'support_layer' higher - everything else gets a pillar, so floating
+    fragments and upward-only branches are supported too.
+
+    A pillar whose vertical path would run through another atom sphere
+    starts on top of the highest blocking sphere instead of the plate
+    (support stacking). With plate_holes, the plate is a lattice of beams
+    with drainage holes, and plate pillars snap to the nearest beam.
+
+    base_radius/tip_radius: pillar radius at the plate and at the atom
+    contact point. Returns the created object.
+    """
     from ase.data import covalent_radii, atomic_numbers
 
-    centers, bottoms, radii = [], [], []
+    centers, sphere_radii, bond_radii = [], [], []
     for ob in atom_objects:
         corners = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
         origin = np.array(ob.matrix_world.translation)
         centers.append(origin)
-        bottoms.append((origin[0], origin[1], min(v.z for v in corners)))
+        zs = [v.z for v in corners]
+        sphere_radii.append((max(zs) - min(zs)) / 2)
         symbol = ob.name.split('.')[0]
-        radii.append(covalent_radii[atomic_numbers.get(symbol, 6)])
+        bond_radii.append(covalent_radii[atomic_numbers.get(symbol, 6)])
     centers = np.array(centers)
-    radii = np.array(radii)
+    sphere_radii = np.array(sphere_radii)
+    bond_radii = np.array(bond_radii)
     n = len(centers)
 
     # bond connectivity from distances (matches the drawn bonds closely)
     distances = np.linalg.norm(centers[:, None, :] - centers[None, :, :], axis=2)
-    cutoff = 1.2 * (radii[:, None] + radii[None, :])
+    cutoff = 1.2 * (bond_radii[:, None] + bond_radii[None, :])
     bonded = (distances < cutoff) & ~np.eye(n, dtype=bool)
 
     # bottom-up island analysis: pillar every atom without a supported,
     # not-too-much-higher bonded neighbor
     order = np.argsort(centers[:, 2])
     is_supported = np.zeros(n, dtype=bool)
-    supported = []
+    pillar_atoms = []
     for i in order:
         holds = [j for j in np.nonzero(bonded[i])[0]
                  if is_supported[j] and centers[j, 2] <= centers[i, 2] + support_layer]
         if not holds:
-            supported.append(bottoms[i])
+            pillar_atoms.append(i)
         is_supported[i] = True
-    zfloor = min(b[2] for b in bottoms)
 
+    zfloor = float((centers[:, 2] - sphere_radii).min())
     plate_top = zfloor - pillar_length
+
+    # pillar start points: the plate, or the top of the highest atom sphere
+    # blocking the vertical path (support stacking)
+    plate_pillars, stacked_pillars = [], []
+    for i in pillar_atoms:
+        x, y = centers[i, 0], centers[i, 1]
+        target_z = centers[i, 2] - sphere_radii[i]
+        start_z = None
+        for j in range(n):
+            if j == i:
+                continue
+            d_xy = math.hypot(centers[j, 0] - x, centers[j, 1] - y)
+            if d_xy >= sphere_radii[j]:
+                continue
+            top_at_column = centers[j, 2] + math.sqrt(sphere_radii[j]**2 - d_xy**2)
+            if top_at_column < target_z and (start_z is None or top_at_column > start_z):
+                start_z = top_at_column
+        if start_z is None:
+            plate_pillars.append((x, y, target_z))
+        else:
+            stacked_pillars.append((x, y, target_z, start_z - 0.1))  # embed base
+
     verts, faces = [], []
 
     def add_ring(x, y, z, radius):
         start = len(verts)
-        for i in range(segments):
-            a = 2 * math.pi * i / segments
+        for k in range(segments):
+            a = 2 * math.pi * k / segments
             verts.append((x + radius * math.cos(a), y + radius * math.sin(a), z))
         return start
 
-    for x, y, z in supported:
-        bottom = add_ring(x, y, plate_top, pillar_radius)
-        top = add_ring(x, y, z + 0.1, pillar_radius * tip_fraction)  # embed tip
-        for i in range(segments):
-            j = (i + 1) % segments
-            faces.append([bottom + i, bottom + j, top + j, top + i])
-        # cap the tip
-        faces.append([top + i for i in range(segments)][::-1])
+    def add_pillar(base_x, base_y, base_z, tip_x, tip_y, tip_z):
+        bottom = add_ring(base_x, base_y, base_z, base_radius)
+        top = add_ring(tip_x, tip_y, tip_z + 0.1, tip_radius)  # embed tip
+        for k in range(segments):
+            m = (k + 1) % segments
+            faces.append([bottom + k, bottom + m, top + m, top + k])
+        faces.append([top + k for k in range(segments)][::-1])
+        faces.append([bottom + k for k in range(segments)])
 
-    # base plate under all pillars
-    xs = [b[0] for b in supported]
-    ys = [b[1] for b in supported]
+    # plate layout (beam lattice with drainage holes, or a solid slab)
+    xs = [p[0] for p in plate_pillars] or [c[0] for c in centers]
+    ys = [p[1] for p in plate_pillars] or [c[1] for c in centers]
     x0, x1 = min(xs) - plate_margin, max(xs) + plate_margin
     y0, y1 = min(ys) - plate_margin, max(ys) + plate_margin
+    beam = max(0.6, 2 * base_radius)
+    pitch = 3 * beam
+
+    def snap_to_lattice(x, y):
+        """Nearest point on the beam centerlines (frame + slats)."""
+        slat_xs = [x0 + beam / 2, x1 - beam / 2]
+        sx = x0 + beam / 2 + pitch
+        while sx < x1 - beam / 2:
+            slat_xs.append(sx)
+            sx += pitch
+        slat_ys = [y0 + beam / 2, y1 - beam / 2]
+        sy = y0 + beam / 2 + pitch
+        while sy < y1 - beam / 2:
+            slat_ys.append(sy)
+            sy += pitch
+        nearest_x = min(slat_xs, key=lambda s: abs(s - x))
+        nearest_y = min(slat_ys, key=lambda s: abs(s - y))
+        # snapping one coordinate onto a slat centerline is enough
+        if abs(nearest_x - x) <= abs(nearest_y - y):
+            return nearest_x, y, slat_xs, slat_ys
+        return x, nearest_y, slat_xs, slat_ys
+
+    def add_box(bx0, bx1, by0, by1, bz0, bz1):
+        base = len(verts)
+        verts.extend([(bx0, by0, bz0), (bx1, by0, bz0), (bx1, by1, bz0), (bx0, by1, bz0),
+                      (bx0, by0, bz1), (bx1, by0, bz1), (bx1, by1, bz1), (bx0, by1, bz1)])
+        faces.extend([[base, base + 1, base + 2, base + 3][::-1],
+                      [base + 4, base + 5, base + 6, base + 7],
+                      [base, base + 1, base + 5, base + 4],
+                      [base + 1, base + 2, base + 6, base + 5],
+                      [base + 2, base + 3, base + 7, base + 6],
+                      [base + 3, base, base + 4, base + 7]])
+
     z0, z1 = plate_top - plate_thickness, plate_top
-    base = len(verts)
-    verts.extend([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
-                  (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)])
-    faces.extend([[base, base + 1, base + 2, base + 3][::-1],
-                  [base + 4, base + 5, base + 6, base + 7],
-                  [base, base + 1, base + 5, base + 4],
-                  [base + 1, base + 2, base + 6, base + 5],
-                  [base + 2, base + 3, base + 7, base + 6],
-                  [base + 3, base, base + 4, base + 7]])
+    if plate_pillars:
+        if plate_holes:
+            slat_xs = slat_ys = None
+            for x, y, target_z in plate_pillars:
+                bx, by, slat_xs, slat_ys = snap_to_lattice(x, y)
+                add_pillar(bx, by, plate_top, x, y, target_z)
+            for sx in slat_xs:
+                add_box(sx - beam / 2, sx + beam / 2, y0, y1, z0, z1)
+            for sy in slat_ys:
+                add_box(x0, x1, sy - beam / 2, sy + beam / 2, z0, z1)
+        else:
+            for x, y, target_z in plate_pillars:
+                add_pillar(x, y, plate_top, x, y, target_z)
+            add_box(x0, x1, y0, y1, z0, z1)
+
+    for x, y, target_z, start_z in stacked_pillars:
+        add_pillar(x, y, start_z, x, y, target_z)
 
     mesh = bpy.data.meshes.new('supports')
     mesh.from_pydata(verts, [], faces)
     mesh.update()
     obj = bpy.data.objects.new('supports', mesh)
     collection.objects.link(obj)
+    obj['ase_auto_supports'] = True
     return obj
 
 
-def export_3dprint(context, filepath, generate_supports=True,
-                   pillar_radius=0.25, support_layer=0.8):
-    """Export the collection of the active object as per-element STLs,
-    the bonds, and supports, zipped into `filepath`."""
+def collect_print_objects(context):
+    """The atom groups, bonds, and support objects of the active object's
+    import collection. Returns (collection, groups, bonds, supports)."""
     active = context.active_object
     if active is None or not active.users_collection:
         raise ValueError('select an object of the imported structure first')
@@ -157,12 +232,43 @@ def export_3dprint(context, filepath, generate_supports=True,
         raise ValueError(
             f"no atom objects found in collection '{collection.name}' - "
             "use the 3D print representation")
+    return collection, groups, bonds, supports
 
-    if generate_supports and not supports:
-        atom_objects = [ob for objs in groups.values() for ob in objs]
-        supports = [build_supports(atom_objects, collection,
-                                   pillar_radius=pillar_radius,
-                                   support_layer=support_layer)]
+
+def rebuild_supports(context, **params):
+    """(Re)generate the automatic supports of the active structure with the
+    given build_supports parameters. Auto-generated supports (marked with
+    the ase_auto_supports property) are replaced; user-made support
+    objects are left alone."""
+    collection, groups, bonds, supports = collect_print_objects(context)
+    kept = []
+    for ob in supports:
+        if ob.get('ase_auto_supports'):
+            bpy.data.objects.remove(ob, do_unlink=True)
+        else:
+            kept.append(ob)
+    atom_objects = [ob for objs in groups.values() for ob in objs]
+    kept.append(build_supports(atom_objects, collection, **params))
+    return kept
+
+
+def export_3dprint(context, filepath, generate_supports=True,
+                   base_radius=0.25, tip_radius=0.1, support_layer=0.8,
+                   plate_thickness=0.6, plate_holes=True):
+    """Export the collection of the active object as per-element STLs,
+    the bonds, and supports, zipped into `filepath`."""
+    collection, groups, bonds, supports = collect_print_objects(context)
+
+    user_supports = [ob for ob in supports if not ob.get('ase_auto_supports')]
+    if generate_supports and not user_supports:
+        # regenerate the auto supports with the current parameters
+        supports = rebuild_supports(context, base_radius=base_radius,
+                                    tip_radius=tip_radius,
+                                    support_layer=support_layer,
+                                    plate_thickness=plate_thickness,
+                                    plate_holes=plate_holes)
+    elif user_supports:
+        supports = user_supports
 
     tmpdir = tempfile.mkdtemp(prefix='ase_3dprint_')
 

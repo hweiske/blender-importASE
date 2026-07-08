@@ -601,13 +601,20 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
 
     generate_supports: bpy.props.BoolProperty(
         name="generate supports",
-        description="generate a base plate with tapered pillars up to the lowest atoms (skipped when the collection already contains a 'supports' object)",
+        description="(re)generate the automatic supports with the parameters below; a user-made 'supports' object is used instead when present",
         default=True,
     )
-    pillar_radius: bpy.props.FloatProperty(
-        name="pillar radius",
-        description="support pillar radius (structure units, i.e. Angstrom)",
+    base_radius: bpy.props.FloatProperty(
+        name="base radius",
+        description="pillar radius at the plate (structure units, i.e. Angstrom)",
         default=0.25,
+        min=0.01,
+        soft_max=1.0,
+    )
+    tip_radius: bpy.props.FloatProperty(
+        name="contact radius",
+        description="pillar radius at the atom contact point",
+        default=0.1,
         min=0.01,
         soft_max=1.0,
     )
@@ -618,6 +625,18 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         min=0.0,
         soft_max=5.0,
     )
+    plate_thickness: bpy.props.FloatProperty(
+        name="plate thickness",
+        description="thickness of the base plate",
+        default=0.6,
+        min=0.1,
+        soft_max=3.0,
+    )
+    plate_holes: bpy.props.BoolProperty(
+        name="plate holes",
+        description="build the plate as a beam lattice with drainage holes instead of a solid slab (plate pillars snap to the nearest beam)",
+        default=True,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -626,16 +645,22 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'generate_supports')
-        layout.prop(self, 'pillar_radius')
+        layout.prop(self, 'base_radius')
+        layout.prop(self, 'tip_radius')
         layout.prop(self, 'support_layer')
+        layout.prop(self, 'plate_thickness')
+        layout.prop(self, 'plate_holes')
 
     def execute(self, context):
         from .exports import export_3dprint
         try:
             files = export_3dprint(context, self.filepath,
                                    generate_supports=self.generate_supports,
-                                   pillar_radius=self.pillar_radius,
-                                   support_layer=self.support_layer)
+                                   base_radius=self.base_radius,
+                                   tip_radius=self.tip_radius,
+                                   support_layer=self.support_layer,
+                                   plate_thickness=self.plate_thickness,
+                                   plate_holes=self.plate_holes)
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
