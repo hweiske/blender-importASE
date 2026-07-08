@@ -309,6 +309,29 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         return {'RUNNING_MODAL'}
 
 
+# dynamic EnumProperty items must stay referenced from python or Blender
+# shows garbage strings - module-level caches hold them alive
+_density_file_items_cache = []
+_csv_file_items_cache = []
+
+
+def _sibling_file_items(operator, cache, match):
+    """Enum items: files next to the one selected in the import browser."""
+    directory = operator.directory or os.path.dirname(operator.filepath)
+    items = [('NONE', '(none)', 'no file selected')]
+    try:
+        current = {f.name for f in operator.files} | {os.path.basename(operator.filepath)}
+        for fname in sorted(os.listdir(directory)):
+            if fname in current:
+                continue
+            if match(fname):
+                items.append((fname, fname, os.path.join(directory, fname)))
+    except OSError:
+        pass
+    cache[:] = items
+    return cache
+
+
 class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
     """Import the +/- isosurfaces of a density file as a real mesh
     (marching cubes), optionally colored by a second density file"""
@@ -326,9 +349,16 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         soft_min=0.0001,
         soft_max=10.0,
     )
-    color_file: bpy.props.StringProperty(
+    color_choice: bpy.props.EnumProperty(
         name="color density",
-        description="optional second density file (.cube or CHGCAR-like); its values are sampled on the isosurface and stored as the 'density_color' color attribute (black to white)",
+        description="second density file from the same folder; its values are sampled on the isosurface and drive the color ramp",
+        items=lambda self, context: _sibling_file_items(
+            self, _density_file_items_cache,
+            lambda f: f.lower().endswith('.cube') or f.upper().startswith(('CHGCAR', 'CHG', 'PARCHG', 'AECCAR'))),
+    )
+    color_file: bpy.props.StringProperty(
+        name="color density path",
+        description="alternative to the dropdown for a color density in another folder (absolute path)",
         subtype='FILE_PATH',
         default='',
     )
@@ -366,6 +396,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'iso_value')
+        layout.prop(self, 'color_choice')
         layout.prop(self, 'color_file')
         layout.prop(self, 'preset')
         layout.prop(self, 'import_atoms')
@@ -383,7 +414,12 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
             return {'CANCELLED'}
 
         from .density_mesh import import_density_mesh
-        color_filepath = bpy.path.abspath(self.color_file) if self.color_file else None
+        if self.color_choice and self.color_choice != 'NONE':
+            color_filepath = join(directory, self.color_choice)
+        elif self.color_file:
+            color_filepath = bpy.path.abspath(self.color_file)
+        else:
+            color_filepath = None
         for name in names:
             try:
                 import_density_mesh(
@@ -414,9 +450,16 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
 
     filename_ext = ".*"
 
-    charge_file: bpy.props.StringProperty(
+    charge_choice: bpy.props.EnumProperty(
         name="charges csv",
-        description="csv file with one partial charge per atom, in the same order as the atoms in the structure file (bare numbers or rows whose last numeric field is the charge)",
+        description="csv file from the same folder with one partial charge per atom, in the same order as the atoms in the structure file",
+        items=lambda self, context: _sibling_file_items(
+            self, _csv_file_items_cache,
+            lambda f: f.lower().endswith(('.csv', '.txt', '.dat'))),
+    )
+    charge_file: bpy.props.StringProperty(
+        name="charges csv path",
+        description="alternative to the dropdown for a csv file in another folder (absolute path)",
         subtype='FILE_PATH',
         default='',
     )
@@ -462,6 +505,7 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(self, 'charge_choice')
         layout.prop(self, 'charge_file')
         layout.prop(self, 'resolution')
         layout.prop(self, 'colorbonds')
@@ -479,12 +523,15 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
         else:
             self.report({'ERROR'}, "No filepath or files provided")
             return {'CANCELLED'}
-        if not self.charge_file:
+        if self.charge_choice and self.charge_choice != 'NONE':
+            charge_filepath = join(directory, self.charge_choice)
+        elif self.charge_file:
+            charge_filepath = bpy.path.abspath(self.charge_file)
+        else:
             self.report({'ERROR'}, "No charges csv file provided")
             return {'CANCELLED'}
 
         from .charges import import_charges
-        charge_filepath = bpy.path.abspath(self.charge_file)
         for name in names:
             try:
                 import_charges(
