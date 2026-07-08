@@ -59,12 +59,15 @@ def main():
     rho = np.exp(-((x - 2)**2 + (y - 2)**2 + (z - 2)**2))
     with open(f'{FIXTURES}/water.cube', 'w') as f:
         write_cube(f, water_cell, data=rho)
-    vcd = VaspChargeDensity(filename=None)
-    vcd.atoms = [water_cell]
-    vcd.chg = [rho]
-    # spin-polarized: also exercises the green/pink spin-difference volume
-    vcd.chgdiff = [rho * np.sign(x - 2)]
-    vcd.write(f'{FIXTURES}/CHGCAR')
+    # only written when absent: the checked-in CHGCAR is real, user-provided
+    # data (spin-polarized bcc Fe with a POTCAR-style 'Fe/' species line)
+    if not os.path.exists(f'{FIXTURES}/CHGCAR'):
+        vcd = VaspChargeDensity(filename=None)
+        vcd.atoms = [water_cell]
+        vcd.chg = [rho]
+        # spin-polarized: also exercises the green/pink spin-difference volume
+        vcd.chgdiff = [rho * np.sign(x - 2)]
+        vcd.write(f'{FIXTURES}/CHGCAR')
 
     print(f'fixtures written to {FIXTURES}')
 
