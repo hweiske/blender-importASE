@@ -337,6 +337,21 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         description="smooth-shade the isosurface",
         default=True,
     )
+    import_atoms: bpy.props.BoolProperty(
+        name="import atoms",
+        description="also import the structure from the density file as the nodes representation",
+        default=True,
+    )
+    preset: bpy.props.EnumProperty(
+        name="shader preset",
+        description="initial color ramp of the generated isosurface material (one material per preset; edits survive re-imports)",
+        items=[
+            ('DEFAULT', 'red-white-blue', 'soft red to white to blue ramp'),
+            ('ELSTAT', 'elstat. potential', 'pure blue to white to red (electrostatic potential map)'),
+            ('LED', 'LED', 'red, green, blue at ramp positions 0.8, 0.9, 1.0'),
+        ],
+        default='DEFAULT',
+    )
     files: bpy.props.CollectionProperty(
         type=bpy.types.OperatorFileListElement,
         options={'HIDDEN', 'SKIP_SAVE'},
@@ -352,6 +367,8 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         layout = self.layout
         layout.prop(self, 'iso_value')
         layout.prop(self, 'color_file')
+        layout.prop(self, 'preset')
+        layout.prop(self, 'import_atoms')
         layout.prop(self, 'shade_smooth')
 
     def execute(self, context):
@@ -374,6 +391,8 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
                     color_filepath=color_filepath,
                     iso_value=self.iso_value,
                     shade_smooth=self.shade_smooth,
+                    preset=self.preset,
+                    import_atoms=self.import_atoms,
                 )
             except ValueError as exc:
                 self.report({'ERROR'}, str(exc))

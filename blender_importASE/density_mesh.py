@@ -20,6 +20,25 @@ from .node_networks.electron_density_nodes import newMaterial
 DENSITY_MESH_MATERIAL = 'density_mesh material'
 COLOR_ATTRIBUTE = 'density_color'
 
+# shader presets: material name + color-ramp stops (position, rgba).
+# The ramp maps the normalized color-density values (0..1).
+SHADER_PRESETS = {
+    'DEFAULT': (DENSITY_MESH_MATERIAL,
+                [(0.0, (0.85, 0.10, 0.10, 1)),
+                 (0.5, (0.95, 0.95, 0.95, 1)),
+                 (1.0, (0.05, 0.15, 0.85, 1))]),
+    # electrostatic potential: pure blue -> white -> red
+    'ELSTAT': ('elstat_potential material',
+               [(0.0, (0.0, 0.0, 1.0, 1)),
+                (0.5, (1.0, 1.0, 1.0, 1)),
+                (1.0, (1.0, 0.0, 0.0, 1))]),
+    # LED analysis: red/green/blue concentrated at the top of the range
+    'LED': ('LED material',
+            [(0.8, (1.0, 0.0, 0.0, 1)),
+             (0.9, (0.0, 1.0, 0.0, 1)),
+             (1.0, (0.0, 0.0, 1.0, 1))]),
+}
+
 
 def _ensure_skimage():
     """Import skimage, installing scikit-image on demand like
@@ -111,11 +130,12 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03):
     return verts_cart, faces, colors
 
 
-def _density_mesh_material():
-    """Material mapping the density_color attribute through a
-    blue-white-red ramp (ESP-map style; the +/- lobes of a plain import
-    come out blue and red)."""
-    mat = newMaterial(DENSITY_MESH_MATERIAL)
+def _density_mesh_material(preset='DEFAULT'):
+    """Material mapping the density_color attribute through a color ramp.
+    One material per preset; the ramp is only initialized on creation, so
+    user edits survive re-imports."""
+    name, stops = SHADER_PRESETS[preset]
+    mat = newMaterial(name)
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
     principled = nodes.get('Principled BSDF')
@@ -130,17 +150,28 @@ def _density_mesh_material():
         ramp = nodes.new('ShaderNodeValToRGB')
         ramp.name = 'Color Ramp'
         ramp.location = (-300, 200)
-        ramp.color_ramp.elements[0].color = (0.85, 0.10, 0.10, 1)  # low -> red
-        ramp.color_ramp.elements[1].color = (0.05, 0.15, 0.85, 1)  # high -> blue
-        mid = ramp.color_ramp.elements.new(0.5)
-        mid.color = (0.95, 0.95, 0.95, 1)
+        elements = ramp.color_ramp.elements
+        elements[0].position, elements[0].color = stops[0]
+        elements[1].position, elements[1].color = stops[-1]
+        for position, color in stops[1:-1]:
+            el = elements.new(position)
+            el.color = color
     links.new(color_attr.outputs['Color'], ramp.inputs['Fac'])
     links.new(ramp.outputs['Color'], principled.inputs['Base Color'])
     return mat
 
 
 def import_density_mesh(filepath, filename, color_filepath=None,
-                        iso_value=0.03, shade_smooth=True, **kwargs):
+                        iso_value=0.03, shade_smooth=True, preset='DEFAULT',
+                        import_atoms=True, **kwargs):
+    if import_atoms:
+        # the structure from the same file, as the nodes representation;
+        # this also creates the collection the isomesh is linked into
+        from .ui import import_ase_molecule
+        import_ase_molecule(filepath, filename, representation='nodes',
+                            read_density=False, animate=False, outline=False,
+                            add_supercell=False)
+
     verts, faces, colors = density_to_mesh_data(
         filepath, color_filepath=color_filepath, iso_value=iso_value)
     print(f'density mesh: {len(verts)} verts, {len(faces)} faces')
@@ -162,5 +193,5 @@ def import_density_mesh(filepath, filename, color_filepath=None,
     # context.collection can be None (e.g. headless after scene cleanup)
     collection = bpy.context.collection or bpy.context.scene.collection
     collection.objects.link(obj)
-    obj.data.materials.append(_density_mesh_material())
+    obj.data.materials.append(_density_mesh_material(preset))
     return obj
