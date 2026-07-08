@@ -45,17 +45,43 @@ def export_xyz(obj, filepath):
 def build_supports(atom_objects, collection, pillar_radius=0.25,
                    support_layer=0.8, plate_thickness=0.6, plate_margin=1.0,
                    tip_fraction=0.4, pillar_length=2.0, segments=12):
-    """Simple resin supports: a base plate below the model and tapered
-    pillars up to the bottom of every atom sphere in the lowest
-    'support_layer' of the structure. Returns the created object."""
-    bottoms = []
+    """Resin supports: a base plate below the model and tapered pillars up
+    to every atom that would print as an island. Working bottom-up, an
+    atom counts as supported when it is bonded (covalent radii * 1.2) to
+    an already-supported atom that is at most 'support_layer' higher -
+    everything else gets a pillar, so floating fragments and upward-only
+    branches are supported too. Returns the created object."""
+    from ase.data import covalent_radii, atomic_numbers
+
+    centers, bottoms, radii = [], [], []
     for ob in atom_objects:
         corners = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
-        zmin = min(v.z for v in corners)
-        origin = ob.matrix_world.translation
-        bottoms.append((origin.x, origin.y, zmin))
+        origin = np.array(ob.matrix_world.translation)
+        centers.append(origin)
+        bottoms.append((origin[0], origin[1], min(v.z for v in corners)))
+        symbol = ob.name.split('.')[0]
+        radii.append(covalent_radii[atomic_numbers.get(symbol, 6)])
+    centers = np.array(centers)
+    radii = np.array(radii)
+    n = len(centers)
+
+    # bond connectivity from distances (matches the drawn bonds closely)
+    distances = np.linalg.norm(centers[:, None, :] - centers[None, :, :], axis=2)
+    cutoff = 1.2 * (radii[:, None] + radii[None, :])
+    bonded = (distances < cutoff) & ~np.eye(n, dtype=bool)
+
+    # bottom-up island analysis: pillar every atom without a supported,
+    # not-too-much-higher bonded neighbor
+    order = np.argsort(centers[:, 2])
+    is_supported = np.zeros(n, dtype=bool)
+    supported = []
+    for i in order:
+        holds = [j for j in np.nonzero(bonded[i])[0]
+                 if is_supported[j] and centers[j, 2] <= centers[i, 2] + support_layer]
+        if not holds:
+            supported.append(bottoms[i])
+        is_supported[i] = True
     zfloor = min(b[2] for b in bottoms)
-    supported = [b for b in bottoms if b[2] <= zfloor + support_layer]
 
     plate_top = zfloor - pillar_length
     verts, faces = [], []
