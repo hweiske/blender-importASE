@@ -40,6 +40,12 @@ Import molecules, crystals, trajectories, and volumetric data (electron densitie
       <b>Trajectories</b> — any ASE-readable trajectory, animated via keyframes
     </td>
   </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="docs/images/print_supports.jpg" alt="Molecule with generated resin supports" width="480"/><br/>
+      <b>3D printing</b> — fused spheres and bonds with generated resin supports, exported as per-element STLs in one zip
+    </td>
+  </tr>
 </table>
 
 ## Dependencies
