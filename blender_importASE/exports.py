@@ -84,9 +84,11 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     n = len(centers)
 
     # bond / contact connectivity (bonds match the drawn ones; 'touching'
-    # also catches non-bonded spheres one rests on)
+    # also catches non-bonded spheres one rests on). The 1.5 factor spans
+    # cluster bonds like the B6 octahedron edges (~1.42x the covalent-radii
+    # sum) while staying well below cross-cluster distances (~2x)
     distances = np.linalg.norm(centers[:, None, :] - centers[None, :, :], axis=2)
-    bonded = (distances < 1.2 * (bond_radii[:, None] + bond_radii[None, :]))
+    bonded = (distances < 1.5 * (bond_radii[:, None] + bond_radii[None, :]))
     touching = distances < (sphere_radii[:, None] + sphere_radii[None, :] + 0.3)
     holds = (bonded | touching) & ~np.eye(n, dtype=bool)
 
