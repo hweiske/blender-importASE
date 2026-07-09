@@ -154,53 +154,67 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         return np.linalg.norm(pts - (a + t[:, None] * ab), axis=1)
 
     def clear_base(i, tip):
-        """A base xy whose pillar segment (plate -> tip) clears every atom
-        sphere and every drawn bond; offset sideways (bypass) when the
-        vertical line is blocked. Falls back to the vertical line if nothing
-        fully clears."""
+        """Find a base xy so the pillar (plate -> tip) does not skewer any
+        other atom. Prefers a base that also clears every drawn bond; if
+        none does, accepts one that at least clears the atoms (a support
+        grazing a bond just fuses with it on the print). Returns None when
+        no base avoids the atoms - better to drop the pillar than punch it
+        through an atom."""
         need = sphere_radii + base_radius + 0.15
         need[i] = -1.0  # ignore the target atom itself
         target = centers[i]
         skip = sphere_radii[i] + 0.15  # ignore samples inside the target atom
 
-        def clears(bx, by):
+        def clearances(bx, by):
+            """(atom_clear, bond_clear): signed clearances of the pillar
+            segment to the nearest other atom and to the drawn bonds."""
             p0 = np.array([bx, by, plate_top])
-            # atom spheres
-            if float((seg_point_dists(p0, tip, centers) - need).min()) <= 0:
-                return False
-            # drawn bonds (sample the pillar and query the bond BVH)
+            atom_c = float((seg_point_dists(p0, tip, centers) - need).min())
+            bond_c = 1e9
             if bond_bvh is not None:
-                length = float(np.linalg.norm(tip - p0))
-                steps = max(2, int(length / 0.15))
+                steps = max(2, int(float(np.linalg.norm(tip - p0)) / 0.15))
                 for s in range(steps + 1):
                     pt = p0 + (tip - p0) * (s / steps)
                     if np.linalg.norm(pt - target) < skip:
                         continue
-                    loc, _, _, d = bond_bvh.find_nearest(Vector(pt), base_radius + 0.2)
-                    if loc is not None and d < base_radius + 0.1:
-                        return False
-            return True
+                    loc, _, _, d = bond_bvh.find_nearest(Vector(pt), base_radius + 0.3)
+                    if loc is not None:
+                        bond_c = min(bond_c, d - base_radius - 0.1)
+            return atom_c, bond_c
 
-        if clears(tip[0], tip[1]):
+        atom_c, bond_c = clearances(tip[0], tip[1])
+        if atom_c > 0 and bond_c > 0:
             return tip[0], tip[1]
-        max_off = 3 * float(sphere_radii.max()) + 2.0
-        r = 0.3
+        # spiral outward; keep the best atom-clearing base as a fallback
+        best_atom = (tip[0], tip[1], bond_c) if atom_c > 0 else None
+        max_off = 5 * float(sphere_radii.max()) + 4.0
+        r = 0.25
         while r <= max_off:
-            for k in range(12):
-                ang = 2 * math.pi * k / 12
+            for k in range(24):
+                ang = 2 * math.pi * k / 24
                 bx, by = tip[0] + r * math.cos(ang), tip[1] + r * math.sin(ang)
-                if clears(bx, by):
+                atom_c, bond_c = clearances(bx, by)
+                if atom_c > 0 and bond_c > 0:
                     return bx, by
-            r += 0.3
-        return tip[0], tip[1]
+                if atom_c > 0 and (best_atom is None or bond_c > best_atom[2]):
+                    best_atom = (bx, by, bond_c)
+            r += 0.25
+        return best_atom[:2] if best_atom is not None else None
 
-    # pillar = (base_x, base_y, tip_x, tip_y, tip_z), base routed to clear
-    # atoms and bonds
+    # pillar = (base_x, base_y, tip_x, tip_y, tip_z); skip an atom when no
+    # pillar path avoids piercing another atom (rather than skewer it)
     pillars = []
+    skipped = 0
     for i in pillar_atoms:
         tip = np.array([centers[i, 0], centers[i, 1], centers[i, 2] - sphere_radii[i]])
-        bx, by = clear_base(i, tip)
-        pillars.append((bx, by, tip[0], tip[1], tip[2]))
+        base = clear_base(i, tip)
+        if base is None:
+            skipped += 1
+            continue
+        pillars.append((base[0], base[1], tip[0], tip[1], tip[2]))
+    if skipped:
+        print(f'supports: {skipped} atom(s) left unsupported (no pillar path '
+              'avoids other atoms)')
 
     verts, faces = [], []
 
