@@ -53,14 +53,18 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     'support_layer' higher - everything else gets a pillar, so floating
     fragments and upward-only branches are supported too.
 
-    A pillar whose vertical path would run through another atom sphere
-    starts on top of the highest blocking sphere instead of the plate
-    (support stacking). With plate_holes, a regular grid of square holes
-    is punched into the plate to save material; pillars that would land
-    on a hole are moved onto material.
+    A pillar never runs through another atom sphere (they would fuse on
+    the print): its base is offset sideways so the tapered pillar routes
+    around any blocking atom up to the target atom's underside. With
+    plate_holes, a regular grid of square holes is punched into the plate
+    to save material; pillars that would land on a hole are moved onto
+    material.
 
     base_radius/tip_radius: pillar radius at the plate and at the atom
-    contact point. Returns the created object.
+    contact point. support_layer: minimum height a bonded/touching
+    neighbor must sit below an atom to hold it up - larger values treat
+    shallower bonds as overhangs and add more pillars. Returns the
+    created object.
     """
     from ase.data import covalent_radii, atomic_numbers
 
@@ -78,46 +82,73 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     bond_radii = np.array(bond_radii)
     n = len(centers)
 
-    # bond connectivity from distances (matches the drawn bonds closely)
+    # bond / contact connectivity (bonds match the drawn ones; 'touching'
+    # also catches non-bonded spheres one rests on)
     distances = np.linalg.norm(centers[:, None, :] - centers[None, :, :], axis=2)
-    cutoff = 1.2 * (bond_radii[:, None] + bond_radii[None, :])
-    bonded = (distances < cutoff) & ~np.eye(n, dtype=bool)
+    bonded = (distances < 1.2 * (bond_radii[:, None] + bond_radii[None, :]))
+    touching = distances < (sphere_radii[:, None] + sphere_radii[None, :] + 0.3)
+    holds = (bonded | touching) & ~np.eye(n, dtype=bool)
 
-    # bottom-up island analysis: pillar every atom without a supported,
-    # not-too-much-higher bonded neighbor
+    # bottom-up island analysis: an atom is grounded only if it rests on a
+    # grounded neighbor that is genuinely BELOW it (support_layer). A
+    # neighbor at the same height or above never counts - those atoms are
+    # printed before their anchor and need their own pillar.
     order = np.argsort(centers[:, 2])
-    is_supported = np.zeros(n, dtype=bool)
+    grounded = np.zeros(n, dtype=bool)
     pillar_atoms = []
     for i in order:
-        holds = [j for j in np.nonzero(bonded[i])[0]
-                 if is_supported[j] and centers[j, 2] <= centers[i, 2] + support_layer]
-        if not holds:
+        below = centers[:, 2] < centers[i, 2] - support_layer
+        if np.any(below & grounded & holds[i]):
+            grounded[i] = True
+        else:
             pillar_atoms.append(i)
-        is_supported[i] = True
+            grounded[i] = True
 
     zfloor = float((centers[:, 2] - sphere_radii).min())
     plate_top = zfloor - pillar_length
 
-    # pillar start points: the plate, or the top of the highest atom sphere
-    # blocking the vertical path (support stacking)
-    plate_pillars, stacked_pillars = [], []
+    def seg_point_dists(a, b, pts):
+        ab = b - a
+        denom = float(ab @ ab)
+        if denom < 1e-9:
+            return np.linalg.norm(pts - a, axis=1)
+        t = np.clip((pts - a) @ ab / denom, 0.0, 1.0)
+        return np.linalg.norm(pts - (a + t[:, None] * ab), axis=1)
+
+    def clear_base(i, tip):
+        """A base xy whose pillar segment (plate -> tip) clears every other
+        atom sphere; offset sideways (bypass) when the vertical line is
+        blocked. Falls back to the least-bad offset if nothing fully clears."""
+        need = sphere_radii + base_radius + 0.15
+        need[i] = -1.0  # ignore the target atom itself
+
+        def min_clearance(bx, by):
+            a = np.array([bx, by, plate_top])
+            return float((seg_point_dists(a, tip, centers) - need).min())
+
+        if min_clearance(tip[0], tip[1]) > 0:
+            return tip[0], tip[1]
+        best, best_c = (tip[0], tip[1]), -1e18
+        max_off = 3 * float(sphere_radii.max()) + 2.0
+        r = 0.3
+        while r <= max_off:
+            for k in range(12):
+                ang = 2 * math.pi * k / 12
+                bx, by = tip[0] + r * math.cos(ang), tip[1] + r * math.sin(ang)
+                c = min_clearance(bx, by)
+                if c > 0:
+                    return bx, by
+                if c > best_c:
+                    best, best_c = (bx, by), c
+            r += 0.3
+        return best
+
+    # pillar = (base_x, base_y, tip_x, tip_y, tip_z), base routed to clear atoms
+    pillars = []
     for i in pillar_atoms:
-        x, y = centers[i, 0], centers[i, 1]
-        target_z = centers[i, 2] - sphere_radii[i]
-        start_z = None
-        for j in range(n):
-            if j == i:
-                continue
-            d_xy = math.hypot(centers[j, 0] - x, centers[j, 1] - y)
-            if d_xy >= sphere_radii[j]:
-                continue
-            top_at_column = centers[j, 2] + math.sqrt(sphere_radii[j]**2 - d_xy**2)
-            if top_at_column < target_z and (start_z is None or top_at_column > start_z):
-                start_z = top_at_column
-        if start_z is None:
-            plate_pillars.append((x, y, target_z))
-        else:
-            stacked_pillars.append((x, y, target_z, start_z - 0.1))  # embed base
+        tip = np.array([centers[i, 0], centers[i, 1], centers[i, 2] - sphere_radii[i]])
+        bx, by = clear_base(i, tip)
+        pillars.append((bx, by, tip[0], tip[1], tip[2]))
 
     verts, faces = [], []
 
@@ -139,8 +170,8 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
 
     # plate layout: a solid slab, optionally with a regular grid of square
     # holes punched in to save material
-    xs = [p[0] for p in plate_pillars] or [c[0] for c in centers]
-    ys = [p[1] for p in plate_pillars] or [c[1] for c in centers]
+    xs = [p[0] for p in pillars] or [c[0] for c in centers]
+    ys = [p[1] for p in pillars] or [c[1] for c in centers]
     x0, x1 = min(xs) - plate_margin, max(xs) + plate_margin
     y0, y1 = min(ys) - plate_margin, max(ys) + plate_margin
     hole = max(0.6, 2 * base_radius)   # hole edge length
@@ -186,12 +217,12 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
                       [base + 3, base, base + 4, base + 7]])
 
     z0, z1 = plate_top - plate_thickness, plate_top
-    if plate_pillars:
+    if pillars:
         if plate_holes:
             holes_x, holes_y = hole_grid()
-            for x, y, target_z in plate_pillars:
-                bx, by = push_off_holes(x, y, holes_x, holes_y)
-                add_pillar(bx, by, plate_top, x, y, target_z)
+            for bx, by, tx, ty, tz in pillars:
+                px, py = push_off_holes(bx, by, holes_x, holes_y)
+                add_pillar(px, py, plate_top, tx, ty, tz)
             # full-width strips between the hole rows...
             y_edges = [y0] + [e for hy in holes_y for e in (hy, hy + hole)] + [y1]
             for yA, yB in zip(y_edges[0::2], y_edges[1::2]):
@@ -202,12 +233,9 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
                 for xA, xB in zip(x_edges[0::2], x_edges[1::2]):
                     add_box(xA, xB, hy, hy + hole, z0, z1)
         else:
-            for x, y, target_z in plate_pillars:
-                add_pillar(x, y, plate_top, x, y, target_z)
+            for bx, by, tx, ty, tz in pillars:
+                add_pillar(bx, by, plate_top, tx, ty, tz)
             add_box(x0, x1, y0, y1, z0, z1)
-
-    for x, y, target_z, start_z in stacked_pillars:
-        add_pillar(x, y, start_z, x, y, target_z)
 
     mesh = bpy.data.meshes.new('supports')
     mesh.from_pydata(verts, [], faces)

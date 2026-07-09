@@ -193,8 +193,8 @@ class ASE_OT_rebuild_supports(bpy.types.Operator):
         name="contact radius", default=0.1, min=0.01, soft_max=1.0,
         description="pillar radius at the atom contact point")
     support_layer: bpy.props.FloatProperty(
-        name="support climb", default=0.8, min=0.0, soft_max=5.0,
-        description="an atom counts as supported by a bonded neighbor at most this much lower or higher")
+        name="support drop", default=0.3, min=0.0, soft_max=5.0,
+        description="minimum height a bonded/touching neighbor must sit below an atom to hold it up; larger adds more pillars")
     plate_thickness: bpy.props.FloatProperty(
         name="plate thickness", default=0.6, min=0.1, soft_max=3.0)
     plate_holes: bpy.props.BoolProperty(
