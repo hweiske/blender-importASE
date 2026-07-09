@@ -45,7 +45,7 @@ def export_xyz(obj, filepath):
 def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
                    support_layer=0.8, plate_thickness=0.6, plate_holes=True,
                    plate_margin=1.0, pillar_length=2.0, segments=12,
-                   bond_radius=0.15):
+                   bond_radius=0.15, bond_objects=None):
     """Resin supports: a base plate below the model and tapered pillars up
     to every atom that would print as an island.
 
@@ -83,12 +83,47 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     bond_radii = np.array(bond_radii)
     n = len(centers)
 
-    # bond / contact connectivity (bonds match the drawn ones; 'touching'
-    # also catches non-bonded spheres one rests on). The 1.5 factor spans
-    # cluster bonds like the B6 octahedron edges (~1.42x the covalent-radii
-    # sum) while staying well below cross-cluster distances (~2x)
     distances = np.linalg.norm(centers[:, None, :] - centers[None, :, :], axis=2)
-    bonded = (distances < 1.5 * (bond_radii[:, None] + bond_radii[None, :]))
+
+    # A BVH of the actually drawn bond meshes is the ground truth for both
+    # connectivity and obstacle avoidance - no covalent-radius guess can
+    # match the node tree's bonds across ionic (no Na-Na) and cluster
+    # (B-B) cases at once.
+    from mathutils.bvhtree import BVHTree
+    bond_bvh = None
+    if bond_objects:
+        deps = bpy.context.evaluated_depsgraph_get()
+        bverts, bpolys = [], []
+        for bo in bond_objects:
+            ev = bo.evaluated_get(deps)
+            me = ev.to_mesh()
+            mw = bo.matrix_world
+            off = len(bverts)
+            bverts.extend([mw @ v.co for v in me.vertices])
+            bpolys.extend([[off + vi for vi in p.vertices] for p in me.polygons])
+            ev.to_mesh_clear()
+        if bpolys:
+            bond_bvh = BVHTree.FromPolygons(bverts, bpolys)
+
+    def bond_between(a, b):
+        """True if a drawn bond tube runs between atoms a and b (sampled
+        points along the center line lie on/inside the bond geometry)."""
+        pa, pb = Vector(centers[a]), Vector(centers[b])
+        hits = 0
+        for t in (0.35, 0.5, 0.65):
+            loc, _, _, d = bond_bvh.find_nearest(pa.lerp(pb, t), bond_radius + 0.4)
+            if loc is not None and d < bond_radius + 0.25:
+                hits += 1
+        return hits >= 2
+
+    if bond_bvh is not None:
+        bonded = np.zeros((n, n), dtype=bool)
+        for a in range(n):
+            for b in range(a + 1, n):
+                if distances[a, b] < 3.6 and bond_between(a, b):
+                    bonded[a, b] = bonded[b, a] = True
+    else:  # fallback when no bond geometry is available
+        bonded = distances < 1.2 * (bond_radii[:, None] + bond_radii[None, :])
     touching = distances < (sphere_radii[:, None] + sphere_radii[None, :] + 0.3)
     holds = (bonded | touching) & ~np.eye(n, dtype=bool)
 
@@ -110,30 +145,6 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     zfloor = float((centers[:, 2] - sphere_radii).min())
     plate_top = zfloor - pillar_length
 
-    # obstacle points a pillar must clear: every atom (with its sphere
-    # radius) plus points sampled along every bond (with the bond radius).
-    # owner_a/owner_b record which atoms each obstacle belongs to, so the
-    # target atom and its own bonds can be ignored when routing to it.
-    obs_pts = [centers[i] for i in range(n)]
-    obs_clear = [sphere_radii[i] + base_radius + 0.15 for i in range(n)]
-    owner_a = list(range(n))
-    owner_b = [-1] * n
-    for a in range(n):
-        for b in range(a + 1, n):
-            if not bonded[a, b]:
-                continue
-            steps = max(2, int(distances[a, b] / 0.3))
-            for s in range(steps + 1):
-                t = s / steps
-                obs_pts.append(centers[a] * (1 - t) + centers[b] * t)
-                obs_clear.append(bond_radius + base_radius + 0.15)
-                owner_a.append(a)
-                owner_b.append(b)
-    obs_pts = np.array(obs_pts)
-    obs_clear = np.array(obs_clear)
-    owner_a = np.array(owner_a)
-    owner_b = np.array(owner_b)
-
     def seg_point_dists(a, b, pts):
         ab = b - a
         denom = float(ab @ ab)
@@ -144,35 +155,47 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
 
     def clear_base(i, tip):
         """A base xy whose pillar segment (plate -> tip) clears every atom
-        sphere and bond cylinder; offset sideways (bypass) when the vertical
-        line is blocked. Falls back to the least-bad offset if nothing fully
-        clears."""
-        # ignore the target atom and any bond attached to it
-        need = obs_clear.copy()
-        need[(owner_a == i) | (owner_b == i)] = -1.0
+        sphere and every drawn bond; offset sideways (bypass) when the
+        vertical line is blocked. Falls back to the vertical line if nothing
+        fully clears."""
+        need = sphere_radii + base_radius + 0.15
+        need[i] = -1.0  # ignore the target atom itself
+        target = centers[i]
+        skip = sphere_radii[i] + 0.15  # ignore samples inside the target atom
 
-        def min_clearance(bx, by):
-            a = np.array([bx, by, plate_top])
-            return float((seg_point_dists(a, tip, obs_pts) - need).min())
+        def clears(bx, by):
+            p0 = np.array([bx, by, plate_top])
+            # atom spheres
+            if float((seg_point_dists(p0, tip, centers) - need).min()) <= 0:
+                return False
+            # drawn bonds (sample the pillar and query the bond BVH)
+            if bond_bvh is not None:
+                length = float(np.linalg.norm(tip - p0))
+                steps = max(2, int(length / 0.15))
+                for s in range(steps + 1):
+                    pt = p0 + (tip - p0) * (s / steps)
+                    if np.linalg.norm(pt - target) < skip:
+                        continue
+                    loc, _, _, d = bond_bvh.find_nearest(Vector(pt), base_radius + 0.2)
+                    if loc is not None and d < base_radius + 0.1:
+                        return False
+            return True
 
-        if min_clearance(tip[0], tip[1]) > 0:
+        if clears(tip[0], tip[1]):
             return tip[0], tip[1]
-        best, best_c = (tip[0], tip[1]), -1e18
         max_off = 3 * float(sphere_radii.max()) + 2.0
         r = 0.3
         while r <= max_off:
             for k in range(12):
                 ang = 2 * math.pi * k / 12
                 bx, by = tip[0] + r * math.cos(ang), tip[1] + r * math.sin(ang)
-                c = min_clearance(bx, by)
-                if c > 0:
+                if clears(bx, by):
                     return bx, by
-                if c > best_c:
-                    best, best_c = (bx, by), c
             r += 0.3
-        return best
+        return tip[0], tip[1]
 
-    # pillar = (base_x, base_y, tip_x, tip_y, tip_z), base routed to clear atoms
+    # pillar = (base_x, base_y, tip_x, tip_y, tip_z), base routed to clear
+    # atoms and bonds
     pillars = []
     for i in pillar_atoms:
         tip = np.array([centers[i, 0], centers[i, 1], centers[i, 2] - sphere_radii[i]])
@@ -321,7 +344,7 @@ def rebuild_supports(context, **params):
         else:
             kept.append(ob)
     atom_objects = [ob for objs in groups.values() for ob in objs]
-    kept.append(build_supports(atom_objects, collection, **params))
+    kept.append(build_supports(atom_objects, collection, bond_objects=bonds, **params))
     return kept
 
 
