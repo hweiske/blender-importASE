@@ -366,20 +366,23 @@ def export_3dprint(context, filepath, generate_supports=True,
                    base_radius=0.25, tip_radius=0.1, support_layer=0.8,
                    plate_thickness=0.6, plate_holes=True, plate_gap=2.0):
     """Export the collection of the active object as per-element STLs,
-    the bonds, and supports, zipped into `filepath`."""
+    the bonds, and supports, zipped into `filepath`.
+
+    Existing supports in the scene (whatever "Rebuild 3D-print supports"
+    last produced, or any you made yourself) are exported as-is, so
+    re-exporting after a rebuild picks up exactly what you see. The
+    support parameters below are only used to generate supports the
+    first time, when none exist yet.
+    """
     collection, groups, bonds, supports = collect_print_objects(context)
 
-    user_supports = [ob for ob in supports if not ob.get('ase_auto_supports')]
-    if generate_supports and not user_supports:
-        # regenerate the auto supports with the current parameters
+    if not supports and generate_supports:
         supports = rebuild_supports(context, base_radius=base_radius,
                                     tip_radius=tip_radius,
                                     support_layer=support_layer,
                                     plate_thickness=plate_thickness,
                                     plate_holes=plate_holes,
                                     pillar_length=plate_gap)
-    elif user_supports:
-        supports = user_supports
 
     tmpdir = tempfile.mkdtemp(prefix='ase_3dprint_')
 

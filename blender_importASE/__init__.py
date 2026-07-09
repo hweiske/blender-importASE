@@ -601,7 +601,7 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
 
     generate_supports: bpy.props.BoolProperty(
         name="generate supports",
-        description="(re)generate the automatic supports with the parameters below; a user-made 'supports' object is used instead when present",
+        description="generate supports (with the parameters below) only if none exist yet; existing supports - e.g. from 'Rebuild 3D-print supports' in the ASE panel - are always exported as-is. Turn off to export without supports when none exist",
         default=True,
     )
     base_radius: bpy.props.FloatProperty(
