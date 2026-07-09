@@ -619,9 +619,9 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         soft_max=1.0,
     )
     support_layer: bpy.props.FloatProperty(
-        name="support climb",
-        description="an atom counts as supported by a bonded neighbor at most this much lower or higher; atoms without such a neighbor (islands, upward-only branches) get their own pillar",
-        default=0.8,
+        name="support drop",
+        description="minimum height a bonded/touching neighbor must sit below an atom to hold it up; atoms without such a lower neighbor (islands, horizontal or upward-only branches) get their own pillar. Larger values add more pillars",
+        default=0.3,
         min=0.0,
         soft_max=5.0,
     )
