@@ -637,6 +637,13 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         description="punch a regular grid of square holes into the base plate to save material (pillars landing on a hole are moved onto material)",
         default=True,
     )
+    plate_gap: bpy.props.FloatProperty(
+        name="plate gap",
+        description="distance from the base plate up to the lowest atom (pillar length below the model)",
+        default=2.0,
+        min=0.0,
+        soft_max=10.0,
+    )
 
     @classmethod
     def poll(cls, context):
@@ -650,6 +657,7 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         layout.prop(self, 'support_layer')
         layout.prop(self, 'plate_thickness')
         layout.prop(self, 'plate_holes')
+        layout.prop(self, 'plate_gap')
 
     def execute(self, context):
         from .exports import export_3dprint
@@ -660,7 +668,8 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
                                    tip_radius=self.tip_radius,
                                    support_layer=self.support_layer,
                                    plate_thickness=self.plate_thickness,
-                                   plate_holes=self.plate_holes)
+                                   plate_holes=self.plate_holes,
+                                   plate_gap=self.plate_gap)
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
