@@ -200,6 +200,9 @@ class ASE_OT_rebuild_supports(bpy.types.Operator):
     plate_holes: bpy.props.BoolProperty(
         name="plate holes", default=True,
         description="regular grid of square holes in the plate to save material")
+    plate_gap: bpy.props.FloatProperty(
+        name="plate gap", default=2.0, min=0.0, soft_max=10.0,
+        description="distance from the base plate up to the lowest atom")
 
     def execute(self, context):
         from .exports import rebuild_supports
@@ -208,7 +211,8 @@ class ASE_OT_rebuild_supports(bpy.types.Operator):
                              tip_radius=self.tip_radius,
                              support_layer=self.support_layer,
                              plate_thickness=self.plate_thickness,
-                             plate_holes=self.plate_holes)
+                             plate_holes=self.plate_holes,
+                             pillar_length=self.plate_gap)
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}

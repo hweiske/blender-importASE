@@ -44,7 +44,8 @@ def export_xyz(obj, filepath):
 
 def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
                    support_layer=0.8, plate_thickness=0.6, plate_holes=True,
-                   plate_margin=1.0, pillar_length=2.0, segments=12):
+                   plate_margin=1.0, pillar_length=2.0, segments=12,
+                   bond_radius=0.15):
     """Resin supports: a base plate below the model and tapered pillars up
     to every atom that would print as an island.
 
@@ -53,12 +54,12 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     'support_layer' higher - everything else gets a pillar, so floating
     fragments and upward-only branches are supported too.
 
-    A pillar never runs through another atom sphere (they would fuse on
-    the print): its base is offset sideways so the tapered pillar routes
-    around any blocking atom up to the target atom's underside. With
-    plate_holes, a regular grid of square holes is punched into the plate
-    to save material; pillars that would land on a hole are moved onto
-    material.
+    A pillar never runs through another atom sphere or bond cylinder
+    (they would fuse on the print): its base is offset sideways so the
+    tapered pillar routes around any obstacle up to the target atom's
+    underside. With plate_holes, a regular grid of square holes is
+    punched into the plate to save material; pillars that would land on
+    a hole are moved onto material.
 
     base_radius/tip_radius: pillar radius at the plate and at the atom
     contact point. support_layer: minimum height a bonded/touching
@@ -107,6 +108,30 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
     zfloor = float((centers[:, 2] - sphere_radii).min())
     plate_top = zfloor - pillar_length
 
+    # obstacle points a pillar must clear: every atom (with its sphere
+    # radius) plus points sampled along every bond (with the bond radius).
+    # owner_a/owner_b record which atoms each obstacle belongs to, so the
+    # target atom and its own bonds can be ignored when routing to it.
+    obs_pts = [centers[i] for i in range(n)]
+    obs_clear = [sphere_radii[i] + base_radius + 0.15 for i in range(n)]
+    owner_a = list(range(n))
+    owner_b = [-1] * n
+    for a in range(n):
+        for b in range(a + 1, n):
+            if not bonded[a, b]:
+                continue
+            steps = max(2, int(distances[a, b] / 0.3))
+            for s in range(steps + 1):
+                t = s / steps
+                obs_pts.append(centers[a] * (1 - t) + centers[b] * t)
+                obs_clear.append(bond_radius + base_radius + 0.15)
+                owner_a.append(a)
+                owner_b.append(b)
+    obs_pts = np.array(obs_pts)
+    obs_clear = np.array(obs_clear)
+    owner_a = np.array(owner_a)
+    owner_b = np.array(owner_b)
+
     def seg_point_dists(a, b, pts):
         ab = b - a
         denom = float(ab @ ab)
@@ -116,15 +141,17 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         return np.linalg.norm(pts - (a + t[:, None] * ab), axis=1)
 
     def clear_base(i, tip):
-        """A base xy whose pillar segment (plate -> tip) clears every other
-        atom sphere; offset sideways (bypass) when the vertical line is
-        blocked. Falls back to the least-bad offset if nothing fully clears."""
-        need = sphere_radii + base_radius + 0.15
-        need[i] = -1.0  # ignore the target atom itself
+        """A base xy whose pillar segment (plate -> tip) clears every atom
+        sphere and bond cylinder; offset sideways (bypass) when the vertical
+        line is blocked. Falls back to the least-bad offset if nothing fully
+        clears."""
+        # ignore the target atom and any bond attached to it
+        need = obs_clear.copy()
+        need[(owner_a == i) | (owner_b == i)] = -1.0
 
         def min_clearance(bx, by):
             a = np.array([bx, by, plate_top])
-            return float((seg_point_dists(a, tip, centers) - need).min())
+            return float((seg_point_dists(a, tip, obs_pts) - need).min())
 
         if min_clearance(tip[0], tip[1]) > 0:
             return tip[0], tip[1]
@@ -298,7 +325,7 @@ def rebuild_supports(context, **params):
 
 def export_3dprint(context, filepath, generate_supports=True,
                    base_radius=0.25, tip_radius=0.1, support_layer=0.8,
-                   plate_thickness=0.6, plate_holes=True):
+                   plate_thickness=0.6, plate_holes=True, plate_gap=2.0):
     """Export the collection of the active object as per-element STLs,
     the bonds, and supports, zipped into `filepath`."""
     collection, groups, bonds, supports = collect_print_objects(context)
@@ -310,7 +337,8 @@ def export_3dprint(context, filepath, generate_supports=True,
                                     tip_radius=tip_radius,
                                     support_layer=support_layer,
                                     plate_thickness=plate_thickness,
-                                    plate_holes=plate_holes)
+                                    plate_holes=plate_holes,
+                                    pillar_length=plate_gap)
     elif user_supports:
         supports = user_supports
 
