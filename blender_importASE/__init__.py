@@ -502,8 +502,8 @@ class ImportASECharges(bpy.types.Operator, ImportHelper):
     )
     outline: bpy.props.BoolProperty(
         name='outline',
-        description='add outline modifier',
-        default=False,
+        description='add outline modifier to the atoms and bonds',
+        default=True,
     )
     files: bpy.props.CollectionProperty(
         type=bpy.types.OperatorFileListElement,
