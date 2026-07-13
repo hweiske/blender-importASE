@@ -114,6 +114,9 @@ class ASE_OT_set_radius_mode(bpy.types.Operator):
             self.report({'WARNING'}, 'no ASE element table on active object')
             return {'CANCELLED'}
         data = table.data.attributes['radius_mode'].data
+        if self.number < 0 or self.number >= len(data):
+            self.report({'WARNING'}, f'element number {self.number} out of range')
+            return {'CANCELLED'}
         data[self.number].value = 0 if data[self.number].value else 1
         _touch(table)
         return {'FINISHED'}
