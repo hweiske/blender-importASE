@@ -92,6 +92,9 @@ class ASE_OT_toggle_pair_cut(bpy.types.Operator):
             self.report({'WARNING'}, 'no ASE pair table on active object')
             return {'CANCELLED'}
         data = table.data.attributes['cut'].data
+        if self.pair_id < 0 or self.pair_id >= len(data):
+            self.report({'WARNING'}, f'pair_id {self.pair_id} out of range')
+            return {'CANCELLED'}
         data[self.pair_id].value = not data[self.pair_id].value
         _touch(table)
         return {'FINISHED'}
