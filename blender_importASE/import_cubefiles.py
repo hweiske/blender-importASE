@@ -105,8 +105,8 @@ def chgcar2vol(filename, modifier='GeometryNodes', density=None):
 
     chgdiff = getattr(density, 'chgdiff', [])
     if len(chgdiff):
-        spin_up_mat = newShader('+ spin material', 0.1, 0.75, 0.25)   # green
-        spin_down_mat = newShader('- spin material', 0.95, 0.35, 0.6)  # pink
+        spin_up_mat = bpy.data.materials.get('+ spin material') or newShader('+ spin material', 0.1, 0.75, 0.25)   # green
+        spin_down_mat = bpy.data.materials.get('- spin material') or newShader('- spin material', 0.95, 0.35, 0.6)  # pink
         spin_obj = data2vol(chgdiff[-1], spacing, (0.0, 0.0, 0.0),
                             os.path.splitext(filename)[0] + '_spin',
                             modifier=modifier,
