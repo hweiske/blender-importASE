@@ -57,8 +57,7 @@ def data2vol(volume, spacing, origin, filepath, modifier='GeometryNodes',
     GRID.gridClass = vdb.GridClass.FOG_VOLUME
     GRID.name = 'density'
     TMPFILE = os.path.splitext(filepath)[0] + '_density.vdb'
-    if not os.path.isfile(TMPFILE):
-        vdb.write(TMPFILE, GRID)
+    vdb.write(TMPFILE, GRID)
     _ = bpy.ops.object.volume_import(filepath=TMPFILE, location=origin)
     density_obj = bpy.context.active_object
     visualize_edensity_node_group()
