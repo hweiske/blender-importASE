@@ -4,11 +4,21 @@ from ..controls import make_control_tables, PAIR_STRIDE
 from .compat import setup_merge_by_distance, setup_curve_to_mesh
 from ase.data import covalent_radii, chemical_symbols, colors
 
+# Absent atoms in a variable-count trajectory are parked here so the hide-atoms
+# node group can cull them; any point farther than SENTINEL_CUTOFF from the
+# origin is treated as "not present in this frame". Far beyond any real cell.
+SENTINEL_COORD = 1.0e7
+SENTINEL_CUTOFF = 1.0e6
+
 
 def read_structure(atoms,name, animate=True, faces=None):
     if animate:
         trajectory=atoms
-        atoms=trajectory[0]
+        # Build the mesh from the fullest frame so that atoms which spawn in
+        # over the course of the trajectory each get a vertex. A per-point
+        # "birth_frame" attribute (written below) lets the node network reveal
+        # them at the frame they first appear.
+        atoms=max(trajectory, key=len)
     vertices=atoms.get_positions()
     object_name=name
     mesh = bpy.data.meshes.new(name=object_name)
@@ -51,18 +61,23 @@ def read_structure(atoms,name, animate=True, faces=None):
 
     mesh.update()
     vertx=obj.data.vertices
-    #doesnt work yet
     if animate:
+        # Per-frame visibility. Under append / remove-from-end identity, atom
+        # index nv exists in a frame iff nv is within that frame's atom count.
+        # Atoms that are absent in a given frame are parked at a far sentinel
+        # position so the node network can cull them for exactly the frames
+        # they do not exist. This handles atoms that spawn in, are removed, and
+        # even toggle in and out repeatedly (variable-count trajectories) -- an
+        # absent atom is never shown at a stale pose, because it is culled.
+        SENTINEL=(SENTINEL_COORD, SENTINEL_COORD, SENTINEL_COORD)
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-       # bpy.data.scenes['Scene'].animall_properties.key_point_location = True
-        vertx=obj.data.vertices
         for n,frame in enumerate(trajectory):
-            #bpy.data.scenes['Scene'].frame_current=n
+            fpos=frame.get_positions()
+            nf=len(frame)
             for nv,v in enumerate(vertx):
-                v.co=frame.positions[nv]
-        
-                v.keyframe_insert(data_path="co", frame=n)    
+                v.co=fpos[nv] if nv < nf else SENTINEL
+                v.keyframe_insert(data_path="co", frame=n)
         #    bpy.context.view_layer.update()
         #    bpy.ops.object.mode_set(mode='EDIT')
         #    bpy.ops.view3d.insert_keyframe_animall()
