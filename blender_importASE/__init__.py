@@ -227,6 +227,15 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         description="also use hydrogen atoms as polyhedra centers and corners",
         default=False,
     )
+    single_element_corners: bpy.props.BoolProperty(
+        name="single-element corners",
+        description="restrict each polyhedron to corner atoms of a single element "
+                    "(the coordinating counter-ion), so ionic solids like NaCl "
+                    "render as clean NaCl6 / ClNa6 octahedra instead of hulls that "
+                    "swallow next-nearest same-element atoms. Turn off for "
+                    "same-element clusters such as B6",
+        default=True,
+    )
     resolution: bpy.props.IntProperty(
         name='resolution',
         description='resolution of bonds and atoms',
@@ -274,6 +283,7 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'poly_cutoff')
         layout.prop(self, 'min_neighbors')
         layout.prop(self, 'include_hydrogen')
+        layout.prop(self, 'single_element_corners')
         layout.prop(self, 'resolution')
         layout.prop(self, 'colorbonds')
         layout.prop(self, 'bond_distance')
@@ -300,6 +310,7 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
                 poly_cutoff=self.poly_cutoff,
                 min_neighbors=self.min_neighbors,
                 include_hydrogen=self.include_hydrogen,
+                single_element_corners=self.single_element_corners,
                 resolution=self.resolution,
                 colorbonds=self.colorbonds,
                 bond_distance=self.bond_distance,
