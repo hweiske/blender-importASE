@@ -39,8 +39,12 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     trajectory = False
     if isinstance(atoms[0],Atoms) and len(atoms) > 1:
         trajectory = True
-        TRAJECTORY=atoms.copy()[1:]
-        atoms=atoms[0]
+        TRAJECTORY=atoms.copy()
+        # Use the fullest frame as the setup reference so materials and the
+        # per-element hide toggles cover every atom type in the trajectory,
+        # including molecules that spawn in on later frames. (The first frame
+        # used to be dropped here, which cut the opening state of the run.)
+        atoms=max(atoms, key=len)
         if animate is False:
             atoms = TRAJECTORY[-1]
         else:
