@@ -48,7 +48,7 @@ def _polyhedra_material():
 
 def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
                           poly_cutoff=1.1, min_neighbors=4,
-                          include_hydrogen=False):
+                          include_hydrogen=False, single_element_corners=True):
     """Expand periodic neighbor images and compute convex-hull faces
     around every coordination center.
 
@@ -64,7 +64,14 @@ def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
                     polyhedron
     min_neighbors:  minimum shell size; smaller shells get no polyhedron
     include_hydrogen: also use H as polyhedra centers/corners
+    single_element_corners: restrict each polyhedron to corner atoms of a
+                    single element (the coordinating counter-ion). Drops
+                    same-element neighbors -- e.g. the next-nearest Na-Na
+                    contacts that otherwise bloat a Na-centered hull -- so
+                    NaCl renders as clean NaCl6 / ClNa6 octahedra. Off by
+                    default so same-element clusters (e.g. B6) are unaffected.
     """
+    from collections import Counter
     from scipy.spatial import ConvexHull  # deferred: only this importer needs scipy
 
     positions = atoms.get_positions()
@@ -113,6 +120,17 @@ def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
         indices, offsets = nl.get_neighbors(i)
         neighbor_indices = [j for j in indices
                             if include_hydrogen or new_atoms[j].symbol != 'H']
+        if single_element_corners:
+            # keep only counter-ion corners: drop neighbors of the center's own
+            # element (e.g. next-nearest Na-Na), and if several other elements
+            # remain, keep the most common one so every corner is one element.
+            center_sym = new_atoms[i].symbol
+            corner = [j for j in neighbor_indices
+                      if new_atoms[j].symbol != center_sym]
+            if corner:
+                top = Counter(new_atoms[j].symbol for j in corner).most_common(1)[0][0]
+                corner = [j for j in corner if new_atoms[j].symbol == top]
+            neighbor_indices = corner
         if len(neighbor_indices) < min_neighbors:
             continue
         neighbor_indices = np.array(neighbor_indices)
@@ -130,14 +148,16 @@ def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
 def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
                      poly_cutoff=1.1, min_neighbors=4, include_hydrogen=False,
                      resolution=16, colorbonds=True, bond_distance=0.66,
-                     bond_radius=0.1, outline=False, **kwargs):
+                     bond_radius=0.1, outline=False, single_element_corners=True,
+                     **kwargs):
     import ase.io
     atoms = ase.io.read(filepath)
 
     new_atoms, faces = build_polyhedra_atoms(
         atoms, expand_cutoff=expand_cutoff, trim_cutoff=trim_cutoff,
         poly_cutoff=poly_cutoff, min_neighbors=min_neighbors,
-        include_hydrogen=include_hydrogen)
+        include_hydrogen=include_hydrogen,
+        single_element_corners=single_element_corners)
     print(f'polyhedra: {len(new_atoms)} atoms, {len(faces)} faces')
 
     atomcolor = atomcolors()
