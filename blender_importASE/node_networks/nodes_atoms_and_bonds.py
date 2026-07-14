@@ -4,18 +4,29 @@ from ..controls import make_control_tables, PAIR_STRIDE
 from .compat import setup_merge_by_distance, setup_curve_to_mesh
 from ase.data import covalent_radii, chemical_symbols, colors
 
+# Absent atoms in a variable-count trajectory are parked here so the hide-atoms
+# node group can cull them; any point farther than SENTINEL_CUTOFF from the
+# origin is treated as "not present in this frame". Far beyond any real cell.
+SENTINEL_COORD = 1.0e7
+SENTINEL_CUTOFF = 1.0e6
 
-def read_structure(atoms,name, animate=True):
+
+def read_structure(atoms,name, animate=True, faces=None):
     if animate:
         trajectory=atoms
-        atoms=trajectory[0]
+        # Build the mesh from the fullest frame so that atoms which spawn in
+        # over the course of the trajectory each get a vertex. A per-point
+        # "birth_frame" attribute (written below) lets the node network reveal
+        # them at the frame they first appear.
+        atoms=max(trajectory, key=len)
     vertices=atoms.get_positions()
     object_name=name
     mesh = bpy.data.meshes.new(name=object_name)
     obj = bpy.data.objects.new(name=object_name, object_data=mesh)
     bpy.context.collection.objects.link(obj)
-    # Create the mesh from the vertex list
-    mesh.from_pydata(vertices, [], [])  # No edges or faces
+    # Create the mesh from the vertex list (faces are used by the
+    # polyhedra importer, which draws coordination polyhedra as real faces)
+    mesh.from_pydata(vertices, [], faces if faces is not None else [])
     if "element" not in mesh.attributes:
         mesh.attributes.new(name="element", type='FLOAT', domain='POINT')
     if "atom_radius" not in mesh.attributes:
@@ -23,12 +34,12 @@ def read_structure(atoms,name, animate=True):
     if 'vdw_radius' not in mesh.attributes:
         mesh.attributes.new(name="vdw_radius", type='FLOAT', domain='POINT')
     if 'color' not in mesh.attributes:
-        mesh.attributes.new(name="color", type='FLOAT_COLOR', domain='POINT')
+        mesh.attributes.new(name="atom_color", type='FLOAT_COLOR', domain='POINT')
 
     element = mesh.attributes["element"].data
     rad = mesh.attributes["atom_radius"].data
     rad_vdw=mesh.attributes["vdw_radius"].data
-    col = mesh.attributes["color"].data
+    col = mesh.attributes["atom_color"].data
 
     atomcolor = atomcolors()
     for i, value in enumerate(element):
@@ -50,18 +61,23 @@ def read_structure(atoms,name, animate=True):
 
     mesh.update()
     vertx=obj.data.vertices
-    #doesnt work yet
     if animate:
+        # Per-frame visibility. Under append / remove-from-end identity, atom
+        # index nv exists in a frame iff nv is within that frame's atom count.
+        # Atoms that are absent in a given frame are parked at a far sentinel
+        # position so the node network can cull them for exactly the frames
+        # they do not exist. This handles atoms that spawn in, are removed, and
+        # even toggle in and out repeatedly (variable-count trajectories) -- an
+        # absent atom is never shown at a stale pose, because it is culled.
+        SENTINEL=(SENTINEL_COORD, SENTINEL_COORD, SENTINEL_COORD)
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-       # bpy.data.scenes['Scene'].animall_properties.key_point_location = True
-        vertx=obj.data.vertices
         for n,frame in enumerate(trajectory):
-            #bpy.data.scenes['Scene'].frame_current=n
+            fpos=frame.get_positions()
+            nf=len(frame)
             for nv,v in enumerate(vertx):
-                v.co=frame.positions[nv]
-        
-                v.keyframe_insert(data_path="co", frame=n)    
+                v.co=fpos[nv] if nv < nf else SENTINEL
+                v.keyframe_insert(data_path="co", frame=n)
         #    bpy.context.view_layer.update()
         #    bpy.ops.object.mode_set(mode='EDIT')
         #    bpy.ops.view3d.insert_keyframe_animall()
@@ -213,7 +229,7 @@ def set_atoms_node_group():
     return set_atoms
 
 #initialize atoms_from_verts node group
-def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
+def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_charges=False):
 
     atoms_and_bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = f"atoms_and_bonds_{atoms.get_chemical_formula()}")
 
@@ -883,7 +899,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     named_attribute_002.name = "Named Attribute.002"
     named_attribute_002.data_type = 'FLOAT_COLOR'
     #Name
-    named_attribute_002.inputs[0].default_value = "color"
+    named_attribute_002.inputs[0].default_value = "atom_color"
 
     #node Reroute.025
     reroute_025 = atoms_and_bonds.nodes.new("NodeReroute")
@@ -958,7 +974,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     store_named_attribute_004.hide = True
     store_named_attribute_004.data_type = 'FLOAT'
     store_named_attribute_004.domain = 'POINT'
-    #Selection
+    #Selectioncp im
     store_named_attribute_004.inputs[1].default_value = True
     #Name
     store_named_attribute_004.inputs[2].default_value = "end_rad"
@@ -1863,6 +1879,118 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None):
     atoms_and_bonds.links.new(sample_cut.outputs[0], cut_bond_final_or.inputs[1])
 
     atoms_and_bonds.links.new(cut_bond_final_or.outputs[0], delete_geometry.inputs[1])
+
+    if with_charges:
+        # --- partial charges (see charges.py) -------------------------------
+        # sample the per-atom 'charge' attribute at the bond endpoints and
+        # store it like start_el/end_el
+        charge_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+        charge_attribute.label = "charge_attribute"
+        charge_attribute.name = "Named Attribute.charge"
+        charge_attribute.data_type = 'FLOAT'
+        charge_attribute.inputs[0].default_value = "charge"
+        charge_attribute.location = (300, -700)
+
+        sample_charge_start = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+        sample_charge_start.name = "Sample Charge Start"
+        sample_charge_start.data_type = 'FLOAT'
+        sample_charge_start.domain = 'POINT'
+        sample_charge_start.location = (515, -700)
+        sample_charge_end = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+        sample_charge_end.name = "Sample Charge End"
+        sample_charge_end.data_type = 'FLOAT'
+        sample_charge_end.domain = 'POINT'
+        sample_charge_end.location = (515, -880)
+        for sampler, index_source in ((sample_charge_start, reroute_032),
+                                      (sample_charge_end, reroute_033)):
+            atoms_and_bonds.links.new(reroute_018.outputs[0], sampler.inputs['Geometry'])
+            atoms_and_bonds.links.new(charge_attribute.outputs[0], sampler.inputs['Value'])
+            atoms_and_bonds.links.new(index_source.outputs[0], sampler.inputs['Index'])
+
+        store_start_charge = atoms_and_bonds.nodes.new("GeometryNodeStoreNamedAttribute")
+        store_start_charge.name = "Store start_charge"
+        store_start_charge.data_type = 'FLOAT'
+        store_start_charge.domain = 'POINT'
+        store_start_charge.inputs[1].default_value = True
+        store_start_charge.inputs[2].default_value = "start_charge"
+        store_start_charge.location = (760, -700)
+        store_end_charge = atoms_and_bonds.nodes.new("GeometryNodeStoreNamedAttribute")
+        store_end_charge.name = "Store end_charge"
+        store_end_charge.data_type = 'FLOAT'
+        store_end_charge.domain = 'POINT'
+        store_end_charge.inputs[1].default_value = True
+        store_end_charge.inputs[2].default_value = "end_charge"
+        store_end_charge.location = (760, -880)
+        atoms_and_bonds.links.new(sample_charge_start.outputs[0], store_start_charge.inputs['Value'])
+        atoms_and_bonds.links.new(sample_charge_end.outputs[0], store_end_charge.inputs['Value'])
+        # splice into the bond attribute-store chain before delete_geometry
+        atoms_and_bonds.links.new(store_named_attribute_008.outputs[0], store_start_charge.inputs[0])
+        atoms_and_bonds.links.new(store_start_charge.outputs[0], store_end_charge.inputs[0])
+        atoms_and_bonds.links.new(store_end_charge.outputs[0], delete_geometry.inputs[0])
+
+        # per-point CHARGE_CURVE on the bond, mirroring the COLOR_CURVE
+        # index-parity switch, read by the color_curve_charge material
+        start_charge_read = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+        start_charge_read.name = "Named Attribute.start_charge"
+        start_charge_read.data_type = 'FLOAT'
+        start_charge_read.inputs[0].default_value = "start_charge"
+        start_charge_read.location = (100, -1500)
+        end_charge_read = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+        end_charge_read.name = "Named Attribute.end_charge"
+        end_charge_read.data_type = 'FLOAT'
+        end_charge_read.inputs[0].default_value = "end_charge"
+        end_charge_read.location = (100, -1650)
+        switch_charge = atoms_and_bonds.nodes.new("GeometryNodeSwitch")
+        switch_charge.name = "Switch Charge"
+        switch_charge.input_type = 'FLOAT'
+        switch_charge.location = (330, -1550)
+        atoms_and_bonds.links.new(math_005.outputs[0], switch_charge.inputs[0])
+        atoms_and_bonds.links.new(start_charge_read.outputs[0], switch_charge.inputs[1])
+        atoms_and_bonds.links.new(end_charge_read.outputs[0], switch_charge.inputs[2])
+
+        store_charge_curve = atoms_and_bonds.nodes.new("GeometryNodeStoreNamedAttribute")
+        store_charge_curve.name = "Store CHARGE_CURVE"
+        store_charge_curve.data_type = 'FLOAT'
+        store_charge_curve.domain = 'POINT'
+        store_charge_curve.inputs[1].default_value = True
+        store_charge_curve.inputs[2].default_value = "CHARGE_CURVE"
+        store_charge_curve.location = (900, -1550)
+        atoms_and_bonds.links.new(switch_charge.outputs[0], store_charge_curve.inputs['Value'])
+        # splice after the COLOR_CURVE store
+        atoms_and_bonds.links.new(store_named_attribute_005.outputs[0], store_charge_curve.inputs[0])
+        atoms_and_bonds.links.new(store_charge_curve.outputs[0], reroute_021.inputs[0])
+
+        # switchable charge materials: atoms -> 'charge_atoms' slot, bonds ->
+        # 'color_curve_charge' slot (appended after the element and bond
+        # materials by the charges importer)
+        charge_colors_socket = atoms_and_bonds.interface.new_socket(
+            name="charge_colors", in_out='INPUT', socket_type='NodeSocketBool')
+        charge_colors_socket.default_value = True
+
+        is_atom_face = atoms_and_bonds.nodes.new("FunctionNodeCompare")
+        is_atom_face.name = "Is Atom Face"
+        is_atom_face.data_type = 'INT'
+        is_atom_face.operation = 'LESS_THAN'
+        is_atom_face.inputs[3].default_value = len(numbers)  # bond slot index
+        is_atom_face.location = (4685.0, -150.0)
+        atoms_and_bonds.links.new(mat_slot_attribute.outputs[0], is_atom_face.inputs[2])
+
+        charge_slot_switch = atoms_and_bonds.nodes.new("GeometryNodeSwitch")
+        charge_slot_switch.name = "Charge Slot Switch"
+        charge_slot_switch.input_type = 'INT'
+        charge_slot_switch.inputs[1].default_value = len(numbers) + 2  # color_curve_charge
+        charge_slot_switch.inputs[2].default_value = len(numbers) + 1  # charge_atoms
+        charge_slot_switch.location = (4885.0, -150.0)
+        atoms_and_bonds.links.new(is_atom_face.outputs[0], charge_slot_switch.inputs[0])
+
+        use_charge_switch = atoms_and_bonds.nodes.new("GeometryNodeSwitch")
+        use_charge_switch.name = "Use Charge Colors"
+        use_charge_switch.input_type = 'INT'
+        use_charge_switch.location = (5085.0, -150.0)
+        atoms_and_bonds.links.new(group_input_002.outputs['charge_colors'], use_charge_switch.inputs[0])
+        atoms_and_bonds.links.new(mat_slot_attribute.outputs[0], use_charge_switch.inputs[1])
+        atoms_and_bonds.links.new(charge_slot_switch.outputs[0], use_charge_switch.inputs[2])
+        atoms_and_bonds.links.new(use_charge_switch.outputs[0], set_material_index.inputs['Material Index'])
 
     #reroute_001.Output -> join_geometry_001.Geometry
     atoms_and_bonds.links.new(reroute_001.outputs[0], join_geometry_001.inputs[0])

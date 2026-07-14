@@ -179,6 +179,46 @@ def _find_density_modifiers(obj):
     return found
 
 
+class ASE_OT_rebuild_supports(bpy.types.Operator):
+    """(Re)generate the 3D-print supports of the active structure; adjust
+    the parameters in the redo panel (F9) and the supports rebuild live"""
+    bl_idname = 'ase.rebuild_supports'
+    bl_label = 'Rebuild 3D-print supports'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    base_radius: bpy.props.FloatProperty(
+        name="base radius", default=0.25, min=0.01, soft_max=1.0,
+        description="pillar radius at the plate")
+    tip_radius: bpy.props.FloatProperty(
+        name="contact radius", default=0.1, min=0.01, soft_max=1.0,
+        description="pillar radius at the atom contact point")
+    support_layer: bpy.props.FloatProperty(
+        name="support drop", default=0.3, min=0.0, soft_max=5.0,
+        description="minimum height a bonded/touching neighbor must sit below an atom to hold it up; larger adds more pillars")
+    plate_thickness: bpy.props.FloatProperty(
+        name="plate thickness", default=0.6, min=0.1, soft_max=3.0)
+    plate_holes: bpy.props.BoolProperty(
+        name="plate holes", default=True,
+        description="regular grid of square holes in the plate to save material")
+    plate_gap: bpy.props.FloatProperty(
+        name="plate gap", default=2.0, min=0.0, soft_max=10.0,
+        description="distance from the base plate up to the lowest atom")
+
+    def execute(self, context):
+        from .exports import rebuild_supports
+        try:
+            rebuild_supports(context, base_radius=self.base_radius,
+                             tip_radius=self.tip_radius,
+                             support_layer=self.support_layer,
+                             plate_thickness=self.plate_thickness,
+                             plate_holes=self.plate_holes,
+                             pillar_length=self.plate_gap)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
+
 class ASE_PT_controls(bpy.types.Panel):
     bl_label = 'ASE structure'
     bl_space_type = 'VIEW_3D'
@@ -198,6 +238,15 @@ class ASE_PT_controls(bpy.types.Panel):
             _draw_modifier_inputs(box, mod)
             if mod.node_group.name.startswith('atoms_and_bonds'):
                 self.draw_tables(context, box)
+
+        # 3D-print supports: offered when the collection has real atom
+        # meshes (the 3D print representation)
+        from ase.data import chemical_symbols as _symbols
+        if any(o.type == 'MESH' and o.name.split('.')[0] in _symbols
+               for o in obj.users_collection[0].all_objects):
+            box = self.layout.box()
+            box.label(text='3D printing')
+            box.operator('ase.rebuild_supports', icon='MOD_LATTICE')
 
         # electron densities live on sibling objects in the same collection
         # (a spin-polarized CHGCAR yields a total and a spin volume)
@@ -242,7 +291,8 @@ class ASE_PT_controls(bpy.types.Panel):
                     op.pair_id = pid
 
 
-classes = (ASE_OT_toggle_pair_cut, ASE_OT_set_radius_mode, ASE_PT_controls)
+classes = (ASE_OT_toggle_pair_cut, ASE_OT_set_radius_mode,
+           ASE_OT_rebuild_supports, ASE_PT_controls)
 
 
 def register():

@@ -7,6 +7,47 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10776696.svg)](https://doi.org/10.5281/zenodo.10776696)
 [![Downloads](https://img.shields.io/github/downloads/Tonner-Zech-Group/blender-importASE/total)](https://github.com/Tonner-Zech-Group/blender-importASE/releases)
 
+Import molecules, crystals, trajectories, and volumetric data (electron densities, molecular orbitals) into Blender through [ASE](https://gitlab.com/ase/ase) — with geometry-nodes representations, coordination polyhedra, and isosurfaces.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/molecule.jpg" alt="Molecule with colored bonds"/><br/>
+      <b>Molecules</b> — geometry-nodes atoms with gray or element-colored bonds
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/polyhedra.jpg" alt="Crystal with coordination polyhedra"/><br/>
+      <b>Coordination polyhedra</b> — convex hulls of coordination shells as solid faces
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/orbital_volume.jpg" alt="Molecular orbital isosurface"/><br/>
+      <b>Molecular orbitals &amp; densities</b> — .cube / VASP volumes with node-based isosurfaces
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/density_mesh.jpg" alt="Density isosurface as mesh, colored by a second density"/><br/>
+      <b>Density as mesh</b> — marching-cubes isosurfaces, optionally colored by a second density file
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/charges.jpg" alt="Molecule colored by partial charges"/><br/>
+      <b>Partial charges</b> — per-atom charges from a csv file, red-white-blue on atoms and bonds
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/trajectory.gif" alt="Animated trajectory"/><br/>
+      <b>Trajectories</b> — any ASE-readable trajectory, animated via keyframes
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="docs/images/print_supports.jpg" alt="Molecule with generated resin supports" width="480"/><br/>
+      <b>3D printing</b> — fused spheres and bonds with generated resin supports, exported as per-element STLs in one zip
+    </td>
+  </tr>
+</table>
+
 ## Dependencies
 
 Dependencies are automatically installed upon activation of the addon using `pip` if an internet connection is present.
@@ -57,3 +98,19 @@ the isovalues of any imported densities.
 The materials used by the geometry-node representations are the ones in the
 object's Material Properties tab (sorted by element, bond material last), so
 you can swap or edit them there and the viewport/render follows.
+
+### 3D printing
+
+The "3D print" representation (formerly `bonds_fromnodes`) imports real
+sphere meshes plus geometry-node bond tubes with icospheres at every atom
+position ("joint radius" on the modifier), so bonds fuse into a printable
+solid. File -> Export -> "ASE 3D print (.zip)" then writes one STL per
+element (atoms joined), the bonds, and simple resin supports (base plate +
+tapered pillars under the lowest atoms; skipped if the collection already
+contains your own "supports" object) into a single zip for the slicer.
+
+### Export to xyz
+
+File -> Export -> "ASE xyz (.xyz)" writes the active nodes-representation
+structure back to a plain xyz file, using the vertex positions (in world
+coordinates, i.e. including any edits) and the stored element numbers.

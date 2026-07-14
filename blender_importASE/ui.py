@@ -39,8 +39,12 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     trajectory = False
     if isinstance(atoms[0],Atoms) and len(atoms) > 1:
         trajectory = True
-        TRAJECTORY=atoms.copy()[1:]
-        atoms=atoms[0]
+        TRAJECTORY=atoms.copy()
+        # Use the fullest frame as the setup reference so materials and the
+        # per-element hide toggles cover every atom type in the trajectory,
+        # including molecules that spawn in on later frames. (The first frame
+        # used to be dropped here, which cut the opening state of the run.)
+        atoms=max(atoms, key=len)
         if animate is False:
             atoms = TRAJECTORY[-1]
         else:
@@ -69,7 +73,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     bpy.context.view_layer.active_layer_collection = layer_collection
 
     # Draw the atoms and bonds
-    if representation != 'bonds_fromnodes' and representation != 'nodes':
+    if representation != '3D_print' and representation != 'nodes':
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         if representation != 'VDW':
@@ -107,7 +111,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         
 
         #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
-    if representation == 'bonds_fromnodes':
+    if representation == '3D_print':
        
         sec_coll = bpy.data.collections.new(name='atoms')
         my_coll.children.link(sec_coll)
@@ -129,7 +133,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     # Read in density
     if read_density:
         density_objs = []
-        if 'cube' in filename:
+        if filename.lower().endswith('.cube'):
             density_objs = [cube2vol(filepath,modifier='GeometryNodes')]
         elif vasp_density is not None:
             # total charge density, plus the spin difference if spin-polarized
@@ -144,7 +148,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
 
     # Handle animation
     if trajectory is True and animate is True:
-        if representation != 'nodes' and representation != 'bonds_fromnodes':
+        if representation != 'nodes' and representation != '3D_print':
             
             move_atoms(TRAJECTORY,list_of_atoms,imageslice)
             if representation != 'VDW':
@@ -152,20 +156,20 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
                     move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
                 else:
                     move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
-        if representation == 'bonds_fromnodes':
-            print("generating trajectory for bonds_fromnodes")
+        if representation == '3D_print':
+            print("generating trajectory for 3D_print")
             move_atoms(TRAJECTORY,list_of_atoms,imageslice)
     end=time.time()
     print('Time to import atoms_object: ',end-end_read)
 
     if outline:
         print(f'add outline modifier to GeometryNodes{modifier_chosen}')
-        if representation != 'nodes' and representation != 'bonds_fromnodes' and representation != 'VDW':
+        if representation != 'nodes' and representation != '3D_print' and representation != 'VDW':
             outline_objects(list_of_atoms + list_of_bonds,modifier='GeometryNodes'+modifier_chosen)
             modifier_counter += 1
             modifier_chosen=f'.00{modifier_counter}'
              
-        if representation == 'bonds_fromnodes':
+        if representation == '3D_print':
             outline_objects([bonds_obj],modifier='GeometryNodes.001')
             outline_objects(list_of_atoms,modifier='GeometryNodes')
             modifier_counter += 1
@@ -179,7 +183,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
             modifier_chosen=f'.00{modifier_counter}'
 
     if add_supercell:
-        if representation == 'bonds_fromnodes':
+        if representation == '3D_print':
             added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)
             if added:
                 print(f'added supercell to GeometryNodes{modifier_chosen}')

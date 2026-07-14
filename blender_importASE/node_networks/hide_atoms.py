@@ -1,5 +1,8 @@
 from ase.data import chemical_symbols
 import bpy
+from .nodes_atoms_and_bonds import SENTINEL_CUTOFF
+
+
 def hide_node_group(atoms):
     hide_atoms = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "hide atoms")
 
@@ -30,7 +33,38 @@ def hide_node_group(atoms):
     geometry_socket = hide_atoms.interface.new_socket(name = "Geometry", in_out='OUTPUT', socket_type = 'NodeSocketGeometry')
     geometry_socket.attribute_domain = 'POINT'
 
-    old_switch = group_input
+    # Cull atoms that are not present in the current frame. Variable-count
+    # trajectories (molecules that spawn in, are removed, or toggle in and out)
+    # park absent atoms at a far sentinel position each frame (see
+    # read_structure); here we delete any point sitting out beyond
+    # SENTINEL_CUTOFF from the origin. Because it keys on the animated position,
+    # visibility is per-frame and handles atoms appearing/disappearing any
+    # number of times. Static imports keep every atom near the origin, so
+    # nothing is culled.
+    position = hide_atoms.nodes.new("GeometryNodeInputPosition")
+    position.name = "Position"
+    distance = hide_atoms.nodes.new("ShaderNodeVectorMath")
+    distance.name = "sentinel_distance"
+    distance.operation = 'LENGTH'
+    is_absent = hide_atoms.nodes.new("FunctionNodeCompare")
+    is_absent.name = "is_absent"
+    is_absent.data_type = 'FLOAT'
+    is_absent.operation = 'GREATER_THAN'
+    is_absent.inputs[1].default_value = SENTINEL_CUTOFF
+    delete_absent = hide_atoms.nodes.new("GeometryNodeDeleteGeometry")
+    delete_absent.name = "Delete Absent"
+    delete_absent.domain = 'POINT'
+    delete_absent.mode = 'ALL'
+    hide_atoms.links.new(position.outputs[0], distance.inputs[0])
+    hide_atoms.links.new(distance.outputs["Value"], is_absent.inputs[0])
+    hide_atoms.links.new(group_input.outputs[0], delete_absent.inputs[0])
+    hide_atoms.links.new(is_absent.outputs[0], delete_absent.inputs[1])
+    position.location = (-400, 300)
+    distance.location = (-200, 300)
+    is_absent.location = (0, 300)
+    delete_absent.location = (200, 700)
+
+    old_switch = delete_absent
     for n,number in enumerate(set(atoms.get_atomic_numbers())):
 
         sym=chemical_symbols[number]

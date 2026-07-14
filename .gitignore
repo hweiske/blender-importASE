@@ -171,3 +171,4 @@ testmaterials.xyz
 write_colors.py
 *.zip
 
+test/fixtures/*.vdb
