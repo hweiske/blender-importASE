@@ -301,6 +301,13 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
     pair_table_socket = atoms_and_bonds.interface.new_socket(name="pair_table", in_out='INPUT', socket_type='NodeSocketObject')
     element_table_socket = atoms_and_bonds.interface.new_socket(name="element_table", in_out='INPUT', socket_type='NodeSocketObject')
 
+    # overall atom-size multiplier, exposed as a slider in the ASE N-panel
+    atom_scale_socket = atoms_and_bonds.interface.new_socket(name="atom_scale", in_out='INPUT', socket_type='NodeSocketFloat')
+    atom_scale_socket.default_value = 1.0
+    atom_scale_socket.min_value = 0.0
+    atom_scale_socket.max_value = 10.0
+    atom_scale_socket.attribute_domain = 'POINT'
+
     #initialize atoms_from_verts nodes
     #node Group Input
     group_input_at_atoms = atoms_and_bonds.nodes.new("NodeGroupInput")
@@ -362,6 +369,14 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
     radius_field.name = "Radius Field"
     radius_field.operation = 'MULTIPLY_ADD'
 
+    # overall atom-size slider: multiply the per-atom radius by atom_scale
+    radius_scaled = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    radius_scaled.name = "Radius Scaled"
+    radius_scaled.operation = 'MULTIPLY'
+    radius_scaled.location = (-620, -520)
+    atoms_and_bonds.links.new(radius_field.outputs[0], radius_scaled.inputs[0])
+    atoms_and_bonds.links.new(group_input_at_atoms.outputs['atom_scale'], radius_scaled.inputs[1])
+
     atoms_and_bonds.links.new(group_input_at_atoms.outputs['element_table'], element_table_info.inputs['Object'])
     atoms_and_bonds.links.new(element_table_info.outputs['Geometry'], sample_radius_mode.inputs['Geometry'])
     atoms_and_bonds.links.new(radius_mode_attribute.outputs[0], sample_radius_mode.inputs['Value'])
@@ -400,7 +415,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
 
         atoms_and_bonds.links.new(compare.outputs[0], group.inputs[1])
         atoms_and_bonds.links.new(group_input_at_atoms.outputs[0], group.inputs[0])
-        atoms_and_bonds.links.new(radius_field.outputs[0], group.inputs[2])
+        atoms_and_bonds.links.new(radius_scaled.outputs[0], group.inputs[2])
         atoms_and_bonds.links.new(element_attribute.outputs[0], compare.inputs[2])
         atoms_and_bonds.links.new(group_input_at_atoms.outputs[3], group.inputs[3])
         atoms_and_bonds.links.new(group.outputs[0], join_geometry_atoms.inputs[0])
