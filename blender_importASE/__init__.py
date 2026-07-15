@@ -701,27 +701,55 @@ class ASEAddonPreferences(bpy.types.AddonPreferences):
             layout.label(text="ASE installation successful.", icon='CHECKMARK')
 
 
+# (import name, pip name, required). ase is required - the operators are only
+# registered when it is available. scipy (polyhedra) and scikit-image (density
+# mesh) back individual features; they are installed up front like ase so the
+# first use of those importers does not stall, but a failure to install them
+# only disables their feature rather than the whole add-on.
+DEPENDENCIES = [
+    ("ase", "ase", True),
+    ("scipy", "scipy", False),
+    ("skimage", "scikit-image", False),
+]
+
+
+def _install_package(import_name, pip_name):
+    """pip install pip_name into Blender's user modules path and return whether
+    import_name is importable afterwards."""
+    install_path = os.path.join(bpy.utils.script_path_user(), "modules")
+    subprocess.check_call([sys.executable, "-m", "pip", "install",
+                           "--target", install_path, pip_name])
+    if install_path not in sys.path:
+        sys.path.append(install_path)
+    importlib.invalidate_caches()
+    return util.find_spec(import_name) is not None
+
+
 def check_dependency():
-    if util.find_spec("ase") is not None:
-        return True
-    else:
-        print("ASE not present in Blender python. Attempting install. This could take a moment...")
+    """Make sure ase and the optional feature dependencies (scipy,
+    scikit-image) are importable, installing any that are missing into
+    Blender's user modules path. Returns True when the required ase is
+    available; optional dependencies only print a warning on failure."""
+    ase_available = True
+    for import_name, pip_name, required in DEPENDENCIES:
+        if util.find_spec(import_name) is not None:
+            continue
+        print(f"{pip_name} not present in Blender python. Attempting install. "
+              "This could take a moment...")
         try:
-            python_path = sys.executable
-            script_path = bpy.utils.script_path_user()
-            install_path = os.path.join(script_path, "modules")
-            subprocess.check_call([python_path, "-m", "pip", "install", "--target", install_path, "ase"])
-            if install_path not in sys.path:
-                sys.path.append(install_path)
-            importlib.invalidate_caches()
-            if util.find_spec("ase") is None:
-                print("ASE not found after installation, check your blender installation")
-                return False
+            installed = _install_package(import_name, pip_name)
         except subprocess.CalledProcessError:
-            print("Failed to install ASE. Please check your internet connection and try again or install manually")
-            return False
-        print("Installed ASE")
-        return True
+            installed = False
+        if installed:
+            print(f"Installed {pip_name}")
+        elif required:
+            print(f"Failed to install {pip_name}. Please check your internet "
+                  "connection and try again or install manually.")
+            ase_available = False
+        else:
+            print(f"Could not install {pip_name}; the feature that needs it "
+                  "will be unavailable until it is installed.")
+    return ase_available
 
 def menu_func_import(self, context):
     self.layout.operator(ImportASEMolecule.bl_idname, text="ASE Molecule (.*)")
