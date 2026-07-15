@@ -1,5 +1,5 @@
 import bpy
-from .compat import setup_volume_to_mesh
+from .compat import setup_volume_to_mesh, cin
 
 #initialize visualize_edensity node group
 def visualize_edensity_node_group(): #from node2python
@@ -59,9 +59,9 @@ def visualize_edensity_node_group(): #from node2python
     compare_005.operation = 'LESS_THAN'
     compare_005.mode = 'ELEMENT'
     #A_INT
-    compare_005.inputs[2].default_value = 0
+    cin(compare_005, 2).default_value = 0
     #B_INT
-    compare_005.inputs[3].default_value = 0
+    cin(compare_005, 3).default_value = 0
     #A_VEC3
     compare_005.inputs[4].default_value = (0.0, 0.0, 0.0)
     #B_VEC3
@@ -87,9 +87,9 @@ def visualize_edensity_node_group(): #from node2python
     compare_003.operation = 'LESS_THAN'
     compare_003.mode = 'ELEMENT'
     #A_INT
-    compare_003.inputs[2].default_value = 0
+    cin(compare_003, 2).default_value = 0
     #B_INT
-    compare_003.inputs[3].default_value = 0
+    cin(compare_003, 3).default_value = 0
     #A_VEC3
     compare_003.inputs[4].default_value = (0.0, 0.0, 0.0)
     #B_VEC3
@@ -115,9 +115,9 @@ def visualize_edensity_node_group(): #from node2python
     compare_004.operation = 'LESS_THAN'
     compare_004.mode = 'ELEMENT'
     #A_INT
-    compare_004.inputs[2].default_value = 0
+    cin(compare_004, 2).default_value = 0
     #B_INT
-    compare_004.inputs[3].default_value = 0
+    cin(compare_004, 3).default_value = 0
     #A_VEC3
     compare_004.inputs[4].default_value = (0.0, 0.0, 0.0)
     #B_VEC3
@@ -148,9 +148,9 @@ def visualize_edensity_node_group(): #from node2python
     compare.operation = 'LESS_THAN'
     compare.mode = 'ELEMENT'
     #A_INT
-    compare.inputs[2].default_value = 0
+    cin(compare, 2).default_value = 0
     #B_INT
-    compare.inputs[3].default_value = 0
+    cin(compare, 3).default_value = 0
     #A_VEC3
     compare.inputs[4].default_value = (0.0, 0.0, 0.0)
     #B_VEC3
@@ -176,9 +176,9 @@ def visualize_edensity_node_group(): #from node2python
     compare_001.operation = 'LESS_THAN'
     compare_001.mode = 'ELEMENT'
     #A_INT
-    compare_001.inputs[2].default_value = 0
+    cin(compare_001, 2).default_value = 0
     #B_INT
-    compare_001.inputs[3].default_value = 0
+    cin(compare_001, 3).default_value = 0
     #A_VEC3
     compare_001.inputs[4].default_value = (0.0, 0.0, 0.0)
     #B_VEC3
@@ -209,9 +209,9 @@ def visualize_edensity_node_group(): #from node2python
     compare_002.operation = 'LESS_THAN'
     compare_002.mode = 'ELEMENT'
     #A_INT
-    compare_002.inputs[2].default_value = 0
+    cin(compare_002, 2).default_value = 0
     #B_INT
-    compare_002.inputs[3].default_value = 0
+    cin(compare_002, 3).default_value = 0
     #A_VEC3
     compare_002.inputs[4].default_value = (0.0, 0.0, 0.0)
     #B_VEC3

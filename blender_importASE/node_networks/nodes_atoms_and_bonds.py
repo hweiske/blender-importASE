@@ -1,7 +1,7 @@
 import bpy
 from ..utils import atomcolors, get_vdw_radius
 from ..controls import make_control_tables, PAIR_STRIDE
-from .compat import setup_merge_by_distance, setup_curve_to_mesh
+from .compat import setup_merge_by_distance, setup_curve_to_mesh, cin
 from ase.data import covalent_radii, chemical_symbols, colors
 
 # Absent atoms in a variable-count trajectory are parked here so the hide-atoms
@@ -398,7 +398,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
         compare.data_type = 'INT'
         compare.mode = 'ELEMENT'
         compare.operation = 'EQUAL'
-        compare.inputs[3].default_value = number
+        cin(compare, 3).default_value = number
         compare.location = (-1200.4930419921875, -100+200*n)
         #node Group
         group = atoms_and_bonds.nodes.new("GeometryNodeGroup")
@@ -416,7 +416,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
         atoms_and_bonds.links.new(compare.outputs[0], group.inputs[1])
         atoms_and_bonds.links.new(group_input_at_atoms.outputs[0], group.inputs[0])
         atoms_and_bonds.links.new(radius_scaled.outputs[0], group.inputs[2])
-        atoms_and_bonds.links.new(element_attribute.outputs[0], compare.inputs[2])
+        atoms_and_bonds.links.new(element_attribute.outputs[0], cin(compare, 2))
         atoms_and_bonds.links.new(group_input_at_atoms.outputs[3], group.inputs[3])
         atoms_and_bonds.links.new(group.outputs[0], join_geometry_atoms.inputs[0])
 
@@ -1723,7 +1723,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
     #math_005.Value -> switch_001.Switch
     atoms_and_bonds.links.new(math_005.outputs[0], switch_001.inputs[0])
     #math_011.Value -> compare_006.A
-    atoms_and_bonds.links.new(math_011.outputs[0], compare_006.inputs[2])
+    atoms_and_bonds.links.new(math_011.outputs[0], cin(compare_006, 2))
     #domain_size_001.Point Count -> math_011.Value
     atoms_and_bonds.links.new(domain_size_001.outputs[0], math_011.inputs[1])
     #index_001.Index -> math_011.Value
@@ -1737,7 +1737,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
     #reroute_006.Output -> join_geometry_001.Geometry
     atoms_and_bonds.links.new(reroute_006.outputs[0], join_geometry_001.inputs[0])
     #math_012.Value -> compare_006.B
-    atoms_and_bonds.links.new(math_012.outputs[0], compare_006.inputs[3])
+    atoms_and_bonds.links.new(math_012.outputs[0], cin(compare_006, 3))
     #reroute_003.Output -> sample_index_001.Geometry
     atoms_and_bonds.links.new(reroute_003.outputs[0], sample_index_001.inputs[0])
     #math_013.Value -> points_001.Count
@@ -2004,9 +2004,9 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
         is_atom_face.name = "Is Atom Face"
         is_atom_face.data_type = 'INT'
         is_atom_face.operation = 'LESS_THAN'
-        is_atom_face.inputs[3].default_value = len(numbers)  # bond slot index
+        cin(is_atom_face, 3).default_value = len(numbers)  # bond slot index
         is_atom_face.location = (4685.0, -150.0)
-        atoms_and_bonds.links.new(mat_slot_attribute.outputs[0], is_atom_face.inputs[2])
+        atoms_and_bonds.links.new(mat_slot_attribute.outputs[0], cin(is_atom_face, 2))
 
         charge_slot_switch = atoms_and_bonds.nodes.new("GeometryNodeSwitch")
         charge_slot_switch.name = "Charge Slot Switch"

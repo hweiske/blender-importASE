@@ -1,6 +1,6 @@
 import bpy
 from ase.data import chemical_symbols
-from .compat import setup_merge_by_distance
+from .compat import setup_merge_by_distance, cin
 
 #initialize cutoff_group node group
 def cutoff_group_node_group():
@@ -751,7 +751,7 @@ def supercell_node_group(atoms):
         is_element.data_type = 'INT'
         is_element.mode = 'ELEMENT'
         is_element.operation = 'EQUAL'
-        is_element.inputs[3].default_value = number
+        cin(is_element, 3).default_value = number
 
 
         
@@ -771,7 +771,7 @@ def supercell_node_group(atoms):
         switch_element.inputs[0].default_value = False
         
         supercell.links.new(is_element.outputs[0], delete_geometry_element.inputs[1])
-        supercell.links.new(element_attribute.outputs[0], is_element.inputs[2])
+        supercell.links.new(element_attribute.outputs[0], cin(is_element, 2))
         
         supercell.links.new(group_input_element.outputs[14+n], switch_element.inputs[0])
         supercell.links.new(delete_geometry_element.outputs[0], switch_element.inputs[2])
@@ -1049,9 +1049,9 @@ def supercell_node_group(atoms):
     is_element.mode = 'ELEMENT'
     is_element.operation = 'EQUAL'
     #A_INT
-    is_element.inputs[2].default_value = 0
+    cin(is_element, 2).default_value = 0
     #B_INT
-    is_element.inputs[3].default_value = 1
+    cin(is_element, 3).default_value = 1
 
     #node Delete Geometry
     delete_geometry = supercell.nodes.new("GeometryNodeDeleteGeometry")
@@ -1499,9 +1499,9 @@ def supercell_atoms_node_group(atoms):
     compare_004_1.mode = 'ELEMENT'
     compare_004_1.operation = 'EQUAL'
     #A_INT
-    compare_004_1.inputs[2].default_value = 0
+    cin(compare_004_1, 2).default_value = 0
     #B_INT
-    compare_004_1.inputs[3].default_value = 1
+    cin(compare_004_1, 3).default_value = 1
 
     #node Delete Geometry
     delete_geometry_1 = supercell_atoms.nodes.new("GeometryNodeDeleteGeometry")
