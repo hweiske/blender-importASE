@@ -1,6 +1,7 @@
 import bpy
 import numpy as np
 from ase.data import colors, atomic_numbers, covalent_radii, vdw_alvarez
+from .node_networks.compat import pin
 
 
 def get_vdw_radius(number):
@@ -264,7 +265,7 @@ class atomcolors():
         # IOR
         principled_bsdf.inputs[3].default_value = 1.45
         # Subsurface Anisotropy
-        principled_bsdf.inputs[12].default_value = 0.0
+        pin(principled_bsdf, 12).default_value = 0.0
 
         # Initialize second atom material
         atom_type = atom_2
@@ -298,7 +299,7 @@ class atomcolors():
         # IOR
         principled_bsdf_001.inputs[3].default_value = 1.45
         # Subsurface Anisotropy
-        principled_bsdf_001.inputs[12].default_value = 0.0
+        pin(principled_bsdf_001, 12).default_value = 0.0
         
         # Node Material Output
         material_output = material_nodes.nodes.new("ShaderNodeOutputMaterial")

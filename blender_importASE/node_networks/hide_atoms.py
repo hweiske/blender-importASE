@@ -1,6 +1,7 @@
 from ase.data import chemical_symbols
 import bpy
 from .nodes_atoms_and_bonds import SENTINEL_CUTOFF
+from .compat import cin
 
 
 def hide_node_group(atoms):
@@ -80,7 +81,7 @@ def hide_node_group(atoms):
         is_element.data_type = 'INT'
         is_element.mode = 'ELEMENT'
         is_element.operation = 'EQUAL'
-        is_element.inputs[3].default_value = number
+        cin(is_element, 3).default_value = number
 
 
         
@@ -100,7 +101,7 @@ def hide_node_group(atoms):
         switch_element.inputs[0].default_value = False
         
         hide_atoms.links.new(is_element.outputs[0], delete_geometry_element.inputs[1])
-        hide_atoms.links.new(element_attribute.outputs[0], is_element.inputs[2])
+        hide_atoms.links.new(element_attribute.outputs[0], cin(is_element, 2))
         
         hide_atoms.links.new(group_input.outputs[1+n], switch_element.inputs[0])
         hide_atoms.links.new(delete_geometry_element.outputs[0], switch_element.inputs[2])

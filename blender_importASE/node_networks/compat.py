@@ -2,6 +2,33 @@
 import bpy
 
 
+def cin(node, old_index):
+    """Operand socket of a FunctionNodeCompare, addressed by its Blender <=5.1
+    index (INT operands were A=2, B=3).
+
+    Before Blender 5.2 the Compare node exposed an A/B pair for every data type
+    and only enabled the active pair; 5.2 collapses it to a single active A/B
+    pair (A=0, B=1), so the old fixed indices raise IndexError. Selecting the
+    enabled 'A'/'B' socket by name works on every version.
+    """
+    name = {0: 'A', 1: 'B', 2: 'A', 3: 'B'}[old_index]
+    for socket in node.inputs:
+        if socket.enabled and socket.name == name:
+            return socket
+    return node.inputs[old_index]
+
+
+def pin(node, old_index):
+    """Principled BSDF input socket addressed by its Blender <=5.1 index.
+
+    Blender 5.2 inserted a 'Thin Wall' socket at index 5, shifting every socket
+    after it by one (0-4 are unchanged). Add that offset on 5.2+.
+    """
+    if old_index >= 5 and bpy.app.version >= (5, 2, 0):
+        return node.inputs[old_index + 1]
+    return node.inputs[old_index]
+
+
 def _input(node, name):
     # collection lookup by name skips disabled sockets in Blender 4.x
     # (e.g. 'Voxel Size' on a Volume to Mesh node in GRID mode), so iterate
