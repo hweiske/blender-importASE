@@ -6,9 +6,12 @@ from ase.data import covalent_radii, chemical_symbols, colors
 
 # Absent atoms in a variable-count trajectory are parked here so the hide-atoms
 # node group can cull them; any point farther than SENTINEL_CUTOFF from the
-# origin is treated as "not present in this frame". Far beyond any real cell.
-SENTINEL_COORD = 1.0e7
-SENTINEL_CUTOFF = 1.0e6
+# origin is treated as "not present in this frame". Kept moderate on purpose:
+# huge coordinates (1e7) lose float32 precision and blow up the mesh bounding
+# box, which makes the geometry-node spatial bond search race and spawn stray
+# atoms. 1e4 is far outside any real structure yet keeps full float precision.
+SENTINEL_COORD = 1.0e4
+SENTINEL_CUTOFF = 1.0e3
 
 
 def read_structure(atoms,name, animate=True, faces=None):
@@ -60,24 +63,39 @@ def read_structure(atoms,name, animate=True, faces=None):
             value.color = list(colors.jmol_colors[atoms[i].number]) + [1]
 
     mesh.update()
-    vertx=obj.data.vertices
     if animate:
-        # Per-frame visibility. Under append / remove-from-end identity, atom
-        # index nv exists in a frame iff nv is within that frame's atom count.
-        # Atoms that are absent in a given frame are parked at a far sentinel
-        # position so the node network can cull them for exactly the frames
-        # they do not exist. This handles atoms that spawn in, are removed, and
-        # even toggle in and out repeatedly (variable-count trajectories) -- an
-        # absent atom is never shown at a stale pose, because it is culled.
-        SENTINEL=(SENTINEL_COORD, SENTINEL_COORD, SENTINEL_COORD)
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-        for n,frame in enumerate(trajectory):
-            fpos=frame.get_positions()
-            nf=len(frame)
-            for nv,v in enumerate(vertx):
-                v.co=fpos[nv] if nv < nf else SENTINEL
-                v.keyframe_insert(data_path="co", frame=n)
+        # Animate the trajectory with ABSOLUTE SHAPE KEYS (one key per frame,
+        # scrubbed by a single animated eval_time) rather than keyframing every
+        # vertex's co. Keying thousands of vertices individually (n_atoms x
+        # n_frames fcurves) makes Blender's depsgraph race on large
+        # trajectories and intermittently feed garbage vertex positions into
+        # the modifier stack -- atoms then get wrongly culled, periodically
+        # imaged, or spawned as floating duplicates. Shape keys are the
+        # supported, deterministic way to animate vertex positions and cost one
+        # fcurve instead of thousands.
+        #
+        # Per-frame visibility: under append / remove-from-end identity, atom
+        # index nv exists in a frame iff nv < that frame's atom count. Atoms
+        # absent in a frame are parked at a far sentinel position (the hide
+        # node group culls anything past SENTINEL_CUTOFF), so an atom is shown
+        # only in the frames it actually exists.
+        n_atoms = len(atoms)
+        SENTINEL = (SENTINEL_COORD, SENTINEL_COORD, SENTINEL_COORD)
+        obj.shape_key_add(name='basis', from_mix=False)
+        for n, frame in enumerate(trajectory):
+            sk = obj.shape_key_add(name=f'frame_{n}', from_mix=False)
+            fpos = frame.get_positions()
+            nf = len(frame)
+            for nv in range(n_atoms):
+                sk.data[nv].co = fpos[nv] if nv < nf else SENTINEL
+        keys = mesh.shape_keys
+        keys.use_relative = False
+        # key_blocks are [basis, frame_0, frame_1, ...]; each frame key sits at
+        # an auto-assigned eval position (read-only .frame). Scrub eval_time so
+        # scene frame n lands exactly on frame key n.
+        for n in range(len(trajectory)):
+            keys.eval_time = keys.key_blocks[n + 1].frame
+            keys.keyframe_insert(data_path='eval_time', frame=n)
         #    bpy.context.view_layer.update()
         #    bpy.ops.object.mode_set(mode='EDIT')
         #    bpy.ops.view3d.insert_keyframe_animall()
