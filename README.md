@@ -1,4 +1,4 @@
-# Collection of Blender Addons for Molecular Structures
+# Collection of examples
 
 [![CI](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml/badge.svg)](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml)
 [![Latest release](https://img.shields.io/github/v/release/Tonner-Zech-Group/blender-importASE)](https://github.com/Tonner-Zech-Group/blender-importASE/releases/latest)
@@ -37,13 +37,13 @@ Import molecules, crystals, trajectories, and volumetric data (electron densitie
     </td>
     <td align="center" width="50%">
       <img src="docs/images/trajectory.gif" alt="Animated trajectory"/><br/>
-      <b>Trajectories</b> — any ASE-readable trajectory, animated via keyframes
+      <b>Trajectories</b> — any ASE-readable trajectory, animated frame by frame (including varying atom counts)
     </td>
   </tr>
   <tr>
     <td align="center" colspan="2">
       <img src="docs/images/print_supports.jpg" alt="Molecule with generated resin supports" width="480"/><br/>
-      <b>3D printing</b> — fused spheres and bonds with generated resin supports, exported as per-element STLs in one zip
+      <b>3D printing</b> — atoms and bonds with generated resin supports, exported as per-element STLs in one zip
     </td>
   </tr>
 </table>
