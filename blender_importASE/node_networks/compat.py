@@ -30,16 +30,18 @@ def pin(node, old_index):
 
 
 # Blender 5.2 moved geometry-nodes modifier inputs off the modifier itself
-# (mod["Socket_N"] = value, an id-property) into a typed container:
-# mod.properties.inputs["Socket_N"] is a small id-property group
-# {'value', 'type', 'attribute_name'}. Setting the nested 'value' does not
-# tag the depsgraph on its own, so the setter tags the owning object.
+# (mod["Socket_N"] = value, an id-property) onto mod.properties.inputs, which
+# exposes every socket as an RNA attribute with a .value property -- the same
+# interface Blender's own operators use:
+#     modifier.properties.inputs.Socket_2.value = 0.8
+# Writing the value does not tag the depsgraph on its own, so the setter tags
+# the owning object.
 
 def set_mod_input(mod, identifier, value):
     """Set a geometry-nodes modifier input by socket identifier on any
     Blender version."""
     if bpy.app.version >= (5, 2, 0):
-        mod.properties.inputs[identifier]['value'] = value
+        getattr(mod.properties.inputs, identifier).value = value
     else:
         mod[identifier] = value
     # a plain id-property write does not tag the depsgraph on any version
@@ -50,13 +52,8 @@ def get_mod_input(mod, identifier, default=None):
     """Read a geometry-nodes modifier input by socket identifier on any
     Blender version."""
     if bpy.app.version >= (5, 2, 0):
-        group = mod.properties.inputs.get(identifier)
-        if group is None:
-            return default
-        try:
-            return group['value']
-        except KeyError:
-            return default
+        prop = getattr(mod.properties.inputs, identifier, None)
+        return default if prop is None else prop.value
     return mod.get(identifier, default)
 
 
@@ -68,10 +65,10 @@ def mod_input_keys(mod):
 
 
 def mod_input_ui(mod, identifier):
-    """(data, property-path) pair for layout.prop() to draw a modifier
-    input as an editable property on any Blender version."""
+    """(data, property) pair for layout.prop() to draw a modifier input
+    as an editable property on any Blender version."""
     if bpy.app.version >= (5, 2, 0):
-        return mod.properties.inputs, f'["{identifier}"]["value"]'
+        return getattr(mod.properties.inputs, identifier), 'value'
     return mod, f'["{identifier}"]'
 
 

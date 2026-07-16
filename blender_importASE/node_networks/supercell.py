@@ -1067,6 +1067,21 @@ def supercell_node_group(atoms):
     switch_007.input_type = 'GEOMETRY'
 
     
+
+    # Offset_z used to be missing: the offset_Z switch was fed from the
+    # Offset_y reroute (or left unconnected), so shifting y also shifted z.
+    # Give z its own socket and wire it directly.
+    offset_z_socket = supercell.interface.new_socket(name = "Offset_z", in_out='INPUT', socket_type = 'NodeSocketInt')
+    offset_z_socket.default_value = 0
+    offset_z_socket.min_value = -2147483648
+    offset_z_socket.max_value = 2147483647
+    offset_z_socket.subtype = 'NONE'
+    offset_z_socket.attribute_domain = 'POINT'
+    # place it right after Offset_y in the panel
+    items = supercell.interface.items_tree
+    y_index = next(i for i, it in enumerate(items) if getattr(it, 'name', '') == 'Offset_y')
+    supercell.interface.move(offset_z_socket, y_index + 1)
+    supercell.links.new(group_input_001.outputs['Offset_z'], switch_005.inputs[1])
     return supercell
 
 def supercell_atoms_node_group(atoms):
@@ -1762,6 +1777,21 @@ def supercell_atoms_node_group(atoms):
     supercell_atoms.links.new(reroute_008.outputs[0], group_001.inputs[0])
     #switch_006.Output -> join_geometry.Geometry
     supercell_atoms.links.new(switch_006.outputs[0], join_geometry.inputs[0])
+
+    # Offset_z used to be missing: the offset_Z switch was fed from the
+    # Offset_y reroute (or left unconnected), so shifting y also shifted z.
+    # Give z its own socket and wire it directly.
+    offset_z_socket = supercell_atoms.interface.new_socket(name = "Offset_z", in_out='INPUT', socket_type = 'NodeSocketInt')
+    offset_z_socket.default_value = 0
+    offset_z_socket.min_value = -2147483648
+    offset_z_socket.max_value = 2147483647
+    offset_z_socket.subtype = 'NONE'
+    offset_z_socket.attribute_domain = 'POINT'
+    # place it right after Offset_y in the panel
+    items = supercell_atoms.interface.items_tree
+    y_index = next(i for i, it in enumerate(items) if getattr(it, 'name', '') == 'Offset_y')
+    supercell_atoms.interface.move(offset_z_socket, y_index + 1)
+    supercell_atoms.links.new(group_input_001.outputs['Offset_z'], switch_005.inputs[1])
     return supercell_atoms
 
 
