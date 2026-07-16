@@ -88,7 +88,7 @@ Builds a coordination polyhedron (convex hull, `scipy.spatial.ConvexHull`) aroun
 ```python
 import_density_mesh(filepath, filename, color_filepath=None, iso_value=0.03,
     shade_smooth=True, preset='DEFAULT', import_atoms=True, color_min=None,
-    color_max=None, sample_interior=False, **kwargs)
+    color_max=None, sample_interior=False, outline=True, **kwargs)
 ```
 Runs marching cubes on the ±`iso_value` levels (`ValueError` if the iso is outside the data range). If `color_filepath` is given, samples that second density onto the surface into a `density_color` vertex attribute; `sample_interior=True` takes the strongest value along the surface normal through the whole volume rather than at the surface point. `color_min==color_max` (default 0) auto-normalizes.
 
@@ -102,7 +102,7 @@ To make the isosurface semi-transparent, set the material's Principled BSDF `Alp
 mat = bpy.data.materials['LED material']
 mat.node_tree.nodes['Principled BSDF'].inputs['Alpha'].default_value = 0.4
 ```
-`import_atoms=True` also imports the structure as `nodes`. To get outlined atoms alongside the mesh, import them separately with `import_ase_molecule(..., outline=True)` and pass `import_atoms=False`.
+`import_atoms=True` also imports the structure as `nodes`, outlined by default (`outline=True`).
 
 ### Charges — `charges.import_charges`
 ```python

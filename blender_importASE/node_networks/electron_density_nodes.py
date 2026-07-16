@@ -412,6 +412,22 @@ def visualize_edensity_node_group(): #from node2python
     visualize_edensity.links.new(group_input.outputs[8], set_material.inputs[2])
     #group_input.material - -> set_material_001.Material
     visualize_edensity.links.new(group_input.outputs[9], set_material_001.inputs[2])
+
+    # 'cut' switch: the delete-geometry cutoff planes only apply when
+    # enabled; by default the switch routes the uncut isosurface straight
+    # to the output so nothing is clipped.
+    cut_socket = visualize_edensity.interface.new_socket(
+        'cut', in_out='INPUT', socket_type='NodeSocketBool')
+    cut_socket.default_value = False
+    cut_switch = visualize_edensity.nodes.new("GeometryNodeSwitch")
+    cut_switch.name = "Cut Switch"
+    cut_switch.label = "cut"
+    cut_switch.input_type = 'GEOMETRY'
+    cut_switch.location = (1400, 100)
+    visualize_edensity.links.new(group_input.outputs['cut'], cut_switch.inputs[0])
+    visualize_edensity.links.new(set_shade_smooth.outputs[0], cut_switch.inputs[1])       # False: uncut
+    visualize_edensity.links.new(delete_geometry_004.outputs[0], cut_switch.inputs[2])    # True: cutoffs apply
+    visualize_edensity.links.new(cut_switch.outputs[0], group_output.inputs[0])
     return visualize_edensity
 
 def newMaterial(id):
