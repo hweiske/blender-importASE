@@ -19,6 +19,7 @@ from .node_networks.nodes_atoms_and_bonds import set_atoms_node_group, atoms_and
 from .node_networks.bond_mat import create_bondmat
 from .node_networks.electron_density_nodes import newMaterial
 from .node_networks.outline import outline_objects
+from .node_networks.compat import set_mod_input
 
 POLYHEDRA_MATERIAL = 'polyhedra material'
 
@@ -176,9 +177,9 @@ def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
     bondmat = create_bondmat(colorbonds=colorbonds, name=elements_name)
     atoms_from_verts = atoms_and_bonds(obj, new_atoms, 'GeometryNodes', bondmat=bondmat)
     obj.modifiers['GeometryNodes'].node_group = atoms_from_verts
-    obj.modifiers['GeometryNodes']["Socket_2"] = bond_distance
-    obj.modifiers['GeometryNodes']["Socket_3"] = bond_radius
-    obj.modifiers['GeometryNodes']["Socket_4"] = resolution
+    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_2", bond_distance)
+    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_3", bond_radius)
+    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_4", resolution)
 
     # the polyhedra faces live in their own object, so modifiers on the
     # structure (like the outline) never touch them. The material reads

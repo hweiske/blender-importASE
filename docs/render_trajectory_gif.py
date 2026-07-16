@@ -30,8 +30,9 @@ import_ase_molecule(f'{REPO}/test/fixtures/Cu-block-TMA.traj', 'Cu-block-TMA.tra
 struct = next(o for o in bpy.data.objects if o.type == 'MESH' and 'element' in o.data.attributes)
 bpy.context.view_layer.objects.active = struct
 
-struct.modifiers['GeometryNodes.001']['Socket_3'] = 3      # 1x3x1 supercell (repeat_y)
-struct.modifiers['GeometryNodes.002']['Socket_2'] = 0.67   # bond distance
+from blender_importASE.node_networks.compat import set_mod_input
+set_mod_input(struct.modifiers['GeometryNodes.001'], 'Socket_3', 3)     # 1x3x1 supercell (repeat_y)
+set_mod_input(struct.modifiers['GeometryNodes.002'], 'Socket_2', 0.67)  # bond distance
 mod, idents = controls.find_ase_modifier(struct)
 mod[idents['pair_table']].data.attributes['cut'].data[pair_id(29, 29)].value = True   # hide Cu-Cu
 mod[idents['element_table']].data.attributes['radius_mode'].data[29].value = 1        # Cu -> vdW

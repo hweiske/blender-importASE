@@ -17,6 +17,8 @@ the 'ASE' tab.
 import bpy
 from ase.data import chemical_symbols
 
+from .node_networks.compat import get_mod_input, mod_input_keys, mod_input_ui
+
 PAIR_STRIDE = 119  # > max atomic number, so pair ids are unique
 
 
@@ -66,7 +68,7 @@ def _table_object(context, which):
     mod, idents = find_ase_modifier(context.active_object)
     if mod is None:
         return None
-    return mod.get(idents[which])
+    return get_mod_input(mod, idents[which])
 
 
 def _touch(table_obj):
@@ -142,7 +144,7 @@ def _group_title(node_group_name):
 def _draw_modifier_inputs(layout, mod):
     """Draw all scalar inputs of a geometry-nodes modifier as regular,
     keyframeable modifier properties."""
-    keys = mod.keys()
+    keys = mod_input_keys(mod)
     col = layout.column(align=True)
     for item in mod.node_group.interface.items_tree:
         if getattr(item, 'in_out', None) != 'INPUT':
@@ -151,7 +153,8 @@ def _draw_modifier_inputs(layout, mod):
             continue
         if item.identifier not in keys:
             continue
-        col.prop(mod, f'["{item.identifier}"]', text=item.name)
+        data, prop_path = mod_input_ui(mod, item.identifier)
+        col.prop(data, prop_path, text=item.name)
 
 
 def _iter_gn_modifiers(obj):
