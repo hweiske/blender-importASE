@@ -1,6 +1,6 @@
 import bpy
 import bmesh
-from mathutils import Vector
+from mathutils import Matrix, Vector
 import ase
 from ase.data import covalent_radii
 from .utils import get_vdw_radius
@@ -43,12 +43,12 @@ def draw_atoms(atoms, scale=1,resolution=16, representation="Balls'n'Sticks"):
         bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
             bpy.data.materials[atom.symbol])
         cnt += 1
-        #full_object_name = bpy.utils.object.full_name(ob)
-        #print(full_object_name)
-        #list_of_atoms.append(full_object_name)
-        #print(ob)
         list_of_atoms.append(ob)
-        bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
+        # bake the scale into the mesh data (each copy owns its data). The
+        # old transform_apply operator acted on the still-selected reference
+        # sphere, so atoms carried an unapplied object scale forever.
+        ob.data.transform(Matrix.Diagonal((*size, 1.0)))
+        ob.scale = (1.0, 1.0, 1.0)
     bpy.ops.object.select_all(action='DESELECT')
     bpy.data.objects[sphere.name].select_set(True)
     bpy.ops.object.delete()
