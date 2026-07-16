@@ -1,4 +1,6 @@
 [lint.per-file-ignores]
-# the test harness must extend sys.path and generate fixtures before
-# importing the addon, so imports cannot all sit at the top of the file
+# the test harness and render scripts must extend sys.path (and register
+# the addon) before importing from it, so imports cannot all sit at the
+# top of the file
 "test/smoke_test.py" = ["E402"]
+"docs/render_trajectory_gif.py" = ["E402"]
