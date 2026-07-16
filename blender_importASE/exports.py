@@ -14,7 +14,7 @@ import math
 
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Matrix, Vector
 from ase import Atoms
 from ase.data import chemical_symbols
 import ase.io
@@ -375,6 +375,14 @@ def export_3dprint(context, filepath, generate_supports=True,
     first time, when none exist yet.
     """
     collection, groups, bonds, supports = collect_print_objects(context)
+
+    # bake any unapplied object scale into the mesh data before exporting
+    # (scenes imported before the draw_atoms fix carry scaled atom objects)
+    for group in groups.values():
+        for ob in group:
+            if tuple(ob.scale) != (1.0, 1.0, 1.0):
+                ob.data.transform(Matrix.Diagonal((*ob.scale, 1.0)))
+                ob.scale = (1.0, 1.0, 1.0)
 
     if not supports and generate_supports:
         supports = rebuild_supports(context, base_radius=base_radius,
