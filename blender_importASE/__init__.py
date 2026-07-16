@@ -715,10 +715,24 @@ DEPENDENCIES = [
 
 def _install_package(import_name, pip_name):
     """pip install pip_name into Blender's user modules path and return whether
-    import_name is importable afterwards."""
+    import_name is importable afterwards.
+
+    scipy / scikit-image drag in their own numpy. A second numpy on the path
+    clashes with the one Blender bundles (ABI / DLL load errors, most visibly
+    on Windows), so we delete the freshly installed copy and let Blender's
+    bundled numpy stay authoritative - the pip wheels are ABI-compatible with
+    it.
+    """
+    import glob
+    import shutil
     install_path = os.path.join(bpy.utils.script_path_user(), "modules")
     subprocess.check_call([sys.executable, "-m", "pip", "install",
                            "--target", install_path, pip_name])
+    for shadow in glob.glob(os.path.join(install_path, "numpy")) + \
+            glob.glob(os.path.join(install_path, "numpy.libs")) + \
+            glob.glob(os.path.join(install_path, "numpy-*.dist-info")):
+        if os.path.isdir(shadow):
+            shutil.rmtree(shadow, ignore_errors=True)
     if install_path not in sys.path:
         sys.path.append(install_path)
     importlib.invalidate_caches()
