@@ -1,7 +1,7 @@
 import bpy
 from ..utils import atomcolors, get_vdw_radius
 from ..controls import make_control_tables, PAIR_STRIDE
-from .compat import setup_merge_by_distance, setup_curve_to_mesh, cin
+from .compat import setup_merge_by_distance, setup_curve_to_mesh, cin, set_mod_input
 from ase.data import covalent_radii, chemical_symbols, colors
 
 # Absent atoms in a variable-count trajectory are parked here so the hide-atoms
@@ -2039,8 +2039,8 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
 
     # create the control tables and plug them into the modifier
     pair_table_obj, element_table_obj = make_control_tables(obj.name, numbers)
-    obj.modifiers[modifier][pair_table_socket.identifier] = pair_table_obj
-    obj.modifiers[modifier][element_table_socket.identifier] = element_table_obj
+    set_mod_input(obj.modifiers[modifier], pair_table_socket.identifier, pair_table_obj)
+    set_mod_input(obj.modifiers[modifier], element_table_socket.identifier, element_table_obj)
     obj['ase_elements'] = [int(z) for z in numbers]
     #attach materials to atoms - order matters: face mat_slot values point at
     #these slots (sorted elements first, bond material last)

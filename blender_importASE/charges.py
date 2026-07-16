@@ -24,6 +24,7 @@ from .node_networks.nodes_atoms_and_bonds import set_atoms_node_group, atoms_and
 from .node_networks.bond_mat import create_bondmat
 from .node_networks.electron_density_nodes import newMaterial
 from .node_networks.outline import outline_objects
+from .node_networks.compat import set_mod_input
 
 CHARGE_ATOMS_MATERIAL = 'charge_atoms'
 CHARGE_BONDS_MATERIAL = 'color_curve_charge'
@@ -138,9 +139,9 @@ def import_charges(filepath, filename, charge_filepath, resolution=16,
     atoms_from_verts = atoms_and_bonds(obj, atoms, 'GeometryNodes',
                                        bondmat=bondmat, with_charges=True)
     obj.modifiers['GeometryNodes'].node_group = atoms_from_verts
-    obj.modifiers['GeometryNodes']["Socket_2"] = bond_distance
-    obj.modifiers['GeometryNodes']["Socket_3"] = bond_radius
-    obj.modifiers['GeometryNodes']["Socket_4"] = resolution
+    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_2", bond_distance)
+    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_3", bond_radius)
+    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_4", resolution)
 
     # the charge materials occupy the two slots after the bond material;
     # the node tree's charge_colors switch points the faces at them
