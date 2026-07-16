@@ -15,6 +15,7 @@ except ImportError:
         vdb = None
 import os
 from .node_networks.electron_density_nodes import visualize_edensity_node_group, newShader
+from .node_networks.compat import set_mod_input
 from .utils import toggle
 import os.path
 
@@ -120,8 +121,8 @@ def data2vol(volume, spacing, origin, filepath, modifier='GeometryNodes',
         plus_material = bpy.data.materials["+ material"]
     if minus_material is None:
         minus_material = bpy.data.materials["- material"]
-    bpy.context.object.modifiers[modifier]["Socket_9"] = plus_material
-    bpy.context.object.modifiers[modifier]["Socket_10"] = minus_material
+    set_mod_input(bpy.context.object.modifiers[modifier], "Socket_9", plus_material)
+    set_mod_input(bpy.context.object.modifiers[modifier], "Socket_10", minus_material)
     toggle(bpy.context.object, SET=False)
     return density_obj
 

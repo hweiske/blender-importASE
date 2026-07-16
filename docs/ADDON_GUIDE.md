@@ -88,7 +88,7 @@ Builds a coordination polyhedron (convex hull, `scipy.spatial.ConvexHull`) aroun
 ```python
 import_density_mesh(filepath, filename, color_filepath=None, iso_value=0.03,
     shade_smooth=True, preset='DEFAULT', import_atoms=True, color_min=None,
-    color_max=None, sample_interior=False, **kwargs)
+    color_max=None, sample_interior=False, outline=True, **kwargs)
 ```
 Runs marching cubes on the ±`iso_value` levels (`ValueError` if the iso is outside the data range). If `color_filepath` is given, samples that second density onto the surface into a `density_color` vertex attribute; `sample_interior=True` takes the strongest value along the surface normal through the whole volume rather than at the surface point. `color_min==color_max` (default 0) auto-normalizes.
 
@@ -102,7 +102,7 @@ To make the isosurface semi-transparent, set the material's Principled BSDF `Alp
 mat = bpy.data.materials['LED material']
 mat.node_tree.nodes['Principled BSDF'].inputs['Alpha'].default_value = 0.4
 ```
-`import_atoms=True` also imports the structure as `nodes`. To get outlined atoms alongside the mesh, import them separately with `import_ase_molecule(..., outline=True)` and pass `import_atoms=False`.
+`import_atoms=True` also imports the structure as `nodes`, outlined by default (`outline=True`).
 
 ### Charges — `charges.import_charges`
 ```python
@@ -124,7 +124,14 @@ A `representation='nodes'` import stacks these modifiers on the single-vertex me
 
 **Don't hardcode modifier indices** — a non-periodic import has no supercell modifier. Use `controls.find_ase_modifier(obj)` which returns `(modifier, {socket_name: identifier})`.
 
-**atoms_and_bonds sockets:** `Socket_2` = bond distance, `Socket_3` = bond radius, `Socket_4` = resolution. `pair_table`/`element_table` are Object sockets — reach them by identifier from `find_ase_modifier`, never by hardcoded name.
+**Setting/reading modifier inputs:** always go through the compat helpers — Blender 5.2 moved geometry-nodes modifier inputs off the modifier (`mod["Socket_N"]` no longer works there):
+```python
+from blender_importASE.node_networks.compat import set_mod_input, get_mod_input
+set_mod_input(mod, 'Socket_2', 0.8)      # works on 4.4 / 5.1 / 5.2, tags the depsgraph
+value = get_mod_input(mod, 'Socket_2')
+```
+
+**atoms_and_bonds sockets:** `Socket_2` = bond distance, `Socket_3` = bond radius, `Socket_4` = resolution, `atom_scale` = overall atom-size multiplier (default 1.0). `pair_table`/`element_table` are Object sockets — reach them by identifier from `find_ase_modifier`, never by hardcoded name.
 
 **supercell sockets:** `Socket_2/3/4` = repeat x/y/z (int, default 1).
 
@@ -136,10 +143,13 @@ Script example (hide Cu–Cu bonds, show Cu as vdW):
 ```python
 from blender_importASE import controls
 from blender_importASE.controls import pair_id
+from blender_importASE.node_networks.compat import get_mod_input
 mod, idents = controls.find_ase_modifier(obj)
-mod[idents['pair_table']].data.attributes['cut'].data[pair_id(29, 29)].value = True
-mod[idents['element_table']].data.attributes['radius_mode'].data[29].value = 1
-mod[idents['pair_table']].data.update(); mod[idents['element_table']].data.update()
+pair_table = get_mod_input(mod, idents['pair_table'])
+element_table = get_mod_input(mod, idents['element_table'])
+pair_table.data.attributes['cut'].data[pair_id(29, 29)].value = True
+element_table.data.attributes['radius_mode'].data[29].value = 1
+pair_table.data.update(); element_table.data.update()
 obj.update_tag()
 ```
 

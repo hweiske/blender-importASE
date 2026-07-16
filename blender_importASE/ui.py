@@ -11,6 +11,7 @@ from .node_networks.supercell import make_supercell
 from .node_networks.bond_mat import create_bondmat
 from .node_networks.outline import outline_objects
 from .node_networks.bond_node import make_bonds
+from .node_networks.compat import set_mod_input
 from .node_networks.hide_atoms import hide_atoms
 import time
 
@@ -102,10 +103,11 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         print(f'add atoms_and_bonds modifier to GeometryNodes{modifier_chosen}')
         atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen,bondmat=bondmat)
        
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen].node_group = atoms_from_verts
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.66
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.1
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_4"] = resolution
+        mod = bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]
+        mod.node_group = atoms_from_verts
+        set_mod_input(mod, "Socket_2", 0.66)
+        set_mod_input(mod, "Socket_3", 0.1)
+        set_mod_input(mod, "Socket_4", resolution)
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
         
@@ -121,9 +123,9 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         bpy.context.view_layer.active_layer_collection = layer_collection
         bonds_obj = make_bonds(modifier='GeometryNodes')
-        bonds_obj.modifiers['GeometryNodes']["Socket_1"] = 0.60
-        bonds_obj.modifiers['GeometryNodes']["Socket_2"] = 0.1
-        bonds_obj.modifiers['GeometryNodes']["Socket_3"] = sec_coll
+        set_mod_input(bonds_obj.modifiers['GeometryNodes'], "Socket_1", 0.60)
+        set_mod_input(bonds_obj.modifiers['GeometryNodes'], "Socket_2", 0.1)
+        set_mod_input(bonds_obj.modifiers['GeometryNodes'], "Socket_3", sec_coll)
         
 
     # Draw the unit cell

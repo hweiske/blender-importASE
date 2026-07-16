@@ -393,6 +393,11 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         description="smooth-shade the isosurface",
         default=True,
     )
+    outline: bpy.props.BoolProperty(
+        name='outline',
+        description='add the outline modifier to the imported structure',
+        default=True,
+    )
     import_atoms: bpy.props.BoolProperty(
         name="import atoms",
         description="also import the structure from the density file as the nodes representation",
@@ -429,6 +434,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'sample_interior')
         layout.prop(self, 'preset')
         layout.prop(self, 'import_atoms')
+        layout.prop(self, 'outline')
         layout.prop(self, 'shade_smooth')
 
     def execute(self, context):
@@ -456,6 +462,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
                     shade_smooth=self.shade_smooth,
                     preset=self.preset,
                     import_atoms=self.import_atoms,
+                    outline=self.outline,
                     color_min=self.color_min,
                     color_max=self.color_max,
                     sample_interior=self.sample_interior,

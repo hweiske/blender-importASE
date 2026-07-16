@@ -1,5 +1,5 @@
 import bpy
-from .compat import setup_volume_to_mesh, cin
+from .compat import setup_volume_to_mesh
 
 #initialize visualize_edensity node group
 def visualize_edensity_node_group(): #from node2python
@@ -58,84 +58,18 @@ def visualize_edensity_node_group(): #from node2python
     compare_005.data_type = 'FLOAT'
     compare_005.operation = 'LESS_THAN'
     compare_005.mode = 'ELEMENT'
-    #A_INT
-    cin(compare_005, 2).default_value = 0
-    #B_INT
-    cin(compare_005, 3).default_value = 0
-    #A_VEC3
-    compare_005.inputs[4].default_value = (0.0, 0.0, 0.0)
-    #B_VEC3
-    compare_005.inputs[5].default_value = (0.0, 0.0, 0.0)
-    #A_COL
-    compare_005.inputs[6].default_value = (0.0, 0.0, 0.0, 0.0)
-    #B_COL
-    compare_005.inputs[7].default_value = (0.0, 0.0, 0.0, 0.0)
-    #A_STR
-    compare_005.inputs[8].default_value = ""
-    #B_STR
-    compare_005.inputs[9].default_value = ""
-    #C
-    compare_005.inputs[10].default_value = 0.8999999761581421
-    #Angle
-    compare_005.inputs[11].default_value = 0.08726649731397629
-    #Epsilon
-    compare_005.inputs[12].default_value = 0.0010000000474974513
 
     #node Compare.003
     compare_003 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_003.data_type = 'FLOAT'
     compare_003.operation = 'LESS_THAN'
     compare_003.mode = 'ELEMENT'
-    #A_INT
-    cin(compare_003, 2).default_value = 0
-    #B_INT
-    cin(compare_003, 3).default_value = 0
-    #A_VEC3
-    compare_003.inputs[4].default_value = (0.0, 0.0, 0.0)
-    #B_VEC3
-    compare_003.inputs[5].default_value = (0.0, 0.0, 0.0)
-    #A_COL
-    compare_003.inputs[6].default_value = (0.0, 0.0, 0.0, 0.0)
-    #B_COL
-    compare_003.inputs[7].default_value = (0.0, 0.0, 0.0, 0.0)
-    #A_STR
-    compare_003.inputs[8].default_value = ""
-    #B_STR
-    compare_003.inputs[9].default_value = ""
-    #C
-    compare_003.inputs[10].default_value = 0.8999999761581421
-    #Angle
-    compare_003.inputs[11].default_value = 0.08726649731397629
-    #Epsilon
-    compare_003.inputs[12].default_value = 0.0010000000474974513
 
     #node Compare.004
     compare_004 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_004.data_type = 'FLOAT'
     compare_004.operation = 'LESS_THAN'
     compare_004.mode = 'ELEMENT'
-    #A_INT
-    cin(compare_004, 2).default_value = 0
-    #B_INT
-    cin(compare_004, 3).default_value = 0
-    #A_VEC3
-    compare_004.inputs[4].default_value = (0.0, 0.0, 0.0)
-    #B_VEC3
-    compare_004.inputs[5].default_value = (0.0, 0.0, 0.0)
-    #A_COL
-    compare_004.inputs[6].default_value = (0.0, 0.0, 0.0, 0.0)
-    #B_COL
-    compare_004.inputs[7].default_value = (0.0, 0.0, 0.0, 0.0)
-    #A_STR
-    compare_004.inputs[8].default_value = ""
-    #B_STR
-    compare_004.inputs[9].default_value = ""
-    #C
-    compare_004.inputs[10].default_value = 0.8999999761581421
-    #Angle
-    compare_004.inputs[11].default_value = 0.08726649731397629
-    #Epsilon
-    compare_004.inputs[12].default_value = 0.0010000000474974513
 
     #node Delete Geometry
     delete_geometry = visualize_edensity.nodes.new("GeometryNodeDeleteGeometry")
@@ -147,56 +81,12 @@ def visualize_edensity_node_group(): #from node2python
     compare.data_type = 'FLOAT'
     compare.operation = 'LESS_THAN'
     compare.mode = 'ELEMENT'
-    #A_INT
-    cin(compare, 2).default_value = 0
-    #B_INT
-    cin(compare, 3).default_value = 0
-    #A_VEC3
-    compare.inputs[4].default_value = (0.0, 0.0, 0.0)
-    #B_VEC3
-    compare.inputs[5].default_value = (0.0, 0.0, 0.0)
-    #A_COL
-    compare.inputs[6].default_value = (0.0, 0.0, 0.0, 0.0)
-    #B_COL
-    compare.inputs[7].default_value = (0.0, 0.0, 0.0, 0.0)
-    #A_STR
-    compare.inputs[8].default_value = ""
-    #B_STR
-    compare.inputs[9].default_value = ""
-    #C
-    compare.inputs[10].default_value = 0.8999999761581421
-    #Angle
-    compare.inputs[11].default_value = 0.08726649731397629
-    #Epsilon
-    compare.inputs[12].default_value = 0.0010000000474974513
 
     #node Compare.001
     compare_001 = visualize_edensity.nodes.new("FunctionNodeCompare")
     compare_001.data_type = 'FLOAT'
     compare_001.operation = 'LESS_THAN'
     compare_001.mode = 'ELEMENT'
-    #A_INT
-    cin(compare_001, 2).default_value = 0
-    #B_INT
-    cin(compare_001, 3).default_value = 0
-    #A_VEC3
-    compare_001.inputs[4].default_value = (0.0, 0.0, 0.0)
-    #B_VEC3
-    compare_001.inputs[5].default_value = (0.0, 0.0, 0.0)
-    #A_COL
-    compare_001.inputs[6].default_value = (0.0, 0.0, 0.0, 0.0)
-    #B_COL
-    compare_001.inputs[7].default_value = (0.0, 0.0, 0.0, 0.0)
-    #A_STR
-    compare_001.inputs[8].default_value = ""
-    #B_STR
-    compare_001.inputs[9].default_value = ""
-    #C
-    compare_001.inputs[10].default_value = 0.8999999761581421
-    #Angle
-    compare_001.inputs[11].default_value = 0.08726649731397629
-    #Epsilon
-    compare_001.inputs[12].default_value = 0.0010000000474974513
 
     #node Delete Geometry.001
     delete_geometry_001 = visualize_edensity.nodes.new("GeometryNodeDeleteGeometry")
@@ -208,28 +98,6 @@ def visualize_edensity_node_group(): #from node2python
     compare_002.data_type = 'FLOAT'
     compare_002.operation = 'LESS_THAN'
     compare_002.mode = 'ELEMENT'
-    #A_INT
-    cin(compare_002, 2).default_value = 0
-    #B_INT
-    cin(compare_002, 3).default_value = 0
-    #A_VEC3
-    compare_002.inputs[4].default_value = (0.0, 0.0, 0.0)
-    #B_VEC3
-    compare_002.inputs[5].default_value = (0.0, 0.0, 0.0)
-    #A_COL
-    compare_002.inputs[6].default_value = (0.0, 0.0, 0.0, 0.0)
-    #B_COL
-    compare_002.inputs[7].default_value = (0.0, 0.0, 0.0, 0.0)
-    #A_STR
-    compare_002.inputs[8].default_value = ""
-    #B_STR
-    compare_002.inputs[9].default_value = ""
-    #C
-    compare_002.inputs[10].default_value = 0.8999999761581421
-    #Angle
-    compare_002.inputs[11].default_value = 0.08726649731397629
-    #Epsilon
-    compare_002.inputs[12].default_value = 0.0010000000474974513
 
     #node Delete Geometry.002
     delete_geometry_002 = visualize_edensity.nodes.new("GeometryNodeDeleteGeometry")
@@ -544,6 +412,22 @@ def visualize_edensity_node_group(): #from node2python
     visualize_edensity.links.new(group_input.outputs[8], set_material.inputs[2])
     #group_input.material - -> set_material_001.Material
     visualize_edensity.links.new(group_input.outputs[9], set_material_001.inputs[2])
+
+    # 'cut' switch: the delete-geometry cutoff planes only apply when
+    # enabled; by default the switch routes the uncut isosurface straight
+    # to the output so nothing is clipped.
+    cut_socket = visualize_edensity.interface.new_socket(
+        'cut', in_out='INPUT', socket_type='NodeSocketBool')
+    cut_socket.default_value = False
+    cut_switch = visualize_edensity.nodes.new("GeometryNodeSwitch")
+    cut_switch.name = "Cut Switch"
+    cut_switch.label = "cut"
+    cut_switch.input_type = 'GEOMETRY'
+    cut_switch.location = (1400, 100)
+    visualize_edensity.links.new(group_input.outputs['cut'], cut_switch.inputs[0])
+    visualize_edensity.links.new(set_shade_smooth.outputs[0], cut_switch.inputs[1])       # False: uncut
+    visualize_edensity.links.new(delete_geometry_004.outputs[0], cut_switch.inputs[2])    # True: cutoffs apply
+    visualize_edensity.links.new(cut_switch.outputs[0], group_output.inputs[0])
     return visualize_edensity
 
 def newMaterial(id):

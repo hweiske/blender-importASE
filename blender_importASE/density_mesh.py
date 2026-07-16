@@ -201,13 +201,13 @@ def _density_mesh_material(preset='DEFAULT'):
 def import_density_mesh(filepath, filename, color_filepath=None,
                         iso_value=0.03, shade_smooth=True, preset='DEFAULT',
                         import_atoms=True, color_min=None, color_max=None,
-                        sample_interior=False, **kwargs):
+                        sample_interior=False, outline=True, **kwargs):
     if import_atoms:
         # the structure from the same file, as the nodes representation;
         # this also creates the collection the isomesh is linked into
         from .ui import import_ase_molecule
         import_ase_molecule(filepath, filename, representation='nodes',
-                            read_density=False, animate=False, outline=False,
+                            read_density=False, animate=False, outline=outline,
                             add_supercell=False)
 
     verts, faces, colors = density_to_mesh_data(
