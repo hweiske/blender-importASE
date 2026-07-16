@@ -43,8 +43,10 @@ jobs:
 
     # Do NOT run untrusted fork-PR code on the self-hosted runner (passwordless
     # sudo + org network). Only push-to-main and merge-queue candidates — both
-    # of which require write access / review — reach this job.
-    if: github.event_name != 'pull_request'
+    # of which require write access / review — reach this job. Also skip on
+    # forks entirely: they have no self-hosted runner, so the job would sit
+    # queued forever and the run would never conclude.
+    if: github.event_name != 'pull_request' && github.repository == 'Tonner-Zech-Group/blender-importASE'
 
     runs-on: [self-hosted, blender]
 
