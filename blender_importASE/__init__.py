@@ -698,9 +698,20 @@ class ASEAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
     install_failed: bpy.props.BoolProperty(default=False)
+    # set by check_dependency() when it finds a package built for a
+    # different Python than this Blender's - either it could not delete it
+    # (no write permission, typically Blender's own bundled installation
+    # directory), or it deleted it but the package lived outside our own
+    # per-user modules folder, where nothing will reinstall a working copy
+    stale_native_packages: bpy.props.StringProperty(default="")
 
     def draw(self, context):
         layout = self.layout
+        if self.stale_native_packages:
+            layout.label(
+                text=f"Native package built for a different Python detected: "
+                     f"{self.stale_native_packages}",
+                icon='ERROR')
         if self.install_failed:
             layout.label(text="ASE installation failed. Please check your internet connection.", icon='ERROR')
         else:
@@ -723,68 +734,129 @@ def _python_abi_tag():
     return f"cp{sys.version_info[0]}{sys.version_info[1]}"
 
 
-def _purge_incompatible_native_packages(install_path):
-    """Delete any pip package under install_path whose compiled extension
-    modules were built for a different Python than the one currently
-    running Blender. Returns the distribution names removed.
+def _native_package_roots():
+    """Every site-packages-like directory that could hold a stale, wrong-
+    Python compiled package for this Blender: our own per-user addon
+    'modules' folder, and Blender's own bundled interpreter's site-packages
+    (numpy ships as part of Blender itself, so a corrupted or half-updated
+    Blender install can carry a broken bundled numpy that our addon never
+    installed and that a purge of only the user 'modules' folder would
+    never see)."""
+    import sysconfig
+    roots = [os.path.join(bpy.utils.script_path_user(), "modules")]
+    for key in ('platlib', 'purelib'):
+        path = sysconfig.get_paths().get(key)
+        if path and path not in roots:
+            roots.append(path)
+    return roots
+
+
+def _purge_incompatible_native_packages(root):
+    """Delete the individual compiled-extension files (and matching
+    dist-info) under root that were built for a different Python than the
+    one currently running Blender. Returns (purged, blocked): distribution
+    names successfully cleaned up, and ones found but not removable (e.g.
+    no write permission - typical for Blender's own install directory).
 
     Guards against stale installs left behind by an earlier Blender/Python
-    version that shares this same user scripts folder - e.g. Blender's
-    "copy previous settings" migration, or a build that bumped its bundled
-    Python while keeping the same version folder name (our install path is
-    keyed on Blender's version, not its bundled Python's). A mismatched
-    compiled extension raises an ImportError deep inside the package
-    ("Importing the numpy C-extensions failed" is numpy's version of this,
-    reported on Windows when a stale cp3xx build is left over from an older
-    interpreter) that util.find_spec() cannot catch, since it only checks
-    whether a module is *findable*, not importable.
+    version that shares this same directory - e.g. Blender's "copy previous
+    settings" migration, or a build that bumped its bundled Python while
+    keeping the same version folder name (our per-user install path is keyed
+    on Blender's version, not its bundled Python's), or a partial/interrupted
+    update that didn't replace every compiled file in Blender's own bundled
+    site-packages. A mismatched compiled extension raises an ImportError
+    deep inside the package ("Importing the numpy C-extensions failed" is
+    numpy's version of this, reported on Windows) that util.find_spec()
+    cannot catch, since it only checks whether a module is *findable*, not
+    importable.
+
+    Removes only the files a mismatched dist-info's RECORD lists that are
+    NOT also claimed by another, non-mismatched dist-info in the same
+    root - not the whole shared top-level package directory, and not any
+    plain (non-tagged) file a good install still needs. pip's --target
+    mode does not clean up a prior conflicting install of the same package
+    name the way a normal site-packages --upgrade would, so two dist-infos
+    (old and new) can end up describing overlapping files in one shared
+    package directory; a later install overwrites same-path files in
+    place, so an old record can still list a path whose current on-disk
+    content actually belongs to the new, good install.
     """
-    if not os.path.isdir(install_path):
-        return []
+    if not os.path.isdir(root):
+        return [], []
     import csv
     import glob
     import re
-    import shutil
     my_tag = _python_abi_tag()
     ext_re = re.compile(r'\.(cp\d{2,3})-')
-    purged = []
-    for record_path in glob.glob(os.path.join(install_path, "*.dist-info", "RECORD")):
-        dist_info_dir = os.path.dirname(record_path)
-        rel_paths = []
+
+    def read_record(record_path):
         try:
             with open(record_path, newline='', encoding='utf-8') as fh:
-                rel_paths = [row[0] for row in csv.reader(fh) if row]
+                return [row[0] for row in csv.reader(fh) if row]
         except OSError:
-            continue
-        mismatched = any(
+            return None
+
+    records = {}  # dist_info_dir -> rel_paths
+    for record_path in glob.glob(os.path.join(root, "*.dist-info", "RECORD")):
+        rel_paths = read_record(record_path)
+        if rel_paths is not None:
+            records[os.path.dirname(record_path)] = rel_paths
+
+    def is_mismatched(rel_paths):
+        return any(
             (m := ext_re.search(os.path.basename(rel))) and m.group(1) != my_tag
             for rel in rel_paths if rel.endswith(('.pyd', '.so')))
-        if not mismatched:
+
+    # paths any NON-mismatched record still needs, across every package -
+    # never delete these even while purging a different, stale record
+    good_paths = {rel for dist_info_dir, rel_paths in records.items()
+                  if not is_mismatched(rel_paths) for rel in rel_paths}
+
+    purged, blocked = [], []
+    for dist_info_dir, rel_paths in records.items():
+        if not is_mismatched(rel_paths):
             continue
-        # remove every top-level file/dir this distribution installed, plus
-        # its dist-info folder
-        top_level = {rel.replace('\\', '/').split('/', 1)[0] for rel in rel_paths}
-        for top in top_level:
-            target = os.path.join(install_path, top)
-            if os.path.isdir(target):
-                shutil.rmtree(target, ignore_errors=True)
-            elif os.path.isfile(target):
+        name = os.path.basename(dist_info_dir).rsplit('-', 2)[0]
+        failed = False
+        for rel in rel_paths:
+            if rel in good_paths:
+                continue  # a still-good install also needs this exact path
+            target = os.path.join(root, rel.replace('\\', '/').replace('/', os.sep))
+            if not os.path.exists(target):
+                continue
+            try:
+                os.remove(target)
+            except OSError as exc:
+                failed = True
+                print(f"Could not remove stale {name} file {target}: {exc}")
+        for dirpath, _, files in list(os.walk(dist_info_dir, topdown=False)):
+            for fn in files:
                 try:
-                    os.remove(target)
-                except OSError:
-                    pass
-        shutil.rmtree(dist_info_dir, ignore_errors=True)
-        purged.append(os.path.basename(dist_info_dir).rsplit('-', 2)[0])
+                    os.remove(os.path.join(dirpath, fn))
+                except OSError as exc:
+                    failed = True
+                    print(f"Could not remove {os.path.join(dirpath, fn)}: {exc}")
+            try:
+                if not os.listdir(dirpath):
+                    os.rmdir(dirpath)
+            except OSError as exc:
+                failed = True
+                print(f"Could not remove {dirpath}: {exc}")
+        (blocked if failed else purged).append(name)
     if purged:
         importlib.invalidate_caches()
         for modname in list(sys.modules):
             if modname in purged or any(modname.startswith(p + '.') for p in purged):
                 del sys.modules[modname]
-        print(f"Removed native packages built for a different Python than "
-              f"{my_tag} (leftover from an earlier Blender/Python version "
-              f"sharing this scripts folder): {', '.join(purged)}. "
-              "Reinstalling...")
-    return purged
+        print(f"Removed native packages under {root} built for a different "
+              f"Python than {my_tag}: {', '.join(purged)}. Reinstalling...")
+    if blocked:
+        print(f"Found native packages under {root} built for a different "
+              f"Python than {my_tag} but could not remove them: "
+              f"{', '.join(blocked)}. If imports keep failing, close Blender, "
+              "delete that package's folder there by hand (or reinstall/"
+              "repair Blender itself), then restart.")
+    return purged, blocked
 
 
 def _can_import(name):
@@ -831,7 +903,40 @@ def check_dependency():
     Blender's user modules path. Returns True when the required ase is
     available; optional dependencies only print a warning on failure."""
     install_path = os.path.join(bpy.utils.script_path_user(), "modules")
-    _purge_incompatible_native_packages(install_path)
+    roots = _native_package_roots()
+    blocked_all, purged_in_bundled = [], []
+    for root in roots:
+        purged, blocked = _purge_incompatible_native_packages(root)
+        blocked_all.extend(blocked)
+        if purged and root != install_path:
+            purged_in_bundled.extend(purged)
+    message = None
+    if blocked_all:
+        # found a wrong-Python package but could not delete it - almost
+        # always Blender's own bundled install directory without write
+        # permission (e.g. under Program Files without admin rights)
+        message = ', '.join(sorted(set(blocked_all)))
+    elif purged_in_bundled:
+        # cleaned it up, but it lived inside Blender's OWN bundled Python,
+        # not our per-user modules folder - we only ever pip-install into
+        # the latter, so nothing will reinstall a working copy there. If
+        # nothing else on sys.path can supply this package, imports will
+        # still fail (just with a different error) until Blender's own
+        # installation is repaired or reinstalled.
+        message = (
+            f"{', '.join(sorted(set(purged_in_bundled)))} (removed from "
+            "Blender's own bundled Python - if imports still fail, "
+            "reinstall or repair Blender itself)")
+    if message:
+        # bpy.context.preferences.addons[__name__] only exists once Blender's
+        # own addon-enable machinery has run; register()/check_dependency()
+        # is also called directly by render/test scripts that skip that
+        # machinery entirely, so this is a best-effort report, not required
+        # for check_dependency() to do its actual job.
+        try:
+            bpy.context.preferences.addons[__name__].preferences.stale_native_packages = message
+        except KeyError:
+            print(f"(no add-on preferences entry to report this in yet) {message}")
 
     ase_available = True
     for import_name, pip_name, required in DEPENDENCIES:
