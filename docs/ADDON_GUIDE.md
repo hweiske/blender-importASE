@@ -187,9 +187,13 @@ Writes one STL per element + `bonds.stl` + `supports.stl` and zips them.
 ## 8. Dependencies
 
 - **ase** — required; auto-pip-installed into Blender's user `modules` path on `register()`. If install fails, no operators register and `ASEAddonPreferences.install_failed` is set.
-- **scipy** — polyhedra only; lazy import, no auto-install.
-- **scikit-image** — density-as-mesh; auto-installed on demand.
+- **scipy** — polyhedra only; auto-installed alongside ase.
+- **scikit-image** — density-as-mesh; auto-installed alongside ase.
 - **openvdb/pyopenvdb** — volumetric density (`import_cubefiles.data2vol`); no auto-install, clear `ImportError` if missing.
+
+`register()`/`check_dependency()` checks every dependency with a real `importlib.import_module()` (not `find_spec`), so an installed-but-broken package is correctly treated as missing and reinstalled — this matters because `find_spec` only checks that a module is *findable*, not that it actually imports.
+
+Before checking anything, `check_dependency()` also scans the user `modules` folder for pip packages whose compiled extensions (`.pyd`/`.so`) were built for a different Python than the one currently running Blender, and deletes them. This guards against a real failure mode on Windows: the install path is keyed on Blender's *version* folder, not its bundled Python — if a Blender build bumps its embedded Python (or a user runs "copy previous settings" from an older Blender/Python), a stale numpy/scipy/scikit-image build for the old interpreter is left sitting in the new version's `modules` folder. Loading it raises `ImportError: ... Importing the numpy C-extensions failed ... incompatible with python 'cpython-31X'` deep inside the package — `find_spec` doesn't catch this because the files are still *there*, just unloadable. The scan reads each package's `RECORD` file (written by pip) for `cpXY`-tagged extension filenames; a mismatch triggers a purge of everything that distribution installed, so the next `_can_import` check correctly reports it missing and it gets reinstalled cleanly.
 
 Heads-up: if the user has a dev ASE checkout on `sys.path`, it can shadow the pip ASE and cause version-skew surprises (e.g. CHGCAR species-line parsing). `read_vasp_density` is gzip-aware and retries stripping `/` from POTCAR-style species lines.
 

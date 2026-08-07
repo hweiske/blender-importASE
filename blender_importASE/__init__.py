@@ -6,7 +6,6 @@ import sys
 import subprocess
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from os.path import join
-from importlib import util
 
 
 __author__ = "Hendrik Weiske"
@@ -720,9 +719,90 @@ DEPENDENCIES = [
 ]
 
 
-def _install_package(import_name, pip_name):
-    """pip install pip_name into Blender's user modules path and return whether
-    import_name is importable afterwards.
+def _python_abi_tag():
+    return f"cp{sys.version_info[0]}{sys.version_info[1]}"
+
+
+def _purge_incompatible_native_packages(install_path):
+    """Delete any pip package under install_path whose compiled extension
+    modules were built for a different Python than the one currently
+    running Blender. Returns the distribution names removed.
+
+    Guards against stale installs left behind by an earlier Blender/Python
+    version that shares this same user scripts folder - e.g. Blender's
+    "copy previous settings" migration, or a build that bumped its bundled
+    Python while keeping the same version folder name (our install path is
+    keyed on Blender's version, not its bundled Python's). A mismatched
+    compiled extension raises an ImportError deep inside the package
+    ("Importing the numpy C-extensions failed" is numpy's version of this,
+    reported on Windows when a stale cp3xx build is left over from an older
+    interpreter) that util.find_spec() cannot catch, since it only checks
+    whether a module is *findable*, not importable.
+    """
+    if not os.path.isdir(install_path):
+        return []
+    import csv
+    import glob
+    import re
+    import shutil
+    my_tag = _python_abi_tag()
+    ext_re = re.compile(r'\.(cp\d{2,3})-')
+    purged = []
+    for record_path in glob.glob(os.path.join(install_path, "*.dist-info", "RECORD")):
+        dist_info_dir = os.path.dirname(record_path)
+        rel_paths = []
+        try:
+            with open(record_path, newline='', encoding='utf-8') as fh:
+                rel_paths = [row[0] for row in csv.reader(fh) if row]
+        except OSError:
+            continue
+        mismatched = any(
+            (m := ext_re.search(os.path.basename(rel))) and m.group(1) != my_tag
+            for rel in rel_paths if rel.endswith(('.pyd', '.so')))
+        if not mismatched:
+            continue
+        # remove every top-level file/dir this distribution installed, plus
+        # its dist-info folder
+        top_level = {rel.replace('\\', '/').split('/', 1)[0] for rel in rel_paths}
+        for top in top_level:
+            target = os.path.join(install_path, top)
+            if os.path.isdir(target):
+                shutil.rmtree(target, ignore_errors=True)
+            elif os.path.isfile(target):
+                try:
+                    os.remove(target)
+                except OSError:
+                    pass
+        shutil.rmtree(dist_info_dir, ignore_errors=True)
+        purged.append(os.path.basename(dist_info_dir).rsplit('-', 2)[0])
+    if purged:
+        importlib.invalidate_caches()
+        for modname in list(sys.modules):
+            if modname in purged or any(modname.startswith(p + '.') for p in purged):
+                del sys.modules[modname]
+        print(f"Removed native packages built for a different Python than "
+              f"{my_tag} (leftover from an earlier Blender/Python version "
+              f"sharing this scripts folder): {', '.join(purged)}. "
+              "Reinstalling...")
+    return purged
+
+
+def _can_import(name):
+    """Actually import (not just locate) a module, so an installed-but-
+    incompatible package (e.g. a compiled extension built for a different
+    Python) is correctly treated as unavailable. util.find_spec() cannot
+    tell the difference - it only checks findability, not importability."""
+    try:
+        importlib.import_module(name)
+        return True
+    except Exception as exc:
+        print(f"{name} did not import cleanly ({exc}); will (re)install.")
+        return False
+
+
+def _install_package(import_name, pip_name, install_path):
+    """pip install pip_name into Blender's user modules path and return
+    whether import_name is importable afterwards.
 
     scipy / scikit-image drag in their own numpy. A second numpy on the path
     clashes with the one Blender bundles (ABI / DLL load errors, most visibly
@@ -732,7 +812,6 @@ def _install_package(import_name, pip_name):
     """
     import glob
     import shutil
-    install_path = os.path.join(bpy.utils.script_path_user(), "modules")
     subprocess.check_call([sys.executable, "-m", "pip", "install",
                            "--target", install_path, pip_name])
     for shadow in glob.glob(os.path.join(install_path, "numpy")) + \
@@ -743,7 +822,7 @@ def _install_package(import_name, pip_name):
     if install_path not in sys.path:
         sys.path.append(install_path)
     importlib.invalidate_caches()
-    return util.find_spec(import_name) is not None
+    return _can_import(import_name)
 
 
 def check_dependency():
@@ -751,14 +830,17 @@ def check_dependency():
     scikit-image) are importable, installing any that are missing into
     Blender's user modules path. Returns True when the required ase is
     available; optional dependencies only print a warning on failure."""
+    install_path = os.path.join(bpy.utils.script_path_user(), "modules")
+    _purge_incompatible_native_packages(install_path)
+
     ase_available = True
     for import_name, pip_name, required in DEPENDENCIES:
-        if util.find_spec(import_name) is not None:
+        if _can_import(import_name):
             continue
         print(f"{pip_name} not present in Blender python. Attempting install. "
               "This could take a moment...")
         try:
-            installed = _install_package(import_name, pip_name)
+            installed = _install_package(import_name, pip_name, install_path)
         except subprocess.CalledProcessError:
             installed = False
         if installed:
