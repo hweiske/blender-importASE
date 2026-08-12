@@ -93,6 +93,17 @@ covalent and vdW radii, hiding bonds per element pair, bond distance/radius and
 resolution, supercell repeats, outline thickness, per-element visibility, and
 the isovalues of any imported densities.
 
+### Dotted bonds
+
+Select two atoms of an imported structure (edit mode, pick the two vertices)
+and press "Add dotted bond" in the ASE sidebar: a row of spheres is drawn
+between them, in the bond color and with the outline. Use it for partial
+bonds in a transition state, hydrogen bonds, or any interaction the
+distance-based bond search does not draw. "replace solid bond" additionally
+hides the normal bond between the two atoms, so the dotted one takes its
+place. The dots sample the atom positions live, so they follow the structure
+and its trajectory.
+
 ### Materials
 
 The materials used by the geometry-node representations are the ones in the
