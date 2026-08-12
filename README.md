@@ -93,16 +93,28 @@ covalent and vdW radii, hiding bonds per element pair, bond distance/radius and
 resolution, supercell repeats, outline thickness, per-element visibility, and
 the isovalues of any imported densities.
 
-### Dotted bonds
+### Custom bonds (dotted / scaled / dashed)
 
 Select two atoms of an imported structure (edit mode, pick the two vertices)
-and press "Add dotted bond" in the ASE sidebar: a row of spheres is drawn
-between them, in the bond color and with the outline. Use it for partial
-bonds in a transition state, hydrogen bonds, or any interaction the
-distance-based bond search does not draw. "replace solid bond" additionally
-hides the normal bond between the two atoms, so the dotted one takes its
-place. The dots sample the atom positions live, so they follow the structure
-and its trajectory.
+and press "Add dotted bond" in the ASE sidebar. The *bond type* dropdown in
+the redo panel (F9) picks the style:
+
+* **Dotted** - a row of spheres between the two atoms
+* **Scaled** - a solid bond that gets thinner the longer it is, capped at the
+  chosen radius (bonds at or below the *reference length* keep the full radius)
+* **Dashed** - alternating cylinder segments
+
+Use them for partial bonds in a transition state, hydrogen bonds, or any
+interaction the distance-based bond search does not draw. All three take the
+bond colour (blended between the two atoms) and get the outline. The bond
+samples the atom positions live, so it follows the structure and its
+trajectory.
+
+"replace solid bond" additionally hides the normal bond between the two atoms,
+so the custom one takes its place. Note this is one replacement per atom: if
+you replace 0-1 and then 0-2, the 0-1 bond reappears. "Reset custom bonds"
+brings every replaced solid bond back and deletes the custom bond objects
+again.
 
 ### Materials
 
