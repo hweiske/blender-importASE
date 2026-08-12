@@ -109,8 +109,7 @@ def data2vol(volume, spacing, origin, filepath, modifier='GeometryNodes',
     GRID.gridClass = vdb.GridClass.FOG_VOLUME
     GRID.name = 'density'
     TMPFILE = os.path.splitext(filepath)[0] + '_density.vdb'
-    if not os.path.isfile(TMPFILE):
-        vdb.write(TMPFILE, GRID)
+    vdb.write(TMPFILE, GRID)
     _ = bpy.ops.object.volume_import(filepath=TMPFILE, location=origin)
     density_obj = bpy.context.active_object
     visualize_edensity_node_group()
@@ -157,8 +156,8 @@ def chgcar2vol(filename, modifier='GeometryNodes', density=None):
 
     chgdiff = getattr(density, 'chgdiff', [])
     if len(chgdiff):
-        spin_up_mat = newShader('+ spin material', 0.1, 0.75, 0.25)   # green
-        spin_down_mat = newShader('- spin material', 0.95, 0.35, 0.6)  # pink
+        spin_up_mat = bpy.data.materials.get('+ spin material') or newShader('+ spin material', 0.1, 0.75, 0.25)   # green
+        spin_down_mat = bpy.data.materials.get('- spin material') or newShader('- spin material', 0.95, 0.35, 0.6)  # pink
         spin_obj = data2vol(chgdiff[-1], spacing, (0.0, 0.0, 0.0),
                             os.path.splitext(filename)[0] + '_spin',
                             modifier=modifier,
