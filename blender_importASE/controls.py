@@ -241,20 +241,36 @@ class ASE_OT_add_dotted_bond(bpy.types.Operator):
     bl_label = 'Add dotted bond'
     bl_options = {'REGISTER', 'UNDO'}
 
+    bond_type: bpy.props.EnumProperty(
+        name="bond type",
+        description="how the bond between the two atoms is drawn",
+        items=[
+            ('DOTTED', 'Dotted', 'A row of spheres between the two atoms'),
+            ('SCALED', 'Scaled',
+             'A solid bond that gets thinner the longer it is, up to the chosen radius'),
+            ('DASHED', 'Dashed', 'Alternating cylinder segments between the two atoms'),
+        ],
+        default='DOTTED')
     atom_a: bpy.props.IntProperty(
         name="atom A", default=-1, min=-1,
         description="first atom index; -1 uses the current selection")
     atom_b: bpy.props.IntProperty(
         name="atom B", default=-1, min=-1,
         description="second atom index; -1 uses the current selection")
-    dots: bpy.props.IntProperty(
-        name="dots", default=10, min=2, soft_max=60,
-        description="number of spheres along the bond")
+    segments: bpy.props.IntProperty(
+        name="dots / dashes", default=10, min=1, soft_max=60,
+        description="number of dots (dotted) or dashes (dashed); unused for scaled")
     radius: bpy.props.FloatProperty(
-        name="dot radius", default=0.08, min=0.0, soft_max=1.0)
+        name="radius", default=0.08, min=0.0, soft_max=1.0,
+        description="dot radius, or the maximum bond radius for the scaled style")
+    reference_length: bpy.props.FloatProperty(
+        name="reference length", default=1.5, min=0.0001, soft_max=10.0,
+        description="scaled style only: bonds at or below this length get the full "
+                    "radius, longer ones get proportionally thinner")
     resolution: bpy.props.IntProperty(
-        name="resolution", default=2, min=1, soft_max=5,
-        description="icosphere subdivisions of each dot")
+        name="resolution", default=2, min=1, soft_max=32,
+        description="icosphere subdivisions (dotted) or profile vertices "
+                    "(scaled/dashed)")
     replace: bpy.props.BoolProperty(
         name="replace solid bond", default=False,
         description="also hide the normal bond between the two atoms, so the "
@@ -282,15 +298,64 @@ class ASE_OT_add_dotted_bond(bpy.types.Operator):
             # write them back so the redo panel (F9) shows and can tweak them
             self.atom_a, self.atom_b = index_a, index_b
 
-        from .dotted_bond import add_dotted_bond
+        from .dotted_bond import add_bond
+        # the dotted style's default resolution (icosphere subdivisions) is
+        # far lower than a profile resolution, so only pass it on when the
+        # user actually changed it away from the property default
+        resolution = self.resolution if self.resolution != 2 else None
         try:
-            bond = add_dotted_bond(obj, index_a, index_b, dots=self.dots,
-                                   radius=self.radius, resolution=self.resolution,
-                                   replace=self.replace, outline=self.outline)
+            bond = add_bond(obj, index_a, index_b, style=self.bond_type,
+                            segments=self.segments, radius=self.radius,
+                            resolution=resolution,
+                            reference_length=self.reference_length,
+                            replace=self.replace, outline=self.outline)
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
-        self.report({'INFO'}, f'dotted bond {index_a}-{index_b}: {bond.name}')
+        self.report({'INFO'},
+                    f'{self.bond_type.lower()} bond {index_a}-{index_b}: {bond.name}')
+        return {'FINISHED'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'bond_type')
+        layout.prop(self, 'radius')
+        if self.bond_type in {'DOTTED', 'DASHED'}:
+            layout.prop(self, 'segments')
+        if self.bond_type == 'SCALED':
+            layout.prop(self, 'reference_length')
+        layout.prop(self, 'resolution')
+        layout.prop(self, 'replace')
+        layout.prop(self, 'outline')
+        row = layout.row(align=True)
+        row.prop(self, 'atom_a')
+        row.prop(self, 'atom_b')
+
+
+class ASE_OT_reset_custom_bonds(bpy.types.Operator):
+    """Restore every solid bond that a dotted/scaled/dashed bond replaced,
+    and delete those custom bonds again"""
+    bl_idname = 'ase.reset_custom_bonds'
+    bl_label = 'Reset custom bonds'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    remove_objects: bpy.props.BoolProperty(
+        name="delete bond objects", default=True,
+        description="also delete the dotted/scaled/dashed bond objects of this "
+                    "structure; untick to only bring the solid bonds back")
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and find_ase_modifier(obj)[0] is not None
+
+    def execute(self, context):
+        from .dotted_bond import reset_custom_bonds
+        restored, removed = reset_custom_bonds(context.active_object,
+                                               remove_objects=self.remove_objects)
+        self.report({'INFO'},
+                    f'restored solid bonds on {restored} atom(s), '
+                    f'removed {removed} bond object(s)')
         return {'FINISHED'}
 
 
@@ -314,8 +379,9 @@ class ASE_PT_controls(bpy.types.Panel):
             if mod.node_group.name.startswith('atoms_and_bonds'):
                 self.draw_tables(context, box)
                 selected = len(_selected_atom_indices(obj))
-                row = box.row()
-                row.operator('ase.add_dotted_bond', icon='PARTICLES')
+                col = box.column(align=True)
+                col.operator('ase.add_dotted_bond', icon='PARTICLES')
+                col.operator('ase.reset_custom_bonds', icon='LOOP_BACK')
                 if selected != 2:
                     box.label(text=f'select 2 atoms ({selected} selected)',
                               icon='INFO')
@@ -373,7 +439,8 @@ class ASE_PT_controls(bpy.types.Panel):
 
 
 classes = (ASE_OT_toggle_pair_cut, ASE_OT_set_radius_mode,
-           ASE_OT_rebuild_supports, ASE_OT_add_dotted_bond, ASE_PT_controls)
+           ASE_OT_rebuild_supports, ASE_OT_add_dotted_bond,
+           ASE_OT_reset_custom_bonds, ASE_PT_controls)
 
 
 def register():
