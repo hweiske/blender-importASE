@@ -10,7 +10,7 @@ def insert_locrotscale_keyframe(ob):
     ob.keyframe_insert(data_path='scale')
 
 
-def move_atoms(trajectory,list_of_atoms,imageslice):
+def move_atoms(trajectory,list_of_atoms,imageslice,frame_interpolation=1):
 #    view_layer=bpy.context.view_layer
     trajectory=trajectory[::imageslice]
     for ni,image in enumerate(trajectory):
@@ -20,7 +20,7 @@ def move_atoms(trajectory,list_of_atoms,imageslice):
             bpy.ops.object.select_all(action='DESELECT')
  #           bpy.context.active_object = atom_ob
             atom_ob.select_set(True)
-            bpy.context.scene.frame_set(ni+1)
+            bpy.context.scene.frame_set(ni*frame_interpolation+1)
   #          bpy.context.active_object.location = image[n].position
             atom_ob.location=image[n].position
 #            if n == 1:
@@ -29,7 +29,7 @@ def move_atoms(trajectory,list_of_atoms,imageslice):
             atom_ob.keyframe_insert(data_path='location')
             atom_ob.select_set(False)
     return None
-def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice):
+def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice,frame_interpolation=1):
     trajectory=trajectory[::imageslice]
     for ni,image in enumerate(trajectory):
         cnt=0
@@ -46,7 +46,7 @@ def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice):
 ###ANIM###                        
                         ob=list_of_bonds[cnt]
                         ob.select_set(True)
-                        bpy.context.scene.frame_set(ni+1)
+                        bpy.context.scene.frame_set(ni*frame_interpolation+1)
                         ob.location = location
                         ob.dimensions = (0.2, 0.2, distance)
                         phi = np.arctan2(displacement[1], displacement[0])
@@ -60,7 +60,7 @@ def move_bonds(trajectory,list_of_bonds,NEIGHBORLIST,imageslice):
                         break
     #print(f'plotted {cnt*len(trajectory)} bonds')
     return None
-def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice):
+def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice,frame_interpolation=1):
     #print("Using Longbond mech")
     trajectory = trajectory[::imageslice]
     for ni,image in enumerate(trajectory):
@@ -72,7 +72,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
             for neighbor, offset in zip(neighbors, offsets):
                 ob=list_of_bonds[cnt]
                 ob.select_set(True)
-                bpy.context.scene.frame_set(ni+1)
+                bpy.context.scene.frame_set(ni*frame_interpolation+1)
                 if bondlengths[cnt] == 'long': 
                     displacements = [0.5 * (image.positions[neighbor] - atom.position + np.dot(offset, image.cell)),
                                      0.5 * (atom.position - np.dot(offset, image.cell) - image.positions[neighbor])]
@@ -90,7 +90,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                 else:
                     ob=list_of_bonds[cnt]
                     ob.select_set(True)
-                    bpy.context.scene.frame_set(ni+1)
+                    bpy.context.scene.frame_set(ni*frame_interpolation+1)
                     displacements = [0.5 * (image.positions[neighbor] - atom.position + np.dot(offset, image.cell)),
                                      0.5 * (atom.position - np.dot(offset, image.cell) - image.positions[neighbor])]
                     location = atom.position + (displacements[0] / 2)
@@ -107,7 +107,7 @@ def move_longbonds(trajectory,list_of_bonds,NEIGHBORLIST,bondlengths,imageslice)
                     # neighbor to atom
                     ob = list_of_bonds[cnt]
                     ob.select_set(True)
-                    bpy.context.scene.frame_set(ni+1)
+                    bpy.context.scene.frame_set(ni*frame_interpolation+1)
                     displacements = [0.5 * (atom.position - image.positions[neighbor] - np.dot(offset, image.cell)),
                                      0.5 * (image.positions[neighbor] + np.dot(offset, image.cell) + atom.position)]
                     location = image.positions[neighbor] + (displacements[0] / 2)

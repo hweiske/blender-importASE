@@ -52,7 +52,8 @@ The importers accept multi-file selection (`files`/`directory` props). Exporters
 import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True,
     resolution=32, colorbonds=False, long_bonds=False, color=0.2, scale=1,
     unit_cell=False, representation="Balls'n'Sticks", read_density=True,
-    shift_cell=False, imageslice=1, animate=True, outline=True, **kwargs)
+    shift_cell=False, imageslice=1, frame_interpolation=1, animate=True,
+    outline=True, **kwargs)
 ```
 Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`), builds a collection named `<formula>_<stem>`, dispatches by `representation`, optionally draws the unit cell and reads the density volume.
 
@@ -67,7 +68,8 @@ Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`),
 - `outline=True` — adds the dark-rim outline modifier. **House style for this project: always render molecules with `outline=True`.**
 - `read_density=True` — if the file carries a volume (`.cube`, CHGCAR/PARCHG/AECCAR), builds a volumetric density object (needs openvdb). Isosurface materials `'+ material'`/`'- material'`.
 - `add_supercell=True` — adds the supercell modifier when the cell is periodic; repeat counts live on `Socket_2/3/4` of that modifier ([§5](#5-the-nodes-modifier-stack-scripting-internals)).
-- `animate=True`, `imageslice=n` — for trajectories, animate every *n*th frame (`overwrite=True` forces `nodes`).
+- `animate=True`, `imageslice=n` — for trajectories, import only every *n*th image (`overwrite=True` forces `nodes`). Use this to thin out long trajectories.
+- `frame_interpolation=n` — spacing of the imported images on the timeline. `1` (default) puts each image on its own frame; `10` leaves 9 empty frames between images for Blender to interpolate, turning a short path (e.g. a 6-image NEB) into a smooth animation. Note this is the opposite of `imageslice`: that one *removes* images, this one *adds* in-between frames. Caveat: on a trajectory whose atom count changes, atoms that appear/disappear slide in from their parked position across the interpolated frames (the images themselves stay exact); the importer prints a warning in that case.
 - `colorbonds=True` — color bond halves by their atoms; `unit_cell=True` draws the cell box.
 
 The GUI operator passes different defaults (`scale=0.5`, `color=0.6`, `representation="nodes"`; its `zero_cell` maps to `shift_cell`).

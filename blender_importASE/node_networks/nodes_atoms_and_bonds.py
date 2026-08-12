@@ -14,7 +14,7 @@ SENTINEL_COORD = 1.0e4
 SENTINEL_CUTOFF = 1.0e3
 
 
-def read_structure(atoms,name, animate=True, faces=None):
+def read_structure(atoms,name, animate=True, faces=None, frame_interpolation=1):
     if animate:
         trajectory=atoms
         # Build the mesh from the fullest frame so that atoms which spawn in
@@ -92,10 +92,18 @@ def read_structure(atoms,name, animate=True, faces=None):
         keys.use_relative = False
         # key_blocks are [basis, frame_0, frame_1, ...]; each frame key sits at
         # an auto-assigned eval position (read-only .frame). Scrub eval_time so
-        # scene frame n lands exactly on frame key n.
+        # scene frame n * frame_interpolation lands exactly on frame key n.
+        # With frame_interpolation > 1 the keyframes are spaced out and
+        # Blender's own f-curve interpolation fills the frames in between,
+        # smoothly morphing one image into the next (useful for e.g. a
+        # 6-image NEB path). The keyframes keep Blender's default bezier
+        # easing, which auto-clamps to stay monotonic: the path eases in at
+        # the start, runs at a constant rate through the middle images, and
+        # eases out at the end.
         for n in range(len(trajectory)):
             keys.eval_time = keys.key_blocks[n + 1].frame
-            keys.keyframe_insert(data_path='eval_time', frame=n)
+            keys.keyframe_insert(data_path='eval_time',
+                                 frame=n * frame_interpolation)
         #    bpy.context.view_layer.update()
         #    bpy.ops.object.mode_set(mode='EDIT')
         #    bpy.ops.view3d.insert_keyframe_animall()
