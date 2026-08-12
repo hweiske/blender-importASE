@@ -10,7 +10,7 @@ from os.path import join
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.2"
+__version__ = "2.3"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -18,7 +18,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (2, 2),
+    "version": (2, 3),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
@@ -983,6 +983,10 @@ def menu_func_export(self, context):
 
 def register():
     bpy.utils.register_class(ASEAddonPreferences)
+    # viewpoint rendering is pure bpy (no ase), so it stays available even
+    # when the dependency install below fails
+    from . import render_vpts
+    render_vpts.register()
     dependency = check_dependency()
     if dependency:
         bpy.utils.register_class(ImportASEMolecule)
@@ -1002,6 +1006,11 @@ def register():
         prefs.install_failed = True
 
 def unregister():
+    try:
+        from . import render_vpts
+        render_vpts.unregister()
+    except Exception:
+        print("Render vpts was not registered, skipping.")
     try:
         from . import controls
         controls.unregister()

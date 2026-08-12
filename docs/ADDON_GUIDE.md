@@ -2,7 +2,7 @@
 
 This is a Blender add-on for importing atomistic structures (via [ASE](https://wiki.fysik.dtu.dk/ase/)) and turning them into publication-quality renders: molecules, crystals, coordination polyhedra, electron-density isosurfaces (volume or mesh), partial-charge colorings, and 3D-printable models. This document is the reference for driving it — both from the Blender GUI and from Python scripts. Everything the GUI does calls the same functions you can call directly, so scripting and clicking are interchangeable.
 
-- **Package:** `blender_importASE/` (add-on version 2.2, min Blender 4.4; tested on 4.4 and 5.1).
+- **Package:** `blender_importASE/` (add-on version 2.3, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
 - **Dependencies:** `ase` (auto-installed on first `register()`), plus `scipy` (polyhedra), `scikit-image` (density-as-mesh, auto-installed), `openvdb`/`pyopenvdb` (volumetric density). See [§8](#8-dependencies).
 
 ---
@@ -41,6 +41,8 @@ Note the calling convention shared by all importers: `(filepath, filename, ...)`
 | ASE Charges (.*) | `import_mesh.ase_charges` | `charges.import_charges` | Structure with per-atom charge attribute + charge coloring |
 | ASE xyz (.xyz) | `export_mesh.ase_xyz` | `exports.export_xyz` | Active structure → .xyz (world-space coords) |
 | ASE 3D print (.zip) | `export_mesh.ase_3dprint` | `exports.export_3dprint` | Per-element STLs + bonds + supports, zipped |
+
+**Render ▸ Render structure vpts** (`render.render_vpts`, `render_vpts.RenderImageOperator`) renders every collection separately for every camera, writing `<collection>_<camera>.png` into a chosen folder. It is part of the add-on (it used to be a separate `render_vpts.py` you installed alongside), and needs no dependencies, so it registers even if the ASE install fails.
 
 The importers accept multi-file selection (`files`/`directory` props). Exporters use the active object.
 
