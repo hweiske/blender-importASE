@@ -1,5 +1,5 @@
 import bpy
-from .compat import setup_merge_by_distance, setup_curve_to_mesh
+from .compat import setup_merge_by_distance, setup_curve_to_mesh, cin, pin
 from .. import __version__
 
 #initialize bonds node group
@@ -57,6 +57,15 @@ def create_bonds_geometry_node_group():
     geometry_in_socket = bonds.interface.new_socket(name = "Geometry", in_out='INPUT', socket_type = 'NodeSocketGeometry')
     geometry_in_socket.attribute_domain = 'POINT'
     bonds.interface.move(geometry_in_socket, 1)
+
+    #Socket joint radius: icospheres instanced at every atom position so the
+    #bond tubes fuse into a watertight solid for 3D printing
+    joint_radius_socket = bonds.interface.new_socket(name = "joint radius", in_out='INPUT', socket_type = 'NodeSocketFloat')
+    joint_radius_socket.default_value = 0.15
+    joint_radius_socket.min_value = 0.0
+    joint_radius_socket.max_value = 3.4028234663852886e+38
+    joint_radius_socket.subtype = 'DISTANCE'
+    joint_radius_socket.attribute_domain = 'POINT'
 
 
     #initialize bonds nodes
@@ -410,7 +419,7 @@ def create_bonds_geometry_node_group():
     compare.mode = 'ELEMENT'
     compare.operation = 'EQUAL'
     #B_INT
-    compare.inputs[3].default_value = 1
+    cin(compare, 3).default_value = 1
 
     #node Index
     index = bonds.nodes.new("GeometryNodeInputIndex")
@@ -1111,7 +1120,38 @@ def create_bonds_geometry_node_group():
     merge_geometry.name = "fix shading"
     setup_merge_by_distance(merge_geometry, distance=0.001)
     merge_geometry.location = (3500, -1165.5565185546875)
-    bonds.links.new(set_shade_smooth.outputs[0], merge_geometry.inputs[0])
+
+    # icosphere joints at every atom position (collection instances sit at
+    # the atom object origins), so tubes fuse into a printable solid
+    joint_points = bonds.nodes.new("GeometryNodeInstancesToPoints")
+    joint_points.name = "Joint Points"
+    joint_points.location = (3050, -1400)
+    joint_sphere = bonds.nodes.new("GeometryNodeMeshIcoSphere")
+    joint_sphere.name = "Joint Ico Sphere"
+    joint_sphere.inputs['Subdivisions'].default_value = 3
+    joint_sphere.location = (3050, -1560)
+    joint_instance = bonds.nodes.new("GeometryNodeInstanceOnPoints")
+    joint_instance.name = "Joint Instance"
+    joint_instance.location = (3230, -1400)
+    joint_realize = bonds.nodes.new("GeometryNodeRealizeInstances")
+    joint_realize.name = "Joint Realize"
+    joint_realize.location = (3380, -1400)
+    join_joints = bonds.nodes.new("GeometryNodeJoinGeometry")
+    join_joints.name = "Join Joints"
+    join_joints.location = (3350, -1200)
+    group_input_joint = bonds.nodes.new("NodeGroupInput")
+    group_input_joint.name = "Group Input Joint"
+    group_input_joint.hide = True
+    group_input_joint.location = (2870, -1560)
+
+    bonds.links.new(collection_info.outputs[0], joint_points.inputs[0])
+    bonds.links.new(group_input_joint.outputs['joint radius'], joint_sphere.inputs['Radius'])
+    bonds.links.new(joint_points.outputs[0], joint_instance.inputs[0])
+    bonds.links.new(joint_sphere.outputs[0], joint_instance.inputs[2])
+    bonds.links.new(joint_instance.outputs[0], joint_realize.inputs[0])
+    bonds.links.new(joint_realize.outputs[0], join_joints.inputs[0])
+    bonds.links.new(set_shade_smooth.outputs[0], join_joints.inputs[0])
+    bonds.links.new(join_joints.outputs[0], merge_geometry.inputs[0])
     # join the (empty) host mesh so the object's material list travels with
     # the geometry; link order matters: last-linked joins first in the
     # merged material list
@@ -1190,7 +1230,7 @@ def create_bonds_geometry_node_group():
     #domain_size_001.Point Count -> math_013.Value
     bonds.links.new(domain_size_001.outputs[0], math_013.inputs[0])
     #math_011.Value -> compare_006.A
-    bonds.links.new(math_011.outputs[0], compare_006.inputs[2])
+    bonds.links.new(math_011.outputs[0], cin(compare_006, 2))
     #domain_size_001.Point Count -> math_011.Value
     bonds.links.new(domain_size_001.outputs[0], math_011.inputs[1])
     #index_001.Index -> math_011.Value
@@ -1202,7 +1242,7 @@ def create_bonds_geometry_node_group():
     #domain_size_001.Point Count -> math_012.Value
     bonds.links.new(domain_size_001.outputs[0], math_012.inputs[1])
     #math_012.Value -> compare_006.B
-    bonds.links.new(math_012.outputs[0], compare_006.inputs[3])
+    bonds.links.new(math_012.outputs[0], cin(compare_006, 3))
     #reroute_003.Output -> sample_index_001.Geometry
     bonds.links.new(reroute_003.outputs[0], sample_index_001.inputs[0])
     #math_013.Value -> points_001.Count
@@ -1270,7 +1310,7 @@ def create_bonds_geometry_node_group():
     #math_003.Value -> compare.A
     bonds.links.new(math_003.outputs[0], compare.inputs[0])
     #math_003.Value -> compare.A
-    bonds.links.new(math_003.outputs[0], compare.inputs[2])
+    bonds.links.new(math_003.outputs[0], cin(compare, 2))
     #realize_instances_003.Geometry -> separate_geometry.Geometry
     bonds.links.new(realize_instances_003.outputs[0], separate_geometry.inputs[0])
     #compare.Result -> separate_geometry.Selection
@@ -1401,53 +1441,53 @@ def bonds_node_group(mat):
     #Alpha
     principled_bsdf.inputs[4].default_value = 1.0
     #Normal
-    principled_bsdf.inputs[5].default_value = (0.0, 0.0, 0.0)
+    pin(principled_bsdf, 5).default_value = (0.0, 0.0, 0.0)
     #Diffuse Roughness
-    principled_bsdf.inputs[7].default_value = 0.0
+    pin(principled_bsdf, 7).default_value = 0.0
     #Subsurface Weight
-    principled_bsdf.inputs[8].default_value = 0.0
+    pin(principled_bsdf, 8).default_value = 0.0
     #Subsurface Radius
-    principled_bsdf.inputs[9].default_value = (1.0, 0.20000000298023224, 0.10000000149011612)
+    pin(principled_bsdf, 9).default_value = (1.0, 0.20000000298023224, 0.10000000149011612)
     #Subsurface Scale
-    principled_bsdf.inputs[10].default_value = 0.05000000074505806
+    pin(principled_bsdf, 10).default_value = 0.05000000074505806
     #Subsurface IOR
-    principled_bsdf.inputs[11].default_value = 1.399999976158142
+    pin(principled_bsdf, 11).default_value = 1.399999976158142
     #Subsurface Anisotropy
-    principled_bsdf.inputs[12].default_value = 0.0
+    pin(principled_bsdf, 12).default_value = 0.0
     #Specular IOR Level
-    principled_bsdf.inputs[13].default_value = 0.5
+    pin(principled_bsdf, 13).default_value = 0.5
     #Specular Tint
-    principled_bsdf.inputs[14].default_value = (1.0, 1.0, 1.0, 1.0)
+    pin(principled_bsdf, 14).default_value = (1.0, 1.0, 1.0, 1.0)
     #Anisotropic
-    principled_bsdf.inputs[15].default_value = 0.0
+    pin(principled_bsdf, 15).default_value = 0.0
     #Anisotropic Rotation
-    principled_bsdf.inputs[16].default_value = 0.0
+    pin(principled_bsdf, 16).default_value = 0.0
     #Tangent
-    principled_bsdf.inputs[17].default_value = (0.0, 0.0, 0.0)
+    pin(principled_bsdf, 17).default_value = (0.0, 0.0, 0.0)
     #Transmission Weight
-    principled_bsdf.inputs[18].default_value = 0.05740181356668472
+    pin(principled_bsdf, 18).default_value = 0.05740181356668472
     #Coat Weight
-    principled_bsdf.inputs[19].default_value = 0.0
+    pin(principled_bsdf, 19).default_value = 0.0
     #Coat Roughness
-    principled_bsdf.inputs[20].default_value = 0.029999999329447746
+    pin(principled_bsdf, 20).default_value = 0.029999999329447746
     #Coat IOR
-    principled_bsdf.inputs[21].default_value = 1.5
+    pin(principled_bsdf, 21).default_value = 1.5
     #Coat Tint
-    principled_bsdf.inputs[22].default_value = (1.0, 1.0, 1.0, 1.0)
+    pin(principled_bsdf, 22).default_value = (1.0, 1.0, 1.0, 1.0)
     #Coat Normal
-    principled_bsdf.inputs[23].default_value = (0.0, 0.0, 0.0)
+    pin(principled_bsdf, 23).default_value = (0.0, 0.0, 0.0)
     #Sheen Weight
-    principled_bsdf.inputs[24].default_value = 0.0
+    pin(principled_bsdf, 24).default_value = 0.0
     #Sheen Roughness
-    principled_bsdf.inputs[25].default_value = 0.5
+    pin(principled_bsdf, 25).default_value = 0.5
     #Sheen Tint
-    principled_bsdf.inputs[26].default_value = (1.0, 1.0, 1.0, 1.0)
+    pin(principled_bsdf, 26).default_value = (1.0, 1.0, 1.0, 1.0)
     #Emission Strength
-    principled_bsdf.inputs[28].default_value = 0.009999999776482582
+    pin(principled_bsdf, 28).default_value = 0.009999999776482582
     #Thin Film Thickness
-    principled_bsdf.inputs[29].default_value = 0.0
+    pin(principled_bsdf, 29).default_value = 0.0
     #Thin Film IOR
-    principled_bsdf.inputs[30].default_value = 1.3300000429153442
+    pin(principled_bsdf, 30).default_value = 1.3300000429153442
 
 
     #Set locations
@@ -1464,7 +1504,7 @@ def bonds_node_group(mat):
     #principled_bsdf.BSDF -> material_output.Surface
     bonds.links.new(principled_bsdf.outputs[0], material_output.inputs[0])
     #attribute.Color -> principled_bsdf.Emission Color
-    bonds.links.new(attribute.outputs[0], principled_bsdf.inputs[27])
+    bonds.links.new(attribute.outputs[0], pin(principled_bsdf, 27))
     return bonds
 
 

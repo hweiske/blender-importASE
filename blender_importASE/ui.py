@@ -11,6 +11,7 @@ from .node_networks.supercell import make_supercell
 from .node_networks.bond_mat import create_bondmat
 from .node_networks.outline import outline_objects
 from .node_networks.bond_node import make_bonds
+from .node_networks.compat import set_mod_input
 from .node_networks.hide_atoms import hide_atoms
 import time
 
@@ -18,8 +19,9 @@ import time
 def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, resolution=32, colorbonds=False, long_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks",
-                        read_density=True, shift_cell=False, 
-                        imageslice=1, animate = True, outline = True, **kwargs):
+                        read_density=True, shift_cell=False,
+                        imageslice=1, frame_interpolation=1,
+                        animate = True, outline = True, **kwargs):
     # Read in the structure
     start=time.time()
     modifier_counter = 0
@@ -39,14 +41,34 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     trajectory = False
     if isinstance(atoms[0],Atoms) and len(atoms) > 1:
         trajectory = True
-        TRAJECTORY=atoms.copy()[1:]
-        atoms=atoms[0]
+        TRAJECTORY=atoms.copy()
+        # Use the fullest frame as the setup reference so materials and the
+        # per-element hide toggles cover every atom type in the trajectory,
+        # including molecules that spawn in on later frames. (The first frame
+        # used to be dropped here, which cut the opening state of the run.)
+        atoms=max(atoms, key=len)
         if animate is False:
             atoms = TRAJECTORY[-1]
         else:
-            bpy.data.scenes['Scene'].frame_end = len(TRAJECTORY[::imageslice])
+            # frame_interpolation spaces the images out over the timeline, so
+            # the last image sits at (n_images - 1) * frame_interpolation
+            n_images = len(TRAJECTORY[::imageslice])
+            bpy.data.scenes['Scene'].frame_end = (
+                (n_images - 1) * frame_interpolation + 1 if frame_interpolation > 1
+                else n_images)
             bpy.data.scenes['Scene'].frame_start = 0
             bpy.data.scenes['Scene'].frame_current = 0
+            if frame_interpolation > 1 and len({len(f) for f in TRAJECTORY}) > 1:
+                # Interpolating between two images with different atom counts
+                # is ill-defined: an atom that only exists in the later image
+                # is parked far away in the earlier one, so the in-between
+                # frames slide it in from that parking position. Images
+                # themselves are still exact; only the generated frames
+                # between a spawn/removal are affected.
+                print('WARNING: frame-interpolation > 1 on a trajectory whose '
+                      'atom count changes - atoms that appear or disappear will '
+                      'slide in/out across the interpolated frames. The imported '
+                      'images themselves are unaffected.')
     elif len(atoms) == 1:
         atoms=atoms[0]
     
@@ -69,7 +91,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     bpy.context.view_layer.active_layer_collection = layer_collection
 
     # Draw the atoms and bonds
-    if representation != 'bonds_fromnodes' and representation != 'nodes':
+    if representation != '3D_print' and representation != 'nodes':
         group_atoms(atoms)
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         if representation != 'VDW':
@@ -79,7 +101,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
     if representation == 'nodes':
         if animate and trajectory:
-            obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True)
+            obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True,frame_interpolation=frame_interpolation)
         else:
             obj,mesh=read_structure(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=False)
         print(f'add hide modifier to GeometryNodes{modifier_chosen}')
@@ -98,16 +120,17 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         print(f'add atoms_and_bonds modifier to GeometryNodes{modifier_chosen}')
         atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen,bondmat=bondmat)
        
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen].node_group = atoms_from_verts
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_2"] = 0.66
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_3"] = 0.1
-        bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]["Socket_4"] = resolution
+        mod = bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]
+        mod.node_group = atoms_from_verts
+        set_mod_input(mod, "Socket_2", 0.66)
+        set_mod_input(mod, "Socket_3", 0.1)
+        set_mod_input(mod, "Socket_4", resolution)
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
         
 
         #bond_nodes = bond_nodes_node_group(atoms, atoms_from_verts)
-    if representation == 'bonds_fromnodes':
+    if representation == '3D_print':
        
         sec_coll = bpy.data.collections.new(name='atoms')
         my_coll.children.link(sec_coll)
@@ -117,9 +140,9 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         list_of_atoms=draw_atoms(atoms, scale=scale,resolution=resolution ,representation=representation)
         bpy.context.view_layer.active_layer_collection = layer_collection
         bonds_obj = make_bonds(modifier='GeometryNodes')
-        bonds_obj.modifiers['GeometryNodes']["Socket_1"] = 0.60
-        bonds_obj.modifiers['GeometryNodes']["Socket_2"] = 0.1
-        bonds_obj.modifiers['GeometryNodes']["Socket_3"] = sec_coll
+        set_mod_input(bonds_obj.modifiers['GeometryNodes'], "Socket_1", 0.60)
+        set_mod_input(bonds_obj.modifiers['GeometryNodes'], "Socket_2", 0.1)
+        set_mod_input(bonds_obj.modifiers['GeometryNodes'], "Socket_3", sec_coll)
         
 
     # Draw the unit cell
@@ -144,28 +167,28 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
 
     # Handle animation
     if trajectory is True and animate is True:
-        if representation != 'nodes' and representation != 'bonds_fromnodes':
-            
-            move_atoms(TRAJECTORY,list_of_atoms,imageslice)
+        if representation != 'nodes' and representation != '3D_print':
+
+            move_atoms(TRAJECTORY,list_of_atoms,imageslice,frame_interpolation)
             if representation != 'VDW':
                 if long_bonds is True:
-                    move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
+                    move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice,frame_interpolation)
                 else:
-                    move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
-        if representation == 'bonds_fromnodes':
-            print("generating trajectory for bonds_fromnodes")
-            move_atoms(TRAJECTORY,list_of_atoms,imageslice)
+                    move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice,frame_interpolation)
+        if representation == '3D_print':
+            print("generating trajectory for 3D_print")
+            move_atoms(TRAJECTORY,list_of_atoms,imageslice,frame_interpolation)
     end=time.time()
     print('Time to import atoms_object: ',end-end_read)
 
     if outline:
         print(f'add outline modifier to GeometryNodes{modifier_chosen}')
-        if representation != 'nodes' and representation != 'bonds_fromnodes' and representation != 'VDW':
+        if representation != 'nodes' and representation != '3D_print' and representation != 'VDW':
             outline_objects(list_of_atoms + list_of_bonds,modifier='GeometryNodes'+modifier_chosen)
             modifier_counter += 1
             modifier_chosen=f'.00{modifier_counter}'
              
-        if representation == 'bonds_fromnodes':
+        if representation == '3D_print':
             outline_objects([bonds_obj],modifier='GeometryNodes.001')
             outline_objects(list_of_atoms,modifier='GeometryNodes')
             modifier_counter += 1
@@ -179,7 +202,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
             modifier_chosen=f'.00{modifier_counter}'
 
     if add_supercell:
-        if representation == 'bonds_fromnodes':
+        if representation == '3D_print':
             added=make_supercell(list_of_atoms, atoms, 'GeometryNodes'+modifier_chosen,representation=representation)
             if added:
                 print(f'added supercell to GeometryNodes{modifier_chosen}')

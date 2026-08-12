@@ -17,6 +17,8 @@ the 'ASE' tab.
 import bpy
 from ase.data import chemical_symbols
 
+from .node_networks.compat import get_mod_input, mod_input_keys, mod_input_ui
+
 PAIR_STRIDE = 119  # > max atomic number, so pair ids are unique
 
 
@@ -66,7 +68,7 @@ def _table_object(context, which):
     mod, idents = find_ase_modifier(context.active_object)
     if mod is None:
         return None
-    return mod.get(idents[which])
+    return get_mod_input(mod, idents[which])
 
 
 def _touch(table_obj):
@@ -148,7 +150,7 @@ def _group_title(node_group_name):
 def _draw_modifier_inputs(layout, mod):
     """Draw all scalar inputs of a geometry-nodes modifier as regular,
     keyframeable modifier properties."""
-    keys = mod.keys()
+    keys = mod_input_keys(mod)
     col = layout.column(align=True)
     for item in mod.node_group.interface.items_tree:
         if getattr(item, 'in_out', None) != 'INPUT':
@@ -157,7 +159,8 @@ def _draw_modifier_inputs(layout, mod):
             continue
         if item.identifier not in keys:
             continue
-        col.prop(mod, f'["{item.identifier}"]', text=item.name)
+        data, prop_path = mod_input_ui(mod, item.identifier)
+        col.prop(data, prop_path, text=item.name)
 
 
 def _iter_gn_modifiers(obj):
@@ -185,6 +188,183 @@ def _find_density_modifiers(obj):
     return found
 
 
+class ASE_OT_rebuild_supports(bpy.types.Operator):
+    """(Re)generate the 3D-print supports of the active structure; adjust
+    the parameters in the redo panel (F9) and the supports rebuild live"""
+    bl_idname = 'ase.rebuild_supports'
+    bl_label = 'Rebuild 3D-print supports'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    base_radius: bpy.props.FloatProperty(
+        name="base radius", default=0.25, min=0.01, soft_max=1.0,
+        description="pillar radius at the plate")
+    tip_radius: bpy.props.FloatProperty(
+        name="contact radius", default=0.1, min=0.01, soft_max=1.0,
+        description="pillar radius at the atom contact point")
+    support_layer: bpy.props.FloatProperty(
+        name="support drop", default=0.3, min=0.0, soft_max=5.0,
+        description="minimum height a bonded/touching neighbor must sit below an atom to hold it up; larger adds more pillars")
+    plate_thickness: bpy.props.FloatProperty(
+        name="plate thickness", default=0.6, min=0.1, soft_max=3.0)
+    plate_holes: bpy.props.BoolProperty(
+        name="plate holes", default=True,
+        description="regular grid of square holes in the plate to save material")
+    plate_gap: bpy.props.FloatProperty(
+        name="plate gap", default=2.0, min=0.0, soft_max=10.0,
+        description="distance from the base plate up to the lowest atom")
+
+    def execute(self, context):
+        from .exports import rebuild_supports
+        try:
+            rebuild_supports(context, base_radius=self.base_radius,
+                             tip_radius=self.tip_radius,
+                             support_layer=self.support_layer,
+                             plate_thickness=self.plate_thickness,
+                             plate_holes=self.plate_holes,
+                             pillar_length=self.plate_gap)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
+
+def _selected_atom_indices(obj):
+    """Indices of the selected atoms (= selected vertices) of a structure,
+    read from the edit-mode cage when the object is in edit mode."""
+    if obj.mode == 'EDIT':
+        import bmesh
+        bm = bmesh.from_edit_mesh(obj.data)
+        return [v.index for v in bm.verts if v.select]
+    return [v.index for v in obj.data.vertices if v.select]
+
+
+class ASE_OT_add_dotted_bond(bpy.types.Operator):
+    """Draw a dotted bond between two atoms: select exactly two atoms
+    (vertices) of the structure, then click. With 'replace solid bond' the
+    normal bond between them is hidden, otherwise the dots are simply added
+    - useful for partial bonds in a transition state or hydrogen bonds"""
+    bl_idname = 'ase.add_dotted_bond'
+    bl_label = 'Add dotted bond'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    bond_type: bpy.props.EnumProperty(
+        name="bond type",
+        description="how the bond between the two atoms is drawn",
+        items=[
+            ('DOTTED', 'Dotted', 'A row of spheres between the two atoms'),
+            ('SCALED', 'Scaled',
+             'A solid bond that gets thinner the longer it is, up to the chosen radius'),
+            ('DASHED', 'Dashed', 'Alternating cylinder segments between the two atoms'),
+        ],
+        default='DOTTED')
+    atom_a: bpy.props.IntProperty(
+        name="atom A", default=-1, min=-1,
+        description="first atom index; -1 uses the current selection")
+    atom_b: bpy.props.IntProperty(
+        name="atom B", default=-1, min=-1,
+        description="second atom index; -1 uses the current selection")
+    segments: bpy.props.IntProperty(
+        name="dots / dashes", default=10, min=1, soft_max=60,
+        description="number of dots (dotted) or dashes (dashed); unused for scaled")
+    radius: bpy.props.FloatProperty(
+        name="radius", default=0.08, min=0.0, soft_max=1.0,
+        description="dot radius, or the maximum bond radius for the scaled style")
+    reference_length: bpy.props.FloatProperty(
+        name="reference length", default=1.5, min=0.0001, soft_max=10.0,
+        description="scaled style only: bonds at or below this length get the full "
+                    "radius, longer ones get proportionally thinner")
+    resolution: bpy.props.IntProperty(
+        name="resolution", default=2, min=1, soft_max=32,
+        description="icosphere subdivisions (dotted) or profile vertices "
+                    "(scaled/dashed)")
+    replace: bpy.props.BoolProperty(
+        name="replace solid bond", default=False,
+        description="also hide the normal bond between the two atoms, so the "
+                    "dotted bond takes its place")
+    outline: bpy.props.BoolProperty(name="outline", default=True)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and find_ase_modifier(obj)[0] is not None
+
+    def execute(self, context):
+        obj = context.active_object
+        if self.atom_a >= 0 and self.atom_b >= 0:
+            index_a, index_b = self.atom_a, self.atom_b
+        else:
+            selected = _selected_atom_indices(obj)
+            if len(selected) != 2:
+                self.report({'ERROR'},
+                            f'select exactly two atoms of "{obj.name}" '
+                            f'(currently {len(selected)}) - enter edit mode, '
+                            'pick the two vertices, then run this again')
+                return {'CANCELLED'}
+            index_a, index_b = selected
+            # write them back so the redo panel (F9) shows and can tweak them
+            self.atom_a, self.atom_b = index_a, index_b
+
+        from .dotted_bond import add_bond
+        # the dotted style's default resolution (icosphere subdivisions) is
+        # far lower than a profile resolution, so only pass it on when the
+        # user actually changed it away from the property default
+        resolution = self.resolution if self.resolution != 2 else None
+        try:
+            bond = add_bond(obj, index_a, index_b, style=self.bond_type,
+                            segments=self.segments, radius=self.radius,
+                            resolution=resolution,
+                            reference_length=self.reference_length,
+                            replace=self.replace, outline=self.outline)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        self.report({'INFO'},
+                    f'{self.bond_type.lower()} bond {index_a}-{index_b}: {bond.name}')
+        return {'FINISHED'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'bond_type')
+        layout.prop(self, 'radius')
+        if self.bond_type in {'DOTTED', 'DASHED'}:
+            layout.prop(self, 'segments')
+        if self.bond_type == 'SCALED':
+            layout.prop(self, 'reference_length')
+        layout.prop(self, 'resolution')
+        layout.prop(self, 'replace')
+        layout.prop(self, 'outline')
+        row = layout.row(align=True)
+        row.prop(self, 'atom_a')
+        row.prop(self, 'atom_b')
+
+
+class ASE_OT_reset_custom_bonds(bpy.types.Operator):
+    """Restore every solid bond that a dotted/scaled/dashed bond replaced,
+    and delete those custom bonds again"""
+    bl_idname = 'ase.reset_custom_bonds'
+    bl_label = 'Reset custom bonds'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    remove_objects: bpy.props.BoolProperty(
+        name="delete bond objects", default=True,
+        description="also delete the dotted/scaled/dashed bond objects of this "
+                    "structure; untick to only bring the solid bonds back")
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and find_ase_modifier(obj)[0] is not None
+
+    def execute(self, context):
+        from .dotted_bond import reset_custom_bonds
+        restored, removed = reset_custom_bonds(context.active_object,
+                                               remove_objects=self.remove_objects)
+        self.report({'INFO'},
+                    f'restored solid bonds on {restored} atom(s), '
+                    f'removed {removed} bond object(s)')
+        return {'FINISHED'}
+
+
 class ASE_PT_controls(bpy.types.Panel):
     bl_label = 'ASE structure'
     bl_space_type = 'VIEW_3D'
@@ -204,6 +384,22 @@ class ASE_PT_controls(bpy.types.Panel):
             _draw_modifier_inputs(box, mod)
             if mod.node_group.name.startswith('atoms_and_bonds'):
                 self.draw_tables(context, box)
+                selected = len(_selected_atom_indices(obj))
+                col = box.column(align=True)
+                col.operator('ase.add_dotted_bond', icon='PARTICLES')
+                col.operator('ase.reset_custom_bonds', icon='LOOP_BACK')
+                if selected != 2:
+                    box.label(text=f'select 2 atoms ({selected} selected)',
+                              icon='INFO')
+
+        # 3D-print supports: offered when the collection has real atom
+        # meshes (the 3D print representation)
+        from ase.data import chemical_symbols as _symbols
+        if any(o.type == 'MESH' and o.name.split('.')[0] in _symbols
+               for o in obj.users_collection[0].all_objects):
+            box = self.layout.box()
+            box.label(text='3D printing')
+            box.operator('ase.rebuild_supports', icon='MOD_LATTICE')
 
         # electron densities live on sibling objects in the same collection
         # (a spin-polarized CHGCAR yields a total and a spin volume)
@@ -248,7 +444,9 @@ class ASE_PT_controls(bpy.types.Panel):
                     op.pair_id = pid
 
 
-classes = (ASE_OT_toggle_pair_cut, ASE_OT_set_radius_mode, ASE_PT_controls)
+classes = (ASE_OT_toggle_pair_cut, ASE_OT_set_radius_mode,
+           ASE_OT_rebuild_supports, ASE_OT_add_dotted_bond,
+           ASE_OT_reset_custom_bonds, ASE_PT_controls)
 
 
 def register():

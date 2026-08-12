@@ -2,6 +2,76 @@
 import bpy
 
 
+def cin(node, old_index):
+    """Operand socket of a FunctionNodeCompare, addressed by its Blender <=5.1
+    index (INT operands were A=2, B=3).
+
+    Before Blender 5.2 the Compare node exposed an A/B pair for every data type
+    and only enabled the active pair; 5.2 collapses it to a single active A/B
+    pair (A=0, B=1), so the old fixed indices raise IndexError. Selecting the
+    enabled 'A'/'B' socket by name works on every version.
+    """
+    name = {0: 'A', 1: 'B', 2: 'A', 3: 'B'}[old_index]
+    for socket in node.inputs:
+        if socket.enabled and socket.name == name:
+            return socket
+    return node.inputs[old_index]
+
+
+def pin(node, old_index):
+    """Principled BSDF input socket addressed by its Blender <=5.1 index.
+
+    Blender 5.2 inserted a 'Thin Wall' socket at index 5, shifting every socket
+    after it by one (0-4 are unchanged). Add that offset on 5.2+.
+    """
+    if old_index >= 5 and bpy.app.version >= (5, 2, 0):
+        return node.inputs[old_index + 1]
+    return node.inputs[old_index]
+
+
+# Blender 5.2 moved geometry-nodes modifier inputs off the modifier itself
+# (mod["Socket_N"] = value, an id-property) onto mod.properties.inputs, which
+# exposes every socket as an RNA attribute with a .value property -- the same
+# interface Blender's own operators use:
+#     modifier.properties.inputs.Socket_2.value = 0.8
+# Writing the value does not tag the depsgraph on its own, so the setter tags
+# the owning object.
+
+def set_mod_input(mod, identifier, value):
+    """Set a geometry-nodes modifier input by socket identifier on any
+    Blender version."""
+    if bpy.app.version >= (5, 2, 0):
+        getattr(mod.properties.inputs, identifier).value = value
+    else:
+        mod[identifier] = value
+    # a plain id-property write does not tag the depsgraph on any version
+    mod.id_data.update_tag()
+
+
+def get_mod_input(mod, identifier, default=None):
+    """Read a geometry-nodes modifier input by socket identifier on any
+    Blender version."""
+    if bpy.app.version >= (5, 2, 0):
+        prop = getattr(mod.properties.inputs, identifier, None)
+        return default if prop is None else prop.value
+    return mod.get(identifier, default)
+
+
+def mod_input_keys(mod):
+    """Socket identifiers a geometry-nodes modifier holds values for."""
+    if bpy.app.version >= (5, 2, 0):
+        return mod.properties.inputs.keys()
+    return mod.keys()
+
+
+def mod_input_ui(mod, identifier):
+    """(data, property) pair for layout.prop() to draw a modifier input
+    as an editable property on any Blender version."""
+    if bpy.app.version >= (5, 2, 0):
+        return getattr(mod.properties.inputs, identifier), 'value'
+    return mod, f'["{identifier}"]'
+
+
 def _input(node, name):
     # collection lookup by name skips disabled sockets in Blender 4.x
     # (e.g. 'Voxel Size' on a Volume to Mesh node in GRID mode), so iterate

@@ -1,4 +1,4 @@
-# Collection of Blender Addons for Molecular Structures
+# Collection of examples
 
 [![CI](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml/badge.svg)](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml)
 [![Latest release](https://img.shields.io/github/v/release/Tonner-Zech-Group/blender-importASE)](https://github.com/Tonner-Zech-Group/blender-importASE/releases/latest)
@@ -6,6 +6,47 @@
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10776696.svg)](https://doi.org/10.5281/zenodo.10776696)
 [![Downloads](https://img.shields.io/github/downloads/Tonner-Zech-Group/blender-importASE/total)](https://github.com/Tonner-Zech-Group/blender-importASE/releases)
+
+Import molecules, crystals, trajectories, and volumetric data (electron densities, molecular orbitals) into Blender through [ASE](https://gitlab.com/ase/ase) — with geometry-nodes representations, coordination polyhedra, and isosurfaces.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/molecule.jpg" alt="Molecule with colored bonds"/><br/>
+      <b>Molecules</b> — geometry-nodes atoms with gray or element-colored bonds
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/polyhedra.jpg" alt="Crystal with coordination polyhedra"/><br/>
+      <b>Coordination polyhedra</b> — convex hulls of coordination shells as solid faces
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/orbital_volume.jpg" alt="Molecular orbital isosurface"/><br/>
+      <b>Molecular orbitals &amp; densities</b> — .cube / VASP volumes with node-based isosurfaces
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/density_mesh.jpg" alt="Density isosurface as mesh, colored by a second density"/><br/>
+      <b>Density as mesh</b> — marching-cubes isosurfaces, optionally colored by a second density file
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/charges.jpg" alt="Molecule colored by partial charges"/><br/>
+      <b>Partial charges</b> — per-atom charges from a csv file, red-white-blue on atoms and bonds
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/trajectory.gif" alt="Animated trajectory"/><br/>
+      <b>Trajectories</b> — any ASE-readable trajectory, animated frame by frame (including varying atom counts)
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="docs/images/print_supports.jpg" alt="Molecule with generated resin supports" width="480"/><br/>
+      <b>3D printing</b> — atoms and bonds with generated resin supports, exported as per-element STLs in one zip
+    </td>
+  </tr>
+</table>
 
 ## Dependencies
 
@@ -19,11 +60,11 @@ In case no internet connection is available. [ASE](https://gitlab.com/ase/ase) n
 * 
 ## Installation
 
-To use the addons in Blender simply download the zip file for yor version `blender_importASE.zip` from the latest release. In Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. If you want to use the automatic rendering of viewpoints, also download the file `render_vpts.py` and install and activate the same way.
+To use the addon in Blender simply download the zip file for yor version `blender_importASE.zip` from the latest release. In Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. Viewpoint rendering (render -> render vpts) is part of the addon, so there is nothing else to install.
 
 ### Developement Install
 
-Symlink the `render_vpts.py` file and the `blender_importASE` folder into your addon directory (by default under linux `~/.config/blender/x.x/scripts/addons`).
+Symlink the `blender_importASE` folder into your addon directory (by default under linux `~/.config/blender/x.x/scripts/addons`).
 
 ## Usage
 
@@ -52,8 +93,47 @@ covalent and vdW radii, hiding bonds per element pair, bond distance/radius and
 resolution, supercell repeats, outline thickness, per-element visibility, and
 the isovalues of any imported densities.
 
+### Custom bonds (dotted / scaled / dashed)
+
+Select two atoms of an imported structure (edit mode, pick the two vertices)
+and press "Add dotted bond" in the ASE sidebar. The *bond type* dropdown in
+the redo panel (F9) picks the style:
+
+* **Dotted** - a row of spheres between the two atoms
+* **Scaled** - a solid bond that gets thinner the longer it is, capped at the
+  chosen radius (bonds at or below the *reference length* keep the full radius)
+* **Dashed** - alternating cylinder segments
+
+Use them for partial bonds in a transition state, hydrogen bonds, or any
+interaction the distance-based bond search does not draw. All three take the
+bond colour (blended between the two atoms) and get the outline. The bond
+samples the atom positions live, so it follows the structure and its
+trajectory.
+
+"replace solid bond" additionally hides the normal bond between the two atoms,
+so the custom one takes its place. Note this is one replacement per atom: if
+you replace 0-1 and then 0-2, the 0-1 bond reappears. "Reset custom bonds"
+brings every replaced solid bond back and deletes the custom bond objects
+again.
+
 ### Materials
 
 The materials used by the geometry-node representations are the ones in the
 object's Material Properties tab (sorted by element, bond material last), so
 you can swap or edit them there and the viewport/render follows.
+
+### 3D printing
+
+The "3D print" representation (formerly `bonds_fromnodes`) imports real
+sphere meshes plus geometry-node bond tubes with icospheres at every atom
+position ("joint radius" on the modifier), so bonds fuse into a printable
+solid. File -> Export -> "ASE 3D print (.zip)" then writes one STL per
+element (atoms joined), the bonds, and simple resin supports (base plate +
+tapered pillars under the lowest atoms; skipped if the collection already
+contains your own "supports" object) into a single zip for the slicer.
+
+### Export to xyz
+
+File -> Export -> "ASE xyz (.xyz)" writes the active nodes-representation
+structure back to a plain xyz file, using the vertex positions (in world
+coordinates, i.e. including any edits) and the stored element numbers.

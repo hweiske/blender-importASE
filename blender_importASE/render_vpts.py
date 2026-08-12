@@ -1,34 +1,37 @@
+"""Render every collection separately for every camera.
+
+Part of the ASE Importer add-on (was a separate render_vpts.py add-on
+that had to be installed alongside it). For each collection in the scene
+and each camera, this hides everything else and renders one image named
+``<collection>_<camera>.png`` into the chosen folder.
+"""
 import bpy
 from os.path import join
 from pathlib import Path
 from bpy_extras.io_utils import ExportHelper
 
-bl_info = {
-    "name": "Render vpts",
-    "blender": (2, 80, 0),
-    "category": "Render",
-}
 
 class RenderImageOperator(bpy.types.Operator,ExportHelper):
     bl_idname = "render.render_vpts"
     bl_label = "Render structure vpts"
+    bl_description = "Render every collection separately for every camera"
+
+    # ExportHelper expects this; the operator builds its own per-image
+    # filenames from the collection and camera names
+    filename_ext = ".png"
+
     directory: bpy.props.StringProperty(
         name='folder',
         description='where to put the images',
         subtype='DIR_PATH'
     )
-    #imagename: bpy.props.StringProperty(
-    #    name='imagename',
-    #    description="basename of the image",
-    #        default='image'
-    #        )
-    imagepath:bpy.props.StringProperty(
+    imagepath: bpy.props.StringProperty(
         name='imagepath',
         description="path for the image",
-            default='',
-            subtype='FILE_PATH'
-            )
-    imagepath = bpy.props.StringProperty(subtype="FILE_PATH") 
+        default='',
+        subtype='FILE_PATH'
+    )
+
     def execute(self, context):
         # Set up scene
         scene = bpy.context.scene
@@ -99,19 +102,16 @@ class RenderImageOperator(bpy.types.Operator,ExportHelper):
     def check(self, context):
         return self.filepath != ""
 
+def menu_func(self, context):
+    self.layout.operator(RenderImageOperator.bl_idname)
+
+
 def register():
     bpy.utils.register_class(RenderImageOperator)
     bpy.types.TOPBAR_MT_render.append(menu_func)
-   # bpy.ops.render.render_structure('INVOKE_DEFAULT')
 
 
 def unregister():
-    bpy.utils.unregister_class(RenderImageOperator)
     bpy.types.TOPBAR_MT_render.remove(menu_func)
-
-
-def menu_func(self, context):
-    self.layout.operator(RenderImageOperator.bl_idname)
-if __name__ == "__main__":
-    register()
+    bpy.utils.unregister_class(RenderImageOperator)
     

@@ -1,4 +1,5 @@
 import bpy
+from .compat import pin
 
 def bond_nodes_node_group(mat,colorbonds=False):
 
@@ -52,55 +53,55 @@ def bond_nodes_node_group(mat,colorbonds=False):
     #Alpha
     principled_bsdf.inputs[4].default_value = 1.0
     #Normal
-    principled_bsdf.inputs[5].default_value = (0.0, 0.0, 0.0)
+    pin(principled_bsdf, 5).default_value = (0.0, 0.0, 0.0)
     #Diffuse Roughness
-    principled_bsdf.inputs[7].default_value = 0.0
+    pin(principled_bsdf, 7).default_value = 0.0
     #Subsurface Weight
-    principled_bsdf.inputs[8].default_value = 0.0
+    pin(principled_bsdf, 8).default_value = 0.0
     #Subsurface Radius
-    principled_bsdf.inputs[9].default_value = (1.0, 0.20000000298023224, 0.10000000149011612)
+    pin(principled_bsdf, 9).default_value = (1.0, 0.20000000298023224, 0.10000000149011612)
     #Subsurface Scale
-    principled_bsdf.inputs[10].default_value = 0.05000000074505806
+    pin(principled_bsdf, 10).default_value = 0.05000000074505806
     #Subsurface IOR
-    principled_bsdf.inputs[11].default_value = 1.399999976158142
+    pin(principled_bsdf, 11).default_value = 1.399999976158142
     #Subsurface Anisotropy
-    principled_bsdf.inputs[12].default_value = 0.0
+    pin(principled_bsdf, 12).default_value = 0.0
     #Specular IOR Level
-    principled_bsdf.inputs[13].default_value = 0.5
+    pin(principled_bsdf, 13).default_value = 0.5
     #Specular Tint
-    principled_bsdf.inputs[14].default_value = (1.0, 1.0, 1.0, 1.0)
+    pin(principled_bsdf, 14).default_value = (1.0, 1.0, 1.0, 1.0)
     #Anisotropic
-    principled_bsdf.inputs[15].default_value = 0.0
+    pin(principled_bsdf, 15).default_value = 0.0
     #Anisotropic Rotation
-    principled_bsdf.inputs[16].default_value = 0.0
+    pin(principled_bsdf, 16).default_value = 0.0
     #Tangent
-    principled_bsdf.inputs[17].default_value = (0.0, 0.0, 0.0)
+    pin(principled_bsdf, 17).default_value = (0.0, 0.0, 0.0)
     #Transmission Weight
-    principled_bsdf.inputs[18].default_value = 0.05740181356668472
+    pin(principled_bsdf, 18).default_value = 0.05740181356668472
     #Coat Weight
-    principled_bsdf.inputs[19].default_value = 0.0
+    pin(principled_bsdf, 19).default_value = 0.0
     #Coat Roughness
-    principled_bsdf.inputs[20].default_value = 0.029999999329447746
+    pin(principled_bsdf, 20).default_value = 0.029999999329447746
     #Coat IOR
-    principled_bsdf.inputs[21].default_value = 1.5
+    pin(principled_bsdf, 21).default_value = 1.5
     #Coat Tint
-    principled_bsdf.inputs[22].default_value = (1.0, 1.0, 1.0, 1.0)
+    pin(principled_bsdf, 22).default_value = (1.0, 1.0, 1.0, 1.0)
     #Coat Normal
-    principled_bsdf.inputs[23].default_value = (0.0, 0.0, 0.0)
+    pin(principled_bsdf, 23).default_value = (0.0, 0.0, 0.0)
     #Sheen Weight
-    principled_bsdf.inputs[24].default_value = 0.0
+    pin(principled_bsdf, 24).default_value = 0.0
     #Sheen Roughness
-    principled_bsdf.inputs[25].default_value = 0.5
+    pin(principled_bsdf, 25).default_value = 0.5
     #Sheen Tint
-    principled_bsdf.inputs[26].default_value = (1.0, 1.0, 1.0, 1.0)
+    pin(principled_bsdf, 26).default_value = (1.0, 1.0, 1.0, 1.0)
     #Emission Color
-    principled_bsdf.inputs[27].default_value = (0.0, 0.0, 0.0, 1.0)
+    pin(principled_bsdf, 27).default_value = (0.0, 0.0, 0.0, 1.0)
     #Emission Strength
-    principled_bsdf.inputs[28].default_value = 0.009999999776482582
+    pin(principled_bsdf, 28).default_value = 0.009999999776482582
     #Thin Film Thickness
-    principled_bsdf.inputs[29].default_value = 0.0
+    pin(principled_bsdf, 29).default_value = 0.0
     #Thin Film IOR
-    principled_bsdf.inputs[30].default_value = 1.3300000429153442
+    pin(principled_bsdf, 30).default_value = 1.3300000429153442
 
     #node Attribute
     attribute = bond_nodes.nodes.new("ShaderNodeAttribute")

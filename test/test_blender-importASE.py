@@ -25,3 +25,18 @@ def test_import_filepath_creates_objects():
     )
     assert out.returncode == 0, f"stdout:\n{out.stdout}\nstderr:\n{out.stderr}"
     assert "OK" in out.stdout, out.stdout
+
+
+@pytest.mark.skipif(_find_blender() is None, reason="blender not on PATH")
+def test_smoke_all_features():
+    """Every fixture in test/fixtures must import through its feature
+    (representations, trajectories, densities, polyhedra, charges,
+    exports) - see smoke_test.py."""
+    blender = _find_blender()
+    script = os.path.join(HERE, "smoke_test.py")
+    out = subprocess.run(
+        [blender, "--background", "--factory-startup", "--python", script],
+        capture_output=True, text=True, timeout=900,
+    )
+    assert "### SUMMARY" in out.stdout, f"stdout:\n{out.stdout}\nstderr:\n{out.stderr}"
+    assert "FAIL" not in out.stdout, f"stdout:\n{out.stdout}"

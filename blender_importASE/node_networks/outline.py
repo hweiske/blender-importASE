@@ -1,5 +1,6 @@
 import bpy
 from .. import __version__
+from .compat import set_mod_input
 def outline_node_group(mat=None):
     """Initialize outline node group"""
     outline = bpy.data.node_groups.new(type='GeometryNodeTree', name="outline")
@@ -279,17 +280,20 @@ def outline_objects(list_of_objects,modifier='GeometryNodes'):
         node = outline_node_group(mat=mat)
     # Always ensure the material socket is set correctly
     node.interface.items_tree["Outline-Mat"].default_value = mat
+    mat_identifier = node.interface.items_tree["Outline-Mat"].identifier
 
-    node["Socket_1"] = 1
-    node["Socket_2"] = False
     bpy.ops.object.select_all(action='DESELECT')
-    
+
     for obj in list_of_objects:
         if obj == list_of_objects[0]:
             bpy.context.view_layer.objects.active = obj
             bpy.ops.object.modifier_add(type='NODES')
             #node = bpy.data.node_groups["outline"]
-            bpy.context.object.modifiers[modifier].node_group = node
+            mod = bpy.context.object.modifiers[modifier]
+            mod.node_group = node
+            # interface defaults are not copied onto the modifier on
+            # Blender 5.2, so set the material input explicitly
+            set_mod_input(mod, mat_identifier, mat)
 
         obj.select_set(True)
         if not obj.data.materials:
