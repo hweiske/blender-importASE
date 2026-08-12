@@ -34,6 +34,8 @@ solid bonds replaced at a time: replacing 0-1 and then 0-2 leaves the
 0-1 bond visible again. Adding the custom bond itself is unaffected -
 only the hiding of the underlying solid bond is one-per-atom.
 """
+import contextlib
+
 import bpy
 
 from . import __version__
@@ -456,17 +458,20 @@ def set_dotted_partner(structure_obj, index_a, index_b, connected=True):
     missing attribute reads as.
     """
     mesh = structure_obj.data
-    if DOTTED_PARTNER_ATTRIBUTE not in mesh.attributes:
-        if not connected:
-            return
-        mesh.attributes.new(name=DOTTED_PARTNER_ATTRIBUTE, type='INT', domain='POINT')
-    data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
-    if max(index_a, index_b) >= len(data):
-        raise ValueError('atom index outside the structure')
-    data[index_a].value = index_b + 1 if connected else 0
-    data[index_b].value = index_a + 1 if connected else 0
-    mesh.update()
-    structure_obj.update_tag()
+    # attribute writes do not stick while the mesh is open in the edit cage
+    with _object_mode():
+        if DOTTED_PARTNER_ATTRIBUTE not in mesh.attributes:
+            if not connected:
+                return
+            mesh.attributes.new(name=DOTTED_PARTNER_ATTRIBUTE, type='INT',
+                                domain='POINT')
+        data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
+        if max(index_a, index_b) >= len(data):
+            raise ValueError('atom index outside the structure')
+        data[index_a].value = index_b + 1 if connected else 0
+        data[index_b].value = index_a + 1 if connected else 0
+        mesh.update()
+        structure_obj.update_tag()
 
 
 def custom_bond_objects(structure_obj):
@@ -484,20 +489,22 @@ def reset_custom_bonds(structure_obj, remove_objects=True):
     the custom-bond objects of this structure. Returns (restored, removed)."""
     mesh = structure_obj.data
     restored = 0
-    if DOTTED_PARTNER_ATTRIBUTE in mesh.attributes:
-        data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
-        for entry in data:
-            if entry.value:
-                restored += 1
-                entry.value = 0
-        mesh.update()
-        structure_obj.update_tag()
+    # same as set_dotted_partner: clearing the attribute needs object mode
+    with _object_mode():
+        if DOTTED_PARTNER_ATTRIBUTE in mesh.attributes:
+            data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
+            for entry in data:
+                if entry.value:
+                    restored += 1
+                    entry.value = 0
+            mesh.update()
+            structure_obj.update_tag()
 
-    removed = 0
-    if remove_objects:
-        for ob in custom_bond_objects(structure_obj):
-            bpy.data.objects.remove(ob, do_unlink=True)
-            removed += 1
+        removed = 0
+        if remove_objects:
+            for ob in custom_bond_objects(structure_obj):
+                bpy.data.objects.remove(ob, do_unlink=True)
+                removed += 1
     return restored, removed
 
 
@@ -518,6 +525,36 @@ def add_bond(structure_obj, index_a, index_b, style='DOTTED', segments=None,
     if not (0 <= index_a < n_atoms and 0 <= index_b < n_atoms):
         raise ValueError(f'atom index outside the structure (0-{n_atoms - 1})')
 
+    # The natural way to pick the two atoms is in edit mode, but object-level
+    # operators (outline_objects) refuse to run there, and mesh attribute
+    # writes (the 'replace' bookkeeping) do not stick while the mesh is open
+    # in the edit cage. Drop to object mode for the duration and go back
+    # afterwards, so the user stays where they were.
+    with _object_mode():
+        return _add_bond(structure_obj, index_a, index_b, style, segments,
+                         radius, resolution, reference_length, replace, outline)
+
+
+@contextlib.contextmanager
+def _object_mode():
+    obj = bpy.context.view_layer.objects.active if bpy.context.view_layer else None
+    previous = obj.mode if obj is not None else 'OBJECT'
+    if previous != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    try:
+        yield
+    finally:
+        if previous != 'OBJECT':
+            restore = bpy.context.view_layer.objects.active
+            if restore is not None and restore.mode == 'OBJECT':
+                try:
+                    bpy.ops.object.mode_set(mode=previous)
+                except RuntimeError:
+                    pass
+
+
+def _add_bond(structure_obj, index_a, index_b, style, segments, radius,
+              resolution, reference_length, replace, outline):
     group = bond_node_group(style)
 
     mesh = bpy.data.meshes.new(f'{structure_obj.name}_{style.lower()}_bond')
