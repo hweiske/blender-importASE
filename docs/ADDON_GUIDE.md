@@ -167,6 +167,16 @@ obj.update_tag()
 - a **3D printing** box with **Rebuild 3D-print supports** (`ase.rebuild_supports`) when the collection holds real element meshes,
 - one box per sibling density/geometry modifier.
 
+**Dotted bonds** (`ase.add_dotted_bond`, `dotted_bond.add_dotted_bond`) draw a row of spheres between two atoms - a partial bond in a transition state, a hydrogen bond, or any interaction the distance-based search does not draw. Select exactly two atoms (vertices) of the structure and click *Add dotted bond*; `replace solid bond` also hides the normal bond between them.
+
+```python
+from blender_importASE.dotted_bond import add_dotted_bond, set_dotted_partner
+add_dotted_bond(structure_obj, 3, 17, dots=10, radius=0.08, replace=True)
+set_dotted_partner(structure_obj, 3, 17, connected=False)   # bring the solid bond back
+```
+
+The dots live in their own object whose node group samples the two atom positions from the structure, so they follow it (including trajectory animation). They are colored like a real bond: the group writes the `COLOR_CURVE` attribute the bond material reads, blended between the two atoms' colors, and sets the material index of the structure's bond slot. `replace` stores a per-atom `dotted_partner` int on the structure mesh (the other atom's index + 1; 0/missing = none) which atoms_and_bonds ORs into its bond delete selection - so re-importing is not needed to undo it, just clear the attribute.
+
 `ase.rebuild_supports` is live-adjustable in the F9 redo panel: `base_radius` (0.25), `tip_radius`/"contact radius" (0.1), `support_layer`/"support drop" (0.3), `plate_thickness` (0.6), `plate_holes` (True), `plate_gap` (2.0). It removes existing auto-supports and rebuilds via `exports.build_supports`.
 
 ---

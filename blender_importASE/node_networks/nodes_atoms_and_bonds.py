@@ -1919,7 +1919,93 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
     atoms_and_bonds.links.new(boolean_math.outputs[0], cut_bond_final_or.inputs[0])
     atoms_and_bonds.links.new(sample_cut.outputs[0], cut_bond_final_or.inputs[1])
 
-    atoms_and_bonds.links.new(cut_bond_final_or.outputs[0], delete_geometry.inputs[1])
+    # --- bonds replaced by a dotted bond --------------------------------
+    # Atoms whose solid bond was replaced carry a 'dotted_partner' int of
+    # "other atom index + 1" (see dotted_bond.py). The +1 is what makes an
+    # absent attribute safe: a missing named attribute reads as 0, which
+    # never equals a real index + 1, so nothing is cut on older imports.
+    dotted_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")
+    dotted_attribute.label = "dotted_partner"
+    dotted_attribute.name = "Named Attribute.dotted_partner"
+    dotted_attribute.data_type = 'INT'
+    dotted_attribute.inputs[0].default_value = "dotted_partner"
+    dotted_attribute.parent = frame_018
+    dotted_attribute.location = (1830.0, -760.0)
+
+    sample_dotted_start = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+    sample_dotted_start.label = "dotted partner of start"
+    sample_dotted_start.name = "Sample Index.dotted_start"
+    sample_dotted_start.data_type = 'INT'
+    sample_dotted_start.domain = 'POINT'
+    sample_dotted_start.parent = frame_018
+    sample_dotted_start.location = (2010.0, -760.0)
+
+    sample_dotted_end = atoms_and_bonds.nodes.new("GeometryNodeSampleIndex")
+    sample_dotted_end.label = "dotted partner of end"
+    sample_dotted_end.name = "Sample Index.dotted_end"
+    sample_dotted_end.data_type = 'INT'
+    sample_dotted_end.domain = 'POINT'
+    sample_dotted_end.parent = frame_018
+    sample_dotted_end.location = (2010.0, -900.0)
+
+    for sample_node, index_reroute in ((sample_dotted_start, reroute_032),
+                                       (sample_dotted_end, reroute_033)):
+        atoms_and_bonds.links.new(reroute_018.outputs[0], sample_node.inputs[0])
+        atoms_and_bonds.links.new(dotted_attribute.outputs[0], sample_node.inputs[1])
+        atoms_and_bonds.links.new(index_reroute.outputs[0], sample_node.inputs[2])
+
+    start_plus_one = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    start_plus_one.name = "Math.start_plus_one"
+    start_plus_one.operation = 'ADD'
+    start_plus_one.inputs[1].default_value = 1.0
+    start_plus_one.parent = frame_018
+    start_plus_one.location = (2190.0, -640.0)
+    atoms_and_bonds.links.new(reroute_032.outputs[0], start_plus_one.inputs[0])
+
+    end_plus_one = atoms_and_bonds.nodes.new("ShaderNodeMath")
+    end_plus_one.name = "Math.end_plus_one"
+    end_plus_one.operation = 'ADD'
+    end_plus_one.inputs[1].default_value = 1.0
+    end_plus_one.parent = frame_018
+    end_plus_one.location = (2190.0, -760.0)
+    atoms_and_bonds.links.new(reroute_033.outputs[0], end_plus_one.inputs[0])
+
+    # start's partner is this bond's end atom, or vice versa
+    dotted_start_matches = atoms_and_bonds.nodes.new("FunctionNodeCompare")
+    dotted_start_matches.name = "Compare.dotted_start"
+    dotted_start_matches.data_type = 'FLOAT'
+    dotted_start_matches.operation = 'EQUAL'
+    dotted_start_matches.parent = frame_018
+    dotted_start_matches.location = (2360.0, -760.0)
+    atoms_and_bonds.links.new(sample_dotted_start.outputs[0], cin(dotted_start_matches, 0))
+    atoms_and_bonds.links.new(end_plus_one.outputs[0], cin(dotted_start_matches, 1))
+
+    dotted_end_matches = atoms_and_bonds.nodes.new("FunctionNodeCompare")
+    dotted_end_matches.name = "Compare.dotted_end"
+    dotted_end_matches.data_type = 'FLOAT'
+    dotted_end_matches.operation = 'EQUAL'
+    dotted_end_matches.parent = frame_018
+    dotted_end_matches.location = (2360.0, -900.0)
+    atoms_and_bonds.links.new(sample_dotted_end.outputs[0], cin(dotted_end_matches, 0))
+    atoms_and_bonds.links.new(start_plus_one.outputs[0], cin(dotted_end_matches, 1))
+
+    dotted_or = atoms_and_bonds.nodes.new("FunctionNodeBooleanMath")
+    dotted_or.name = "Boolean Math Dotted Bond"
+    dotted_or.operation = 'OR'
+    dotted_or.parent = frame_018
+    dotted_or.location = (2530.0, -830.0)
+    atoms_and_bonds.links.new(dotted_start_matches.outputs[0], dotted_or.inputs[0])
+    atoms_and_bonds.links.new(dotted_end_matches.outputs[0], dotted_or.inputs[1])
+
+    cut_bond_with_dotted = atoms_and_bonds.nodes.new("FunctionNodeBooleanMath")
+    cut_bond_with_dotted.name = "Boolean Math Cut Bonds and Dotted"
+    cut_bond_with_dotted.operation = 'OR'
+    cut_bond_with_dotted.parent = frame_018
+    cut_bond_with_dotted.location = (2700.0, -170.0)
+    atoms_and_bonds.links.new(cut_bond_final_or.outputs[0], cut_bond_with_dotted.inputs[0])
+    atoms_and_bonds.links.new(dotted_or.outputs[0], cut_bond_with_dotted.inputs[1])
+
+    atoms_and_bonds.links.new(cut_bond_with_dotted.outputs[0], delete_geometry.inputs[1])
 
     if with_charges:
         # --- partial charges (see charges.py) -------------------------------
