@@ -2,7 +2,7 @@
 
 This is a Blender add-on for importing atomistic structures (via [ASE](https://wiki.fysik.dtu.dk/ase/)) and turning them into publication-quality renders: molecules, crystals, coordination polyhedra, electron-density isosurfaces (volume or mesh), partial-charge colorings, and 3D-printable models. This document is the reference for driving it — both from the Blender GUI and from Python scripts. Everything the GUI does calls the same functions you can call directly, so scripting and clicking are interchangeable.
 
-- **Package:** `blender_importASE/` (add-on version 2.2, min Blender 4.4; tested on 4.4 and 5.1).
+- **Package:** `blender_importASE/` (add-on version 2.3, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
 - **Dependencies:** `ase` (auto-installed on first `register()`), plus `scipy` (polyhedra), `scikit-image` (density-as-mesh, auto-installed), `openvdb`/`pyopenvdb` (volumetric density). See [§8](#8-dependencies).
 
 ---
@@ -42,6 +42,8 @@ Note the calling convention shared by all importers: `(filepath, filename, ...)`
 | ASE xyz (.xyz) | `export_mesh.ase_xyz` | `exports.export_xyz` | Active structure → .xyz (world-space coords) |
 | ASE 3D print (.zip) | `export_mesh.ase_3dprint` | `exports.export_3dprint` | Per-element STLs + bonds + supports, zipped |
 
+**Render ▸ Render structure vpts** (`render.render_vpts`, `render_vpts.RenderImageOperator`) renders every collection separately for every camera, writing `<collection>_<camera>.png` into a chosen folder. It is part of the add-on (it used to be a separate `render_vpts.py` you installed alongside), and needs no dependencies, so it registers even if the ASE install fails.
+
 The importers accept multi-file selection (`files`/`directory` props). Exporters use the active object.
 
 ---
@@ -52,7 +54,8 @@ The importers accept multi-file selection (`files`/`directory` props). Exporters
 import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True,
     resolution=32, colorbonds=False, long_bonds=False, color=0.2, scale=1,
     unit_cell=False, representation="Balls'n'Sticks", read_density=True,
-    shift_cell=False, imageslice=1, animate=True, outline=True, **kwargs)
+    shift_cell=False, imageslice=1, frame_interpolation=1, animate=True,
+    outline=True, **kwargs)
 ```
 Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`), builds a collection named `<formula>_<stem>`, dispatches by `representation`, optionally draws the unit cell and reads the density volume.
 
@@ -67,7 +70,8 @@ Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`),
 - `outline=True` — adds the dark-rim outline modifier. **House style for this project: always render molecules with `outline=True`.**
 - `read_density=True` — if the file carries a volume (`.cube`, CHGCAR/PARCHG/AECCAR), builds a volumetric density object (needs openvdb). Isosurface materials `'+ material'`/`'- material'`.
 - `add_supercell=True` — adds the supercell modifier when the cell is periodic; repeat counts live on `Socket_2/3/4` of that modifier ([§5](#5-the-nodes-modifier-stack-scripting-internals)).
-- `animate=True`, `imageslice=n` — for trajectories, animate every *n*th frame (`overwrite=True` forces `nodes`).
+- `animate=True`, `imageslice=n` — for trajectories, import only every *n*th image (`overwrite=True` forces `nodes`). Use this to thin out long trajectories.
+- `frame_interpolation=n` — spacing of the imported images on the timeline. `1` (default) puts each image on its own frame; `10` leaves 9 empty frames between images for Blender to interpolate, turning a short path (e.g. a 6-image NEB) into a smooth animation. Note this is the opposite of `imageslice`: that one *removes* images, this one *adds* in-between frames. Caveat: on a trajectory whose atom count changes, atoms that appear/disappear slide in from their parked position across the interpolated frames (the images themselves stay exact); the importer prints a warning in that case.
 - `colorbonds=True` — color bond halves by their atoms; `unit_cell=True` draws the cell box.
 
 The GUI operator passes different defaults (`scale=0.5`, `color=0.6`, `representation="nodes"`; its `zero_cell` maps to `shift_cell`).

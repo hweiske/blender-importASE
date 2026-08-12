@@ -10,7 +10,7 @@ from os.path import join
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.2"
+__version__ = "2.3"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -18,7 +18,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (2, 2),
+    "version": (2, 3),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
@@ -99,7 +99,17 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     imageslice: bpy.props.IntProperty(
         name='nth-image',
         description='when loading long trajectories it is recommended not to use all images, since that will scale poorly depending on the number of bonds in the molecule and drastically influence performance',
-        default=1
+        default=1,
+        min=1,
+    )
+    frame_interpolation: bpy.props.IntProperty(
+        name='frame-interpolation',
+        description='how far apart the imported images are placed on the timeline. '
+                    '1 puts every image on its own frame. 10 leaves 9 empty frames '
+                    'between images, which Blender fills in by interpolating, so a '
+                    'short path (e.g. a 6-image NEB) plays as a smooth animation',
+        default=1,
+        min=1,
     )
     overwrite: bpy.props.BoolProperty(
         name='overwrite',
@@ -144,6 +154,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'animate')
         layout.prop(self, 'overwrite')
         layout.prop(self,'imageslice')
+        layout.prop(self,'frame_interpolation')
 
     def execute(self, context):
         # When invoked from the GUI file dialog, ImportHelper populates
@@ -173,6 +184,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                     unit_cell=self.unit_cell, representation=self.representation,
                     read_density=self.read_density,
                     shift_cell=self.zero_cell, imageslice=self.imageslice,
+                    frame_interpolation=self.frame_interpolation,
                     animate=self.animate, outline=self.outline,
                     overwrite=self.overwrite, add_supercell=self.add_supercell,
                 )
@@ -971,6 +983,10 @@ def menu_func_export(self, context):
 
 def register():
     bpy.utils.register_class(ASEAddonPreferences)
+    # viewpoint rendering is pure bpy (no ase), so it stays available even
+    # when the dependency install below fails
+    from . import render_vpts
+    render_vpts.register()
     dependency = check_dependency()
     if dependency:
         bpy.utils.register_class(ImportASEMolecule)
@@ -990,6 +1006,11 @@ def register():
         prefs.install_failed = True
 
 def unregister():
+    try:
+        from . import render_vpts
+        render_vpts.unregister()
+    except Exception:
+        print("Render vpts was not registered, skipping.")
     try:
         from . import controls
         controls.unregister()

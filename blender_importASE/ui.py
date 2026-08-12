@@ -19,8 +19,9 @@ import time
 def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, resolution=32, colorbonds=False, long_bonds=False, color=0.2, scale=1,
                         unit_cell=False,
                         representation="Balls'n'Sticks",
-                        read_density=True, shift_cell=False, 
-                        imageslice=1, animate = True, outline = True, **kwargs):
+                        read_density=True, shift_cell=False,
+                        imageslice=1, frame_interpolation=1,
+                        animate = True, outline = True, **kwargs):
     # Read in the structure
     start=time.time()
     modifier_counter = 0
@@ -49,9 +50,25 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         if animate is False:
             atoms = TRAJECTORY[-1]
         else:
-            bpy.data.scenes['Scene'].frame_end = len(TRAJECTORY[::imageslice])
+            # frame_interpolation spaces the images out over the timeline, so
+            # the last image sits at (n_images - 1) * frame_interpolation
+            n_images = len(TRAJECTORY[::imageslice])
+            bpy.data.scenes['Scene'].frame_end = (
+                (n_images - 1) * frame_interpolation + 1 if frame_interpolation > 1
+                else n_images)
             bpy.data.scenes['Scene'].frame_start = 0
             bpy.data.scenes['Scene'].frame_current = 0
+            if frame_interpolation > 1 and len({len(f) for f in TRAJECTORY}) > 1:
+                # Interpolating between two images with different atom counts
+                # is ill-defined: an atom that only exists in the later image
+                # is parked far away in the earlier one, so the in-between
+                # frames slide it in from that parking position. Images
+                # themselves are still exact; only the generated frames
+                # between a spawn/removal are affected.
+                print('WARNING: frame-interpolation > 1 on a trajectory whose '
+                      'atom count changes - atoms that appear or disappear will '
+                      'slide in/out across the interpolated frames. The imported '
+                      'images themselves are unaffected.')
     elif len(atoms) == 1:
         atoms=atoms[0]
     
@@ -84,7 +101,7 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
                 list_of_bonds,nl=draw_bonds(atoms,resolution=resolution)
     if representation == 'nodes':
         if animate and trajectory:
-            obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True)
+            obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True,frame_interpolation=frame_interpolation)
         else:
             obj,mesh=read_structure(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=False)
         print(f'add hide modifier to GeometryNodes{modifier_chosen}')
@@ -151,16 +168,16 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     # Handle animation
     if trajectory is True and animate is True:
         if representation != 'nodes' and representation != '3D_print':
-            
-            move_atoms(TRAJECTORY,list_of_atoms,imageslice)
+
+            move_atoms(TRAJECTORY,list_of_atoms,imageslice,frame_interpolation)
             if representation != 'VDW':
                 if long_bonds is True:
-                    move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice)
+                    move_longbonds(TRAJECTORY,list_of_bonds,nl,bondlengths,imageslice,frame_interpolation)
                 else:
-                    move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice)
+                    move_bonds(TRAJECTORY,list_of_bonds,nl,imageslice,frame_interpolation)
         if representation == '3D_print':
             print("generating trajectory for 3D_print")
-            move_atoms(TRAJECTORY,list_of_atoms,imageslice)
+            move_atoms(TRAJECTORY,list_of_atoms,imageslice,frame_interpolation)
     end=time.time()
     print('Time to import atoms_object: ',end-end_read)
 
