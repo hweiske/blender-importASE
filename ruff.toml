@@ -1,0 +1,4 @@
+[lint.per-file-ignores]
+# the test harness must extend sys.path and generate fixtures before
+# importing the addon, so imports cannot all sit at the top of the file
+"test/smoke_test.py" = ["E402"]

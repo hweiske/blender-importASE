@@ -1,5 +1,6 @@
 import bpy
-    
+from .compat import setup_volume_to_mesh
+
 #initialize visualize_edensity node group
 def visualize_edensity_node_group(): #from node2python
     visualize_edensity= bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "visualize_edensity")
@@ -15,13 +16,8 @@ def visualize_edensity_node_group(): #from node2python
 
     #node Volume to Mesh.001
     volume_to_mesh_001 = visualize_edensity.nodes.new("GeometryNodeVolumeToMesh")
-    volume_to_mesh_001.resolution_mode = 'GRID'
-    #Voxel Size
-    volume_to_mesh_001.inputs[1].default_value = 0.30000001192092896
-    #Voxel Amount
-    volume_to_mesh_001.inputs[2].default_value = 64.0
-    #Adaptivity
-    volume_to_mesh_001.inputs[4].default_value = 0.0
+    setup_volume_to_mesh(volume_to_mesh_001, resolution_mode='GRID',
+                         voxel_size=0.3, voxel_amount=64.0, adaptivity=0.0)
 
     #node Join Geometry
     join_geometry = visualize_edensity.nodes.new("GeometryNodeJoinGeometry")
@@ -361,13 +357,8 @@ def visualize_edensity_node_group(): #from node2python
 
     #node Volume to Mesh
     volume_to_mesh = visualize_edensity.nodes.new("GeometryNodeVolumeToMesh")
-    volume_to_mesh.resolution_mode = 'GRID'
-    #Voxel Size
-    volume_to_mesh.inputs[1].default_value = 0.30000001192092896
-    #Voxel Amount
-    volume_to_mesh.inputs[2].default_value = 64.0
-    #Adaptivity
-    volume_to_mesh.inputs[4].default_value = 0.0
+    setup_volume_to_mesh(volume_to_mesh, resolution_mode='GRID',
+                         voxel_size=0.3, voxel_amount=64.0, adaptivity=0.0)
 
     #node Math
     math = visualize_edensity.nodes.new("ShaderNodeMath")
@@ -466,9 +457,9 @@ def visualize_edensity_node_group(): #from node2python
     #group_input.isovalue -> math.Value
     visualize_edensity.links.new(group_input.outputs[1], math.inputs[0])
     #group_input.isovalue -> volume_to_mesh.Threshold
-    visualize_edensity.links.new(group_input.outputs[1], volume_to_mesh.inputs[3])
+    visualize_edensity.links.new(group_input.outputs[1], volume_to_mesh.inputs['Threshold'])
     #math.Value -> volume_to_mesh_001.Threshold
-    visualize_edensity.links.new(math.outputs[0], volume_to_mesh_001.inputs[3])
+    visualize_edensity.links.new(math.outputs[0], volume_to_mesh_001.inputs['Threshold'])
     #group_input.Geometry -> volume_to_mesh_001.Volume
     visualize_edensity.links.new(group_input.outputs[0], volume_to_mesh_001.inputs[0])
     #volume_to_mesh.Mesh -> set_material.Geometry

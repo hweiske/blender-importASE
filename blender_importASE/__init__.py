@@ -83,7 +83,7 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     )
     read_density: bpy.props.BoolProperty(
         name='load e-density',
-        description="load electron-density as volume and use a node-tree for the creation of isosurfaces (only .cube-files)",
+        description="load electron-density as volume and use a node-tree for the creation of isosurfaces (.cube files and VASP CHGCAR/PARCHG/AECCAR)",
         default=True,
     )
     zero_cell: bpy.props.BoolProperty(
@@ -226,11 +226,20 @@ def register():
     if dependency:
         bpy.utils.register_class(ImportASEMolecule)
         bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+        # deferred so the addon can load (and show its preferences) when
+        # ase is not installed yet - controls imports ase at module level
+        from . import controls
+        controls.register()
     else:
         prefs = bpy.context.preferences.addons[__name__].preferences
         prefs.install_failed = True
 
 def unregister():
+    try:
+        from . import controls
+        controls.unregister()
+    except Exception:
+        print("ASE controls were not registered, skipping.")
     try:
         bpy.utils.unregister_class(ImportASEMolecule)
     except RuntimeError:
