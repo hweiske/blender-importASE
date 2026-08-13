@@ -167,15 +167,16 @@ obj.update_tag()
 - a **3D printing** box with **Rebuild 3D-print supports** (`ase.rebuild_supports`) when the collection holds real element meshes,
 - one box per sibling density/geometry modifier.
 
-**Custom bonds** (`ase.add_dotted_bond`, `dotted_bond.add_bond`) draw a bond between two atoms that the distance-based search does not - a partial bond in a transition state, a hydrogen bond, and so on. Select exactly two atoms (vertices) and click *Add dotted bond*; the `bond type` dropdown in the redo panel picks the style:
+**Custom bonds** (`ase.add_dotted_bond`, `dotted_bond.add_bond`) draw a bond between two atoms that the distance-based search does not - a partial bond in a transition state, a hydrogen bond, and so on. Select exactly two atoms (vertices) and click *Add custom bond*; the `bond type` dropdown in the redo panel picks the style:
 
 - `DOTTED` - a row of spheres (`dotted_bond` group)
-- `SCALED` - a solid bond thinning with length, capped at `radius`; bonds at or below `reference length` keep the full radius (`scaled_bond` group)
+- `SCALED` - a solid bond thinning with length, capped at `radius`. The reference is the bond's *natural* length (the two atoms' covalent radii added), so a bond at its normal length is full thickness and a stretched/partial one thins in proportion (`scaled_bond` group)
 - `DASHED` - alternating cylinder segments (`dashed_bond` group)
 
 ```python
-from blender_importASE.dotted_bond import add_bond, reset_custom_bonds
-add_bond(structure_obj, 3, 17, style='DASHED', segments=8, radius=0.08, replace=True)
+from blender_importASE.custom_bonds import add_bond, reset_custom_bonds
+add_bond(structure_obj, 3, 17, style='DASHED', segments=8, replace=True)
+# radius=None (the default) matches the structure's own bond radius
 reset_custom_bonds(structure_obj)          # restore solid bonds, delete the custom ones
 ```
 
@@ -224,3 +225,5 @@ Heads-up: if the user has a dev ASE checkout on `sys.path`, it can shadow the pi
 ## 9. Rendering conventions for this repo
 
 Gallery panels and GIFs are rendered from `blender_startup.blend` (Cycles + packed HDRI world) with an orthographic camera framed to fit, 1080×1080 for panels. **Always render molecules with `outline=True`.** Reproducible render scripts live in `docs/` (e.g. `docs/render_trajectory_gif.py`). The scratchpad `render_panels.py` regenerates the whole `docs/images/` gallery.
+
+Each custom bond is also listed in the ASE panel of its **structure** (a *Custom bonds* box), so `atom A` / `atom B` and the style's settings can be changed there without selecting the bond object.
