@@ -56,6 +56,13 @@ BOND_GROUPS = {
 }
 DOTTED_BOND_GROUP = BOND_GROUPS['DOTTED']  # backwards compatible alias
 
+# Stamp for the generated bond groups. It carries its own revision on top of
+# the add-on version so that changing a group's definition forces a rebuild
+# even within one release: 2.3.2 shipped a scaled_bond with a 'reference
+# length' socket, and without this an updated 2.3.2 would happily reuse it.
+_BOND_GROUP_REVISION = 2
+_GROUP_STAMP = f'{__version__}-bonds{_BOND_GROUP_REVISION}'
+
 BOND_STYLE_ITEMS = (
     ('DOTTED', 'Dotted', 'A row of spheres between the two atoms'),
     ('SCALED', 'Scaled',
@@ -190,12 +197,12 @@ def _new_group(style):
     name = BOND_GROUPS[style]
     existing = bpy.data.node_groups.get(name)
     if existing is not None:
-        if existing.description == __version__:
+        if existing.description == _GROUP_STAMP:
             return existing, False
         existing.name = f'{name}_old'
 
     group = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-    group.description = __version__
+    group.description = _GROUP_STAMP
     group.is_modifier = True
 
     group.interface.new_socket('Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
