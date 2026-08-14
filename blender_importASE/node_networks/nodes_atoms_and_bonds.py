@@ -1921,7 +1921,7 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
 
     # --- bonds replaced by a dotted bond --------------------------------
     # Atoms whose solid bond was replaced carry a 'dotted_partner' int of
-    # "other atom index + 1" (see dotted_bond.py). The +1 is what makes an
+    # "other atom index + 1" (see custom_bonds.py). The +1 is what makes an
     # absent attribute safe: a missing named attribute reads as 0, which
     # never equals a real index + 1, so nothing is cut on older imports.
     dotted_attribute = atoms_and_bonds.nodes.new("GeometryNodeInputNamedAttribute")

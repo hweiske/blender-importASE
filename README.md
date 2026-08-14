@@ -96,17 +96,21 @@ the isovalues of any imported densities.
 ### Custom bonds (dotted / scaled / dashed)
 
 Select two atoms of an imported structure (edit mode, pick the two vertices)
-and press "Add dotted bond" in the ASE sidebar. The *bond type* dropdown in
+and press "Add custom bond" in the ASE sidebar. The *bond type* dropdown in
 the redo panel (F9) picks the style:
 
 * **Dotted** - a row of spheres between the two atoms
 * **Scaled** - a solid bond that gets thinner the longer it is, capped at the
-  chosen radius (bonds at or below the *reference length* keep the full radius)
+  chosen radius. It is measured against the bond's natural length (the two
+  atoms' covalent radii added), so a normal-length bond is full thickness and
+  a stretched or partial one thins in proportion
 * **Dashed** - alternating cylinder segments
 
 Use them for partial bonds in a transition state, hydrogen bonds, or any
 interaction the distance-based bond search does not draw. All three take the
-bond colour (blended between the two atoms) and get the outline. The bond
+bond colour (blended between the two atoms), match the structure's own bond
+radius unless you set one, and get the outline. Each bond is listed in the ASE
+panel of the structure, so the two atoms can be changed there afterwards. The bond
 samples the atom positions live, so it follows the structure and its
 trajectory.
 
