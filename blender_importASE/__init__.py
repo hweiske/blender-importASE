@@ -10,7 +10,7 @@ from os.path import join
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.3.2"
+__version__ = "2.4.0"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -18,7 +18,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (2, 3, 2),
+    "version": (2, 4, 0),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
@@ -709,7 +709,6 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
 class ASEAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
-    install_failed: bpy.props.BoolProperty(default=False)
     # set by check_dependency() when it finds a package built for a
     # different Python than this Blender's - either it could not delete it
     # (no write permission, typically Blender's own bundled installation
@@ -724,21 +723,35 @@ class ASEAddonPreferences(bpy.types.AddonPreferences):
                 text=f"Native package built for a different Python detected: "
                      f"{self.stale_native_packages}",
                 icon='ERROR')
-        if self.install_failed:
-            layout.label(text="ASE installation failed. Please check your internet connection.", icon='ERROR')
-        else:
-            layout.label(text="ASE installation successful.", icon='CHECKMARK')
+        layout.label(text="Dependencies (nothing installs automatically - click to install):")
+        for import_name, pip_name, required in DEPENDENCIES:
+            row = layout.row(align=True)
+            available = _can_import(import_name)
+            row.label(text=f"{pip_name}{' (required)' if required else ''}",
+                      icon='CHECKMARK' if available else 'ERROR')
+            if not available:
+                op = row.operator(ASEInstallDependency.bl_idname, text=f"Install {pip_name}")
+                op.import_name = import_name
+                op.pip_name = pip_name
+                op.required = required
+        if not _can_import('ase'):
+            layout.label(text="Import/export operators stay hidden until ase is installed.",
+                        icon='INFO')
 
 
 # (import name, pip name, required). ase is required - the operators are only
-# registered when it is available. scipy (polyhedra) and scikit-image (density
-# mesh) back individual features; they are installed up front like ase so the
+# registered when it is available. scipy (polyhedra), scikit-image (density
+# mesh) and scm.plams (AMS TAPE41 volumes, e.g. NOCV deformation densities)
+# back individual features; they are installed up front like ase so the
 # first use of those importers does not stall, but a failure to install them
-# only disables their feature rather than the whole add-on.
+# only disables their feature rather than the whole add-on. plams is pure
+# Python (no compiled extensions), so unlike scipy/scikit-image it never
+# needs the numpy-shadow cleanup in _install_package.
 DEPENDENCIES = [
     ("ase", "ase", True),
     ("scipy", "scipy", False),
     ("skimage", "scikit-image", False),
+    ("scm.plams", "plams", False),
 ]
 
 
@@ -910,10 +923,18 @@ def _install_package(import_name, pip_name, install_path):
 
 
 def check_dependency():
-    """Make sure ase and the optional feature dependencies (scipy,
-    scikit-image) are importable, installing any that are missing into
-    Blender's user modules path. Returns True when the required ase is
-    available; optional dependencies only print a warning on failure."""
+    """Check (never install) whether ase and the optional feature
+    dependencies (scipy, scikit-image, scm.plams) are importable. Still
+    runs the native-package mismatch cleanup - that's hygiene (deleting
+    broken files), not installing new ones, so it stays automatic. Returns
+    True when the required ase is available.
+
+    Nothing here calls pip. Installing is the user's call, made explicitly
+    per-package from the add-on preferences panel's "Install" buttons
+    (`ASEInstallDependency` / `_install_package`) - register() used to
+    install every missing dependency itself on first enable, which meant a
+    silent network call and a pip subprocess the user never asked for.
+    """
     install_path = os.path.join(bpy.utils.script_path_user(), "modules")
     roots = _native_package_roots()
     blocked_all, purged_in_bundled = [], []
@@ -950,26 +971,66 @@ def check_dependency():
         except KeyError:
             print(f"(no add-on preferences entry to report this in yet) {message}")
 
-    ase_available = True
-    for import_name, pip_name, required in DEPENDENCIES:
-        if _can_import(import_name):
-            continue
-        print(f"{pip_name} not present in Blender python. Attempting install. "
-              "This could take a moment...")
+    return _can_import('ase')
+
+
+def _register_feature_operators():
+    """Register the ase-dependent operators/menus. Split out of register()
+    so ASEInstallDependency can call it right after a successful 'Install
+    ase' click - installing into Blender's user modules path makes the
+    package importable in the same session (no restart needed), so there is
+    no reason to make the user re-toggle the add-on for that to take
+    effect."""
+    bpy.utils.register_class(ImportASEMolecule)
+    bpy.utils.register_class(ImportASEPolyhedra)
+    bpy.utils.register_class(ImportASEDensityMesh)
+    bpy.utils.register_class(ImportASECharges)
+    bpy.utils.register_class(ExportASEXyz)
+    bpy.utils.register_class(ExportASE3DPrint)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
+    # deferred so the addon can load (and show its preferences) when
+    # ase is not installed yet - controls imports ase at module level
+    from . import controls
+    controls.register()
+
+
+class ASEInstallDependency(bpy.types.Operator):
+    """Install one DEPENDENCIES entry into Blender's user modules path, on
+    demand - the preferences panel shows one of these per missing package
+    instead of register() installing everything automatically."""
+    bl_idname = "ase.install_dependency"
+    bl_label = "Install"
+    bl_options = {"REGISTER"}
+    bl_description = "Download and install this package into Blender's user modules path"
+
+    import_name: bpy.props.StringProperty()
+    pip_name: bpy.props.StringProperty()
+    required: bpy.props.BoolProperty(default=False)
+
+    def execute(self, context):
+        install_path = os.path.join(bpy.utils.script_path_user(), "modules")
+        self.report({'INFO'}, f"Installing {self.pip_name}... this could take a moment.")
         try:
-            installed = _install_package(import_name, pip_name, install_path)
-        except subprocess.CalledProcessError:
+            installed = _install_package(self.import_name, self.pip_name, install_path)
+        except subprocess.CalledProcessError as exc:
             installed = False
-        if installed:
-            print(f"Installed {pip_name}")
-        elif required:
-            print(f"Failed to install {pip_name}. Please check your internet "
-                  "connection and try again or install manually.")
-            ase_available = False
-        else:
-            print(f"Could not install {pip_name}; the feature that needs it "
-                  "will be unavailable until it is installed.")
-    return ase_available
+            self.report({'ERROR'}, f"pip failed for {self.pip_name}: {exc}")
+            return {'CANCELLED'}
+        if not installed:
+            self.report({'ERROR'},
+                        f"Installed {self.pip_name} but it still did not import cleanly.")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"Installed {self.pip_name}.")
+        if self.import_name == 'ase':
+            # the required dependency - operators were never registered
+            # without it, so do that now instead of asking for a restart
+            try:
+                _register_feature_operators()
+                self.report({'INFO'}, "ASE Importer operators are now available.")
+            except ValueError:
+                pass  # already registered (e.g. re-running the installer)
+        return {'FINISHED'}
 
 def menu_func_import(self, context):
     self.layout.operator(ImportASEMolecule.bl_idname, text="ASE Molecule (.*)")
@@ -983,27 +1044,19 @@ def menu_func_export(self, context):
 
 def register():
     bpy.utils.register_class(ASEAddonPreferences)
-    # viewpoint rendering is pure bpy (no ase), so it stays available even
-    # when the dependency install below fails
+    bpy.utils.register_class(ASEInstallDependency)
+    # viewpoint rendering is pure bpy (no ase), so it stays available
+    # regardless of whether any dependency below is installed
     from . import render_vpts
     render_vpts.register()
-    dependency = check_dependency()
-    if dependency:
-        bpy.utils.register_class(ImportASEMolecule)
-        bpy.utils.register_class(ImportASEPolyhedra)
-        bpy.utils.register_class(ImportASEDensityMesh)
-        bpy.utils.register_class(ImportASECharges)
-        bpy.utils.register_class(ExportASEXyz)
-        bpy.utils.register_class(ExportASE3DPrint)
-        bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
-        bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
-        # deferred so the addon can load (and show its preferences) when
-        # ase is not installed yet - controls imports ase at module level
-        from . import controls
-        controls.register()
-    else:
-        prefs = bpy.context.preferences.addons[__name__].preferences
-        prefs.install_failed = True
+    # check-only: nothing gets installed just by enabling the add-on
+    # anymore. If ase already happens to be present (a previous manual
+    # install, or another add-on/script put it on this Blender's modules
+    # path), the feature operators come up immediately; otherwise the
+    # preferences panel's "Install ase" button is what activates them
+    # (ASEInstallDependency calls _register_feature_operators() itself).
+    if check_dependency():
+        _register_feature_operators()
 
 def unregister():
     try:
@@ -1022,9 +1075,22 @@ def unregister():
             bpy.utils.unregister_class(cls)
         except RuntimeError:
             print(f"{cls.__name__} was not registered, skipping.")
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
-    bpy.utils.unregister_class(ASEAddonPreferences)
+    # only ever added by _register_feature_operators(), which only runs
+    # once ase is confirmed importable - guard removal the same way class
+    # unregistration is guarded above, rather than assuming they're there
+    try:
+        bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+        bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    except ValueError:
+        print("Import/export menu entries were not registered, skipping.")
+    # guarded like every other class above: a factory-settings reset (e.g.
+    # bpy.ops.wm.read_factory_settings, used between test steps) can already
+    # have cleared these without going through this unregister() at all
+    for cls in (ASEInstallDependency, ASEAddonPreferences):
+        try:
+            bpy.utils.unregister_class(cls)
+        except RuntimeError:
+            print(f"{cls.__name__} was not registered, skipping.")
 
 
 if __name__ == "__main__":

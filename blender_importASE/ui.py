@@ -2,7 +2,8 @@ import bpy
 import ase
 import ase.io
 from ase import Atoms
-from .import_cubefiles import cube2vol, chgcar2vol, is_vasp_density, read_vasp_density
+from .import_cubefiles import (cube2vol, chgcar2vol, is_vasp_density, read_vasp_density,
+                               is_ams_tape41, read_tape41, tape41_import)
 from .utils import atomcolors, group_atoms
 from .drawobjects import draw_atoms, draw_bonds, draw_unit_cell, draw_longbonds
 from .trajectory import move_atoms, move_bonds,move_longbonds
@@ -27,11 +28,17 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
     modifier_counter = 0
     modifier_chosen=''
     vasp_density = None
+    tape41_volumes = None
     if is_vasp_density(filename):
         # CHGCAR-like files can't be read by ase.io.read (the POSCAR header
         # is followed by the density grid); read atoms and grid in one pass
         vasp_density = read_vasp_density(filepath)
         atoms = list(vasp_density.atoms)
+    elif is_ams_tape41(filename):
+        # TAPE41 is a binary KF file, not an ase.io format at all - atoms
+        # and every requested volume come from the same KFFile pass
+        tape41_atoms, tape41_volumes = read_tape41(filepath)
+        atoms = [tape41_atoms]
     else:
         atoms = ase.io.read(filepath,index = ':')
     end_read=time.time()
@@ -157,6 +164,9 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         elif vasp_density is not None:
             # total charge density, plus the spin difference if spin-polarized
             density_objs = chgcar2vol(filepath,modifier='GeometryNodes',density=vasp_density)
+        elif tape41_volumes is not None:
+            # one volume object per KF entry (e.g. every requested NOCV pair)
+            density_objs = tape41_import(filepath,filename,modifier='GeometryNodes',found=tape41_volumes)
         if density_objs:
             modifier_chosen=f'.00{modifier_counter}'
             if shift_cell is True:

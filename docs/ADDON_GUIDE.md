@@ -2,8 +2,8 @@
 
 This is a Blender add-on for importing atomistic structures (via [ASE](https://wiki.fysik.dtu.dk/ase/)) and turning them into publication-quality renders: molecules, crystals, coordination polyhedra, electron-density isosurfaces (volume or mesh), partial-charge colorings, and 3D-printable models. This document is the reference for driving it — both from the Blender GUI and from Python scripts. Everything the GUI does calls the same functions you can call directly, so scripting and clicking are interchangeable.
 
-- **Package:** `blender_importASE/` (add-on version 2.3.2, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
-- **Dependencies:** `ase` (auto-installed on first `register()`), plus `scipy` (polyhedra), `scikit-image` (density-as-mesh, auto-installed), `openvdb`/`pyopenvdb` (volumetric density). See [§8](#8-dependencies).
+- **Package:** `blender_importASE/` (add-on version 2.4.0, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
+- **Dependencies:** `ase`, plus `scipy` (polyhedra), `scikit-image` (density-as-mesh), `scm.plams` (AMS TAPE41 volumes), `openvdb`/`pyopenvdb` (volumetric density) — none installed automatically; each has its own "Install" button in the add-on preferences. See [§8](#8-dependencies).
 
 ---
 
@@ -16,7 +16,7 @@ This is a Blender add-on for importing atomistic structures (via [ASE](https://w
 ```python
 import sys; sys.path.insert(0, '/path/to/blender-importASE')
 import bpy, blender_importASE
-blender_importASE.register()                       # installs ase if missing
+blender_importASE.register()                       # checks only - see §8, install ase first
 from blender_importASE.ui import import_ase_molecule
 import_ase_molecule('/data/mol.cube', 'mol.cube', representation='nodes',
                     read_density=True, outline=True, add_supercell=False)
@@ -68,7 +68,7 @@ Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`),
 
 **Key options:**
 - `outline=True` — adds the dark-rim outline modifier. **House style for this project: always render molecules with `outline=True`.**
-- `read_density=True` — if the file carries a volume (`.cube`, CHGCAR/PARCHG/AECCAR), builds a volumetric density object (needs openvdb). Isosurface materials `'+ material'`/`'- material'`.
+- `read_density=True` — if the file carries a volume (`.cube`, CHGCAR/PARCHG/AECCAR, AMS TAPE41), builds a volumetric density object (needs openvdb). Isosurface materials `'+ material'`/`'- material'`.
 - `add_supercell=True` — adds the supercell modifier when the cell is periodic; repeat counts live on `Socket_2/3/4` of that modifier ([§5](#5-the-nodes-modifier-stack-scripting-internals)).
 - `animate=True`, `imageslice=n` — for trajectories, import only every *n*th image (`overwrite=True` forces `nodes`). Use this to thin out long trajectories.
 - `frame_interpolation=n` — spacing of the imported images on the timeline. `1` (default) puts each image on its own frame; `10` leaves 9 empty frames between images for Blender to interpolate, turning a short path (e.g. a 6-image NEB) into a smooth animation. Note this is the opposite of `imageslice`: that one *removes* images, this one *adds* in-between frames. Caveat: on a trajectory whose atom count changes, atoms that appear/disappear slide in from their parked position across the interpolated frames (the images themselves stay exact); the importer prints a warning in that case.
@@ -107,6 +107,33 @@ mat = bpy.data.materials['LED material']
 mat.node_tree.nodes['Principled BSDF'].inputs['Alpha'].default_value = 0.4
 ```
 `import_atoms=True` also imports the structure as `nodes`, outlined by default (`outline=True`).
+
+### AMS TAPE41 volumes — `import_cubefiles.tape41_import`
+
+A TAPE41 (the binary KF file AMS/BAND writes for grid-based quantities -
+e.g. `NOCVdRhoPlot` off a PEDANOCV restart) is not an ase.io format at all,
+so it takes a separate path through `import_ase_molecule`, detected by
+`import_cubefiles.is_ams_tape41` (matches a bare `TAPE41`, `*.t41`, or any
+`*TAPE41`-suffixed name - the common case of copying it out of a results
+directory with the original name kept, e.g. `restart.TAPE41`). Both atoms
+and every named volume come from one `import_cubefiles.read_tape41`
+pass (`scm.plams.tools.kftools.KFFile`, reading the `Geometry`/`Grid`/`FOO`
+sections directly - no external `densf`/`amsvol2cube` conversion step, and
+no intermediate `.cube` file):
+
+```python
+import_ase_molecule('/path/to/restart.TAPE41', 'restart.TAPE41',
+                    representation='nodes', read_density=True)
+```
+
+A TAPE41 can carry several named volumes at once (e.g. two NOCV pairs,
+`dRhoNOCV=1,k=1` and `dRhoNOCV=2,k=1`, from one `NOCVdRhoPlot: 1 Band 1 2`
+restart request) - every one becomes its own volume object, named after
+its KF variable, each independently toggleable and using the same
+`'+ material'`/`'- material'` convention as `cube2vol`. Call
+`read_tape41(filepath, volumes=[...])` directly to select specific names
+instead of importing every volume in the file, or `is_ams_tape41(filename)`
+to test a path before deciding how to import it.
 
 ### Charges — `charges.import_charges`
 ```python
@@ -207,12 +234,24 @@ Writes one STL per element + `bonds.stl` + `supports.stl` and zips them.
 
 ## 8. Dependencies
 
-- **ase** — required; auto-pip-installed into Blender's user `modules` path on `register()`. If install fails, no operators register and `ASEAddonPreferences.install_failed` is set.
-- **scipy** — polyhedra only; auto-installed alongside ase.
-- **scikit-image** — density-as-mesh; auto-installed alongside ase.
-- **openvdb/pyopenvdb** — volumetric density (`import_cubefiles.data2vol`); no auto-install, clear `ImportError` if missing.
+**Nothing installs automatically.** `register()` only *checks* what's importable
+(`check_dependency()` — no pip call in it at all) and registers whatever operators that
+allows; installing is a deliberate, per-package action from the add-on's preferences
+panel (Edit ▸ Preferences ▸ Add-ons ▸ ASE Importer), which lists every `DEPENDENCIES`
+entry with a ✓/✗ status and an **Install `<name>`** button when missing
+(`ASEInstallDependency`, `bl_idname = "ase.install_dependency"`). Scripts can still call
+it directly: `bpy.ops.ase.install_dependency(import_name='ase', pip_name='ase')`.
 
-`register()`/`check_dependency()` checks every dependency with a real `importlib.import_module()` (not `find_spec`), so an installed-but-broken package is correctly treated as missing and reinstalled — this matters because `find_spec` only checks that a module is *findable*, not that it actually imports.
+- **ase** — required; without it the import/export operators, and the whole *File ▸
+  Import/Export* menu entries, stay unregistered — clicking **Install ase** registers
+  them immediately in the same session (`_register_feature_operators()`, no restart or
+  add-on re-toggle needed).
+- **scipy** — polyhedra only.
+- **scikit-image** — density-as-mesh.
+- **scm.plams** (pip name `plams`) — AMS TAPE41 volumes (`import_cubefiles.read_tape41`/`tape41_import`). Pure Python (no compiled extensions), so it never triggers the native-package mismatch cleanup below the way scipy/scikit-image can.
+- **openvdb/pyopenvdb** — volumetric density (`import_cubefiles.data2vol`); has no pip wheel worth auto-offering either, so importing it is always a manual, `ImportError`-on-failure story regardless of this section.
+
+`check_dependency()` (and the install button) check with a real `importlib.import_module()` (not `find_spec`), so an installed-but-broken package is correctly treated as missing and reinstallable — this matters because `find_spec` only checks that a module is *findable*, not that it actually imports.
 
 Before checking anything, `check_dependency()` also scans every site-packages-like directory that could hold a stale, wrong-Python compiled package — `_native_package_roots()` returns both the user `modules` folder (which our own installs write into) *and* Blender's own bundled interpreter's `site-packages` (via `sysconfig.get_paths()`, since numpy ships as part of Blender itself) — and deletes any mismatched files it finds in each. This guards against two related failure modes: our install path is keyed on Blender's *version* folder, not its bundled Python (a build bump or a "copy previous settings" migration can leave an old-interpreter numpy/scipy/scikit-image build sitting in the new version's `modules` folder); and Blender's *own* bundled numpy can end up half-updated the same way (e.g. a partial Steam update that bumps the embedded Python but doesn't cleanly replace every compiled file). Either one raises `ImportError: ... Importing the numpy C-extensions failed ... incompatible with python 'cpython-31X'` deep inside the package — `find_spec` doesn't catch this because the files are still *there*, just unloadable.
 
