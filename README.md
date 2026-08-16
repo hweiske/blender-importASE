@@ -9,6 +9,8 @@
 
 Import molecules, crystals, trajectories, and volumetric data (electron densities, molecular orbitals) into Blender through [ASE](https://gitlab.com/ase/ase) — with geometry-nodes representations, coordination polyhedra, and isosurfaces.
 
+[![Download Add-on](https://img.shields.io/badge/Download-blender__importASE.zip-blue?style=for-the-badge&logo=blender&logoColor=white)](https://github.com/hweiske/blender-importASE/releases/latest/download/blender_importASE.zip)
+
 <table>
   <tr>
     <td align="center" width="50%">
@@ -60,7 +62,7 @@ In case no internet connection is available. [ASE](https://gitlab.com/ase/ase) n
 * 
 ## Installation
 
-To use the addon in Blender simply download the zip file for yor version `blender_importASE.zip` from the latest release. In Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. Viewpoint rendering (render -> render vpts) is part of the addon, so there is nothing else to install.
+Click the **Download Add-on** button above (or grab `blender_importASE.zip` from the [latest release](https://github.com/hweiske/blender-importASE/releases/latest) directly). In Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. Viewpoint rendering (render -> render vpts) is part of the addon, so there is nothing else to install.
 
 ### Developement Install
 
