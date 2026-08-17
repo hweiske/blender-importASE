@@ -1,13 +1,15 @@
 # Collection of examples
 
-[![CI](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml/badge.svg)](https://github.com/Tonner-Zech-Group/blender-importASE/actions/workflows/python-app.yml)
-[![Latest release](https://img.shields.io/github/v/release/Tonner-Zech-Group/blender-importASE)](https://github.com/Tonner-Zech-Group/blender-importASE/releases/latest)
+[![CI](https://github.com/hweiske/blender-importASE/actions/workflows/python-app.yml/badge.svg)](https://github.com/hweiske/blender-importASE/actions/workflows/python-app.yml)
+[![Latest release](https://img.shields.io/github/v/release/hweiske/blender-importASE)](https://github.com/hweiske/blender-importASE/releases/latest)
 [![Blender](https://img.shields.io/badge/blender-4.4%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10776696.svg)](https://doi.org/10.5281/zenodo.10776696)
-[![Downloads](https://img.shields.io/github/downloads/Tonner-Zech-Group/blender-importASE/total)](https://github.com/Tonner-Zech-Group/blender-importASE/releases)
+[![Downloads](https://img.shields.io/github/downloads/hweiske/blender-importASE/total)](https://github.com/hweiske/blender-importASE/releases)
 
 Import molecules, crystals, trajectories, and volumetric data (electron densities, molecular orbitals) into Blender through [ASE](https://gitlab.com/ase/ase) — with geometry-nodes representations, coordination polyhedra, and isosurfaces.
+
+[![Download Add-on](https://img.shields.io/badge/Download-blender__importASE.zip-blue?style=for-the-badge&logo=blender&logoColor=white)](https://raw.githubusercontent.com/hweiske/blender-importASE/build/blender_importASE.zip)
 
 <table>
   <tr>
@@ -60,7 +62,7 @@ In case no internet connection is available. [ASE](https://gitlab.com/ase/ase) n
 * 
 ## Installation
 
-To use the addon in Blender simply download the zip file for yor version `blender_importASE.zip` from the latest release. In Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. Viewpoint rendering (render -> render vpts) is part of the addon, so there is nothing else to install.
+Click the **Download Add-on** button above for `blender_importASE.zip` built straight from the current `main` (rebuilt automatically on every push - see `.github/workflows/build-latest.yml`). For a stable, versioned copy instead, grab it from a [tagged release](https://github.com/hweiske/blender-importASE/releases/latest) instead. Either way: in Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. Viewpoint rendering (render -> render vpts) is part of the addon, so there is nothing else to install.
 
 ### Developement Install
 
@@ -96,17 +98,21 @@ the isovalues of any imported densities.
 ### Custom bonds (dotted / scaled / dashed)
 
 Select two atoms of an imported structure (edit mode, pick the two vertices)
-and press "Add dotted bond" in the ASE sidebar. The *bond type* dropdown in
+and press "Add custom bond" in the ASE sidebar. The *bond type* dropdown in
 the redo panel (F9) picks the style:
 
 * **Dotted** - a row of spheres between the two atoms
 * **Scaled** - a solid bond that gets thinner the longer it is, capped at the
-  chosen radius (bonds at or below the *reference length* keep the full radius)
+  chosen radius. It is measured against the bond's natural length (the two
+  atoms' covalent radii added), so a normal-length bond is full thickness and
+  a stretched or partial one thins in proportion
 * **Dashed** - alternating cylinder segments
 
 Use them for partial bonds in a transition state, hydrogen bonds, or any
 interaction the distance-based bond search does not draw. All three take the
-bond colour (blended between the two atoms) and get the outline. The bond
+bond colour (blended between the two atoms), match the structure's own bond
+radius unless you set one, and get the outline. Each bond is listed in the ASE
+panel of the structure, so the two atoms can be changed there afterwards. The bond
 samples the atom positions live, so it follows the structure and its
 trajectory.
 

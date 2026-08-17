@@ -69,6 +69,42 @@ def main():
         vcd.chgdiff = [rho * np.sign(x - 2)]
         vcd.write(f'{FIXTURES}/CHGCAR')
 
+    # minimal synthetic AMS TAPE41: two small named volumes under [FOO], the
+    # same layout a real PEDANOCV restart's NOCVdRhoPlot writes (see
+    # import_cubefiles.read_tape41). Only written when plams is importable -
+    # unlike the other fixtures this one needs an extra dependency, so it's
+    # optional the way the addon's own plams support is optional.
+    try:
+        from scm.plams.tools.kftools import KFFile
+        BOHR = 1.8897259886  # Angstrom -> Bohr, matching import_cubefiles' inverse
+        nx = ny = nz = 6
+        gx, gy, gz = np.mgrid[0:1:nx * 1j, 0:1:ny * 1j, 0:1:nz * 1j]
+        lobe1 = np.exp(-((gx - 0.3) ** 2 + (gy - 0.5) ** 2 + (gz - 0.5) ** 2) / 0.02)
+        lobe2 = -np.exp(-((gx - 0.7) ** 2 + (gy - 0.5) ** 2 + (gz - 0.5) ** 2) / 0.02)
+        tape41_path = f'{FIXTURES}/synthetic.TAPE41'
+        if os.path.exists(tape41_path):
+            os.remove(tape41_path)
+        kf = KFFile(tape41_path)
+        positions_bohr = np.array([(2, 2, 2), (2.76, 2.59, 2), (1.24, 2.59, 2)]) * BOHR
+        kf.write('Geometry', 'nnuc', 3)
+        # fixed-width, equal-length slots per label (matching real AMS TAPE41
+        # output) - read_tape41 divides the raw string length by nnuc, so
+        # uneven padding (plain space-separated symbols) slices wrong
+        kf.write('Geometry', 'labels', ''.join(s.ljust(8) for s in ['O', 'H', 'H']))
+        kf.write('Geometry', 'xyznuc', positions_bohr.flatten().tolist())
+        kf.write('Grid', 'nr of points x', nx)
+        kf.write('Grid', 'nr of points y', ny)
+        kf.write('Grid', 'nr of points z', nz)
+        kf.write('Grid', 'x-vector', [4.0 * BOHR, 0.0, 0.0])
+        kf.write('Grid', 'y-vector', [0.0, 4.0 * BOHR, 0.0])
+        kf.write('Grid', 'z-vector', [0.0, 0.0, 4.0 * BOHR])
+        kf.write('Grid', 'Start_point', [0.0, 0.0, 0.0])
+        kf.write('FOO', 'dRhoNOCV=1,k=1', lobe1.flatten(order='F').tolist())
+        kf.write('FOO', 'dRhoNOCV=2,k=1', lobe2.flatten(order='F').tolist())
+        print(f'wrote {tape41_path}')
+    except ImportError:
+        print('plams not installed - skipping synthetic.TAPE41 (optional fixture)')
+
     print(f'fixtures written to {FIXTURES}')
 
 

@@ -1,0 +1,41 @@
+# Rebuilds blender_importASE.zip from whatever is currently on main and
+# publishes it to the "build" branch - a rolling, always-current zip built
+# straight from source, distinct from release.yml's tagged releases.
+#
+# The README's download button points at this branch's raw file, so it
+# always reflects the latest commit on main rather than the last version
+# someone tagged.
+
+name: Build latest zip
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build addon zip
+      run: |
+        zip -r /tmp/blender_importASE.zip blender_importASE \
+          -x "*/__pycache__/*" "*.pyc" "*/.pytest_cache/*" "*/.ruff_cache/*"
+
+    - name: Publish to the build branch
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git checkout --orphan build
+        git rm -rf --cached . > /dev/null
+        find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
+        cp /tmp/blender_importASE.zip .
+        git add blender_importASE.zip
+        git commit -m "Latest build from ${{ github.sha }}"
+        git push --force origin build

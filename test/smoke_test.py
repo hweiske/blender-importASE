@@ -77,6 +77,22 @@ step('cube_density', lambda: run_import(f'{SCRATCH}/water.cube',
      representation='nodes', animate=False, read_density=True))
 step('chgcar_density', lambda: run_import(f'{SCRATCH}/CHGCAR',
      representation='nodes', animate=False, read_density=True))
+def run_tape41_density():
+    # an actual import, not importlib.util.find_spec: a partial/broken
+    # install (e.g. a failed pip leaving a bare 'scm' namespace dir behind)
+    # can make find_spec succeed while the real import still fails - the
+    # same distinction check_dependency() draws in __init__.py.
+    try:
+        import scm.plams  # noqa: F401
+    except ImportError:
+        print('plams not installed - skipping the actual import')
+        return
+    run_import(f'{SCRATCH}/synthetic.TAPE41', representation='nodes',
+              animate=False, read_density=True)
+    names = {o.name for o in bpy.data.objects if o.type == 'VOLUME'}
+    assert names == {'dRhoNOCV=1,k=1', 'dRhoNOCV=2,k=1'}, names
+
+step('tape41_density', run_tape41_density)
 def run_polyhedra():
     fresh_scene()
     from blender_importASE.polyhedra import import_polyhedra

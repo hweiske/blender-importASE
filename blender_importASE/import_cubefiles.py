@@ -1,7 +1,9 @@
 import bpy
 import numpy as np
+from ase import Atoms
 from ase.io.cube import read_cube
 from ase.calculators.vasp import VaspChargeDensity
+from ase.units import Bohr as BOHR_TO_ANG
 #if bpy.app.version[1] < 4:         didn't work
 #    import pyopenvdb as vdb
 #else:
@@ -133,6 +135,99 @@ def cube2vol(filename, filepath=os.environ.get('HOME'), modifier='GeometryNodes'
     VOLUME = atoms['data']
     SPACING = atoms['spacing']
     return data2vol(VOLUME, SPACING, ORIGIN, filename, modifier=modifier)
+
+
+def is_ams_tape41(filename):
+    """True for an AMS/BAND TAPE41 (binary KF) volume file.
+
+    TAPE41 carries no informative extension - by SCM convention it is
+    either literally named ``TAPE41``, renamed to ``*.t41`` (see the AMS
+    docs: "renaming it to foobar.t41 will allow AMSview to read it"), or
+    just kept as a ``*.TAPE41``/``*_TAPE41`` suffix (the most common case
+    in practice: copying it out of a results directory next to other
+    same-named files, e.g. ``restart.TAPE41``). Anything else is left to
+    the normal ase.io.read dispatch.
+    """
+    base = os.path.basename(filename).upper()
+    return base == 'TAPE41' or base.endswith('.T41') or base.endswith('TAPE41')
+
+
+def _read_atoms_from_kf(kf):
+    """Read the atomic geometry out of a TAPE41's Geometry section.
+
+    Same layout ase.io.cube uses internally, just reached through
+    plams' KFFile instead of the cube text format: ``nnuc`` atoms,
+    ``labels`` a fixed-width concatenated string of element symbols,
+    ``xyznuc`` a flat xyz array in Bohr.
+    """
+    nnuc = kf.read('Geometry', 'nnuc')
+    raw_labels = kf.read('Geometry', 'labels')
+    xyz_bohr = np.array(kf.read('Geometry', 'xyznuc')).reshape(-1, 3)
+    label_len = len(raw_labels) // nnuc
+    symbols = [raw_labels[i * label_len:(i + 1) * label_len].strip() for i in range(nnuc)]
+    return Atoms(symbols=symbols, positions=xyz_bohr * BOHR_TO_ANG)
+
+
+def read_tape41(filepath, volumes=None, kfkey='FOO'):
+    """Read atoms and one or more named volumes out of an AMS TAPE41.
+
+    volumes: specific FOO-section names to read (e.g. the NOCV pairs
+    ``['dRhoNOCV=1,k=1', 'dRhoNOCV=2,k=1']``); None reads every entry
+    under kfkey. Returns ``(atoms, {name: (data, spacing, origin)})``
+    with data indexed like ase.io.cube (shape (nx, ny, nz)) and
+    spacing/origin in Angstrom, ready for data2vol().
+    """
+    from scm.plams.tools.kftools import KFFile
+
+    kf = KFFile(str(filepath))
+    atoms = _read_atoms_from_kf(kf)
+
+    nx = kf.read('Grid', 'nr of points x')
+    ny = kf.read('Grid', 'nr of points y')
+    nz = kf.read('Grid', 'nr of points z')
+    vx = np.array(kf.read('Grid', 'x-vector')) * BOHR_TO_ANG
+    vy = np.array(kf.read('Grid', 'y-vector')) * BOHR_TO_ANG
+    vz = np.array(kf.read('Grid', 'z-vector')) * BOHR_TO_ANG
+    origin = np.array(kf.read('Grid', 'Start_point')) * BOHR_TO_ANG
+
+    skeleton = kf.get_skeleton()
+    names = volumes if volumes else list(skeleton.get(kfkey, []))
+    if not names:
+        raise ValueError(f"no volumes found under KF section '{kfkey}' in {filepath}")
+
+    result = {}
+    for name in names:
+        raw = kf.read(kfkey, name)
+        data = np.reshape(np.array(raw), (nx, ny, nz), order='F')
+        result[name] = (data, (vx, vy, vz), origin)
+    return atoms, result
+
+
+def tape41_import(filepath, filename, modifier='GeometryNodes', volumes=None, found=None):
+    """Import one or more volumes from an AMS TAPE41 (e.g. NOCV deformation
+    densities from a PEDANOCV restart) straight into Blender, without a
+    separate cube-file conversion step.
+
+    Every requested volume becomes its own volume object with the usual
+    blue/red '+ material'/'- material' pair (same convention as cube2vol),
+    named after its KF variable so e.g. 'dRhoNOCV=1,k=1' and
+    'dRhoNOCV=2,k=1' land as two separate, independently toggleable
+    objects - matching how NOCV pairs are conventionally rendered one at
+    a time, not overlaid. Returns the list of density objects.
+
+    Pass `found` (the volumes dict from an already-done read_tape41()
+    call) to skip re-reading the KF file - the importer already needs the
+    atoms out of it before this point, so it reads once and hands the
+    volumes dict through rather than opening the file twice.
+    """
+    if found is None:
+        _, found = read_tape41(filepath, volumes=volumes)
+    objects = []
+    for name, (data, spacing, origin) in found.items():
+        obj = data2vol(data, spacing, origin, f'{filepath}_{name}', modifier=modifier)
+        obj.name = name
+        objects.append(obj)
+    return objects
 
 
 def chgcar2vol(filename, modifier='GeometryNodes', density=None):

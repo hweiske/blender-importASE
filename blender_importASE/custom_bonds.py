@@ -34,12 +34,17 @@ solid bonds replaced at a time: replacing 0-1 and then 0-2 leaves the
 0-1 bond visible again. Adding the custom bond itself is unaffected -
 only the hiding of the underlying solid bond is one-per-atom.
 """
+import contextlib
+
 import bpy
 
 from . import __version__
 from .node_networks.compat import cin, set_mod_input
 from .node_networks.outline import outline_objects
 
+# Kept spelled 'dotted_partner': the name is baked into saved files and into
+# the atoms_and_bonds node group, so renaming it would silently orphan the
+# replacement bookkeeping of existing scenes.
 DOTTED_PARTNER_ATTRIBUTE = 'dotted_partner'
 OUTLINE_MATERIAL = 'outline_color'
 
@@ -50,6 +55,13 @@ BOND_GROUPS = {
     'DASHED': 'dashed_bond',
 }
 DOTTED_BOND_GROUP = BOND_GROUPS['DOTTED']  # backwards compatible alias
+
+# Stamp for the generated bond groups. It carries its own revision on top of
+# the add-on version so that changing a group's definition forces a rebuild
+# even within one release: 2.3.2 shipped a scaled_bond with a 'reference
+# length' socket, and without this an updated 2.3.2 would happily reuse it.
+_BOND_GROUP_REVISION = 2
+_GROUP_STAMP = f'{__version__}-bonds{_BOND_GROUP_REVISION}'
 
 BOND_STYLE_ITEMS = (
     ('DOTTED', 'Dotted', 'A row of spheres between the two atoms'),
@@ -185,12 +197,12 @@ def _new_group(style):
     name = BOND_GROUPS[style]
     existing = bpy.data.node_groups.get(name)
     if existing is not None:
-        if existing.description == __version__:
+        if existing.description == _GROUP_STAMP:
             return existing, False
         existing.name = f'{name}_old'
 
     group = bpy.data.node_groups.new(type='GeometryNodeTree', name=name)
-    group.description = __version__
+    group.description = _GROUP_STAMP
     group.is_modifier = True
 
     group.interface.new_socket('Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
@@ -269,10 +281,6 @@ def scaled_bond_node_group():
                                         socket_type='NodeSocketFloat')
     radius.default_value = 0.1
     radius.min_value = 0.0
-    reference = group.interface.new_socket('reference length', in_out='INPUT',
-                                           socket_type='NodeSocketFloat')
-    reference.default_value = 1.5
-    reference.min_value = 0.0001
     resolution = group.interface.new_socket('resolution', in_out='INPUT',
                                             socket_type='NodeSocketInt')
     resolution.default_value = 16
@@ -282,9 +290,12 @@ def scaled_bond_node_group():
     nodes, links = group.nodes, group.links
     group_input, group_output, curve_line, color_a, color_b = _bond_front_end(group)
 
-    # radius = min(bond radius, bond radius * reference length / bond length):
-    # at or below the reference length the bond has its full radius, beyond it
-    # it thins out in proportion
+    # radius = min(bond radius, bond radius * natural length / bond length),
+    # where the natural length is the sum of the two atoms' covalent radii.
+    # A bond at its normal length is drawn at full thickness; a stretched or
+    # partial bond thins in proportion to how stretched it is. Taking the
+    # reference from the atoms themselves means it adapts per element pair
+    # instead of needing a hand-tuned number.
     endpoints = nodes.new('ShaderNodeVectorMath')
     endpoints.name = 'Bond Length'
     endpoints.operation = 'DISTANCE'
@@ -292,12 +303,43 @@ def scaled_bond_node_group():
     links.new(curve_line.inputs['Start'].links[0].from_socket, endpoints.inputs[0])
     links.new(curve_line.inputs['End'].links[0].from_socket, endpoints.inputs[1])
 
+    # natural length = covalent radius of A + covalent radius of B, read from
+    # the structure's per-atom 'atom_radius' attribute
+    object_info = nodes['Structure Info']
+    covalent = nodes.new('GeometryNodeInputNamedAttribute')
+    covalent.name = 'atom_radius'
+    covalent.data_type = 'FLOAT'
+    covalent.inputs[0].default_value = 'atom_radius'
+    covalent.location = (-700, -880)
+
+    radius_a = nodes.new('GeometryNodeSampleIndex')
+    radius_a.name = 'Sample Covalent A'
+    radius_a.data_type = 'FLOAT'
+    radius_a.domain = 'POINT'
+    radius_a.location = (-500, -880)
+    radius_b = nodes.new('GeometryNodeSampleIndex')
+    radius_b.name = 'Sample Covalent B'
+    radius_b.data_type = 'FLOAT'
+    radius_b.domain = 'POINT'
+    radius_b.location = (-500, -1040)
+    for node, socket in ((radius_a, 'atom A'), (radius_b, 'atom B')):
+        links.new(object_info.outputs['Geometry'], node.inputs['Geometry'])
+        links.new(covalent.outputs[0], node.inputs['Value'])
+        links.new(group_input.outputs[socket], node.inputs['Index'])
+
+    natural_length = nodes.new('ShaderNodeMath')
+    natural_length.name = 'Natural length'
+    natural_length.operation = 'ADD'
+    natural_length.location = (-300, -940)
+    links.new(radius_a.outputs[0], natural_length.inputs[0])
+    links.new(radius_b.outputs[0], natural_length.inputs[1])
+
     scale_by_reference = nodes.new('ShaderNodeMath')
-    scale_by_reference.name = 'Radius x reference'
+    scale_by_reference.name = 'Radius x natural length'
     scale_by_reference.operation = 'MULTIPLY'
     scale_by_reference.location = (-120, -700)
     links.new(group_input.outputs['bond radius'], scale_by_reference.inputs[0])
-    links.new(group_input.outputs['reference length'], scale_by_reference.inputs[1])
+    links.new(natural_length.outputs[0], scale_by_reference.inputs[1])
 
     divide_by_length = nodes.new('ShaderNodeMath')
     divide_by_length.name = 'Scaled radius'
@@ -442,6 +484,19 @@ def bond_node_group(style):
     return _GROUP_BUILDERS[style]()
 
 
+def structure_bond_radius(structure_obj, fallback=0.1):
+    """The bond radius currently set on the structure's atoms_and_bonds
+    modifier, so a custom bond is as thick as the solid bonds around it
+    instead of carrying its own hardcoded default."""
+    from .controls import find_ase_modifier
+    from .node_networks.compat import get_mod_input
+    mod, idents = find_ase_modifier(structure_obj)
+    if mod is None or not idents or 'bond_radius' not in idents:
+        return fallback
+    value = get_mod_input(mod, idents['bond_radius'])
+    return float(value) if value else fallback
+
+
 def _socket_identifiers(group):
     return {item.name: item.identifier
             for item in group.interface.items_tree
@@ -456,17 +511,20 @@ def set_dotted_partner(structure_obj, index_a, index_b, connected=True):
     missing attribute reads as.
     """
     mesh = structure_obj.data
-    if DOTTED_PARTNER_ATTRIBUTE not in mesh.attributes:
-        if not connected:
-            return
-        mesh.attributes.new(name=DOTTED_PARTNER_ATTRIBUTE, type='INT', domain='POINT')
-    data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
-    if max(index_a, index_b) >= len(data):
-        raise ValueError('atom index outside the structure')
-    data[index_a].value = index_b + 1 if connected else 0
-    data[index_b].value = index_a + 1 if connected else 0
-    mesh.update()
-    structure_obj.update_tag()
+    # attribute writes do not stick while the mesh is open in the edit cage
+    with _object_mode():
+        if DOTTED_PARTNER_ATTRIBUTE not in mesh.attributes:
+            if not connected:
+                return
+            mesh.attributes.new(name=DOTTED_PARTNER_ATTRIBUTE, type='INT',
+                                domain='POINT')
+        data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
+        if max(index_a, index_b) >= len(data):
+            raise ValueError('atom index outside the structure')
+        data[index_a].value = index_b + 1 if connected else 0
+        data[index_b].value = index_a + 1 if connected else 0
+        mesh.update()
+        structure_obj.update_tag()
 
 
 def custom_bond_objects(structure_obj):
@@ -484,31 +542,33 @@ def reset_custom_bonds(structure_obj, remove_objects=True):
     the custom-bond objects of this structure. Returns (restored, removed)."""
     mesh = structure_obj.data
     restored = 0
-    if DOTTED_PARTNER_ATTRIBUTE in mesh.attributes:
-        data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
-        for entry in data:
-            if entry.value:
-                restored += 1
-                entry.value = 0
-        mesh.update()
-        structure_obj.update_tag()
+    # same as set_dotted_partner: clearing the attribute needs object mode
+    with _object_mode():
+        if DOTTED_PARTNER_ATTRIBUTE in mesh.attributes:
+            data = mesh.attributes[DOTTED_PARTNER_ATTRIBUTE].data
+            for entry in data:
+                if entry.value:
+                    restored += 1
+                    entry.value = 0
+            mesh.update()
+            structure_obj.update_tag()
 
-    removed = 0
-    if remove_objects:
-        for ob in custom_bond_objects(structure_obj):
-            bpy.data.objects.remove(ob, do_unlink=True)
-            removed += 1
+        removed = 0
+        if remove_objects:
+            for ob in custom_bond_objects(structure_obj):
+                bpy.data.objects.remove(ob, do_unlink=True)
+                removed += 1
     return restored, removed
 
 
 def add_bond(structure_obj, index_a, index_b, style='DOTTED', segments=None,
-             radius=None, resolution=None, reference_length=1.5,
-             replace=False, outline=True):
+             radius=None, resolution=None, replace=False, outline=True):
     """Create a custom-bond object between two atoms of structure_obj.
 
     style: 'DOTTED', 'SCALED' or 'DASHED'. segments is the number of dots
-    (dotted) or dashes (dashed) and is ignored for the scaled style;
-    passing None for segments/radius/resolution keeps the style's default.
+    (dotted) or dashes (dashed) and is ignored for the scaled style.
+    radius None (or 0) matches the structure's own bond radius; passing None
+    for segments/resolution keeps the style's default.
     """
     if style not in BOND_GROUPS:
         raise ValueError(f'unknown bond style {style!r}')
@@ -518,6 +578,36 @@ def add_bond(structure_obj, index_a, index_b, style='DOTTED', segments=None,
     if not (0 <= index_a < n_atoms and 0 <= index_b < n_atoms):
         raise ValueError(f'atom index outside the structure (0-{n_atoms - 1})')
 
+    # The natural way to pick the two atoms is in edit mode, but object-level
+    # operators (outline_objects) refuse to run there, and mesh attribute
+    # writes (the 'replace' bookkeeping) do not stick while the mesh is open
+    # in the edit cage. Drop to object mode for the duration and go back
+    # afterwards, so the user stays where they were.
+    with _object_mode():
+        return _add_bond(structure_obj, index_a, index_b, style, segments,
+                         radius, resolution, replace, outline)
+
+
+@contextlib.contextmanager
+def _object_mode():
+    obj = bpy.context.view_layer.objects.active if bpy.context.view_layer else None
+    previous = obj.mode if obj is not None else 'OBJECT'
+    if previous != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    try:
+        yield
+    finally:
+        if previous != 'OBJECT':
+            restore = bpy.context.view_layer.objects.active
+            if restore is not None and restore.mode == 'OBJECT':
+                try:
+                    bpy.ops.object.mode_set(mode=previous)
+                except RuntimeError:
+                    pass
+
+
+def _add_bond(structure_obj, index_a, index_b, style, segments, radius,
+              resolution, replace, outline):
     group = bond_node_group(style)
 
     mesh = bpy.data.meshes.new(f'{structure_obj.name}_{style.lower()}_bond')
@@ -557,12 +647,12 @@ def add_bond(structure_obj, index_a, index_b, style='DOTTED', segments=None,
     if segment_socket and segments is not None:
         set_mod_input(modifier, idents[segment_socket], segments)
     radius_socket = 'dot radius' if style == 'DOTTED' else 'bond radius'
-    if radius is not None:
-        set_mod_input(modifier, idents[radius_socket], radius)
+    if radius is None or radius <= 0.0:
+        # match the structure's own bonds
+        radius = structure_bond_radius(structure_obj)
+    set_mod_input(modifier, idents[radius_socket], radius)
     if resolution is not None:
         set_mod_input(modifier, idents['resolution'], resolution)
-    if style == 'SCALED':
-        set_mod_input(modifier, idents['reference length'], reference_length)
 
     if outline:
         # outline_objects() makes its target the active object; put the
