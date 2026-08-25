@@ -172,3 +172,6 @@ write_colors.py
 *.zip
 
 test/fixtures/*.vdb
+
+# Stamped into the addon package by .github/workflows/build-latest.yml at build time
+blender_importASE/BUILD_INFO.txt

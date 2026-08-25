@@ -1,10 +1,25 @@
 # Rebuilds blender_importASE.zip from whatever is currently on main and
-# publishes it to the "build" branch - a rolling, always-current zip built
-# straight from source, distinct from release.yml's tagged releases.
+# publishes it two ways:
 #
-# The README's download button points at this branch's raw file, so it
-# always reflects the latest commit on main rather than the last version
-# someone tagged.
+#   1. as the asset of a rolling "latest-build" pre-release  <- what the README
+#      button points at
+#   2. to the orphan "build" branch                          <- kept so the old
+#      raw.githubusercontent URL does not break for anyone who bookmarked it
+#
+# Why the release asset is the one the button uses: the raw.githubusercontent
+# URL is a MUTABLE url (this workflow force-pushes over it) served with
+# `cache-control: max-age=300` through Fastly. After a merge, the browser cache
+# and the regional edge will both happily hand out the PREVIOUS zip for a
+# while - which looks exactly like "the download button is broken". A release
+# asset redirects to a fresh, content-addressed storage URL each time the asset
+# is replaced, so there is no stale copy to serve.
+#
+# The zip also carries BUILD_INFO.txt naming the commit it was built from, so a
+# downloaded zip is self-identifying and "did I actually get the new version?"
+# is answerable without guessing.
+#
+# The pre-release flag matters: `releases/latest` keeps pointing at the newest
+# real tagged release, so release.yml's stable versions are unaffected.
 
 name: Build latest zip
 
@@ -17,16 +32,70 @@ on:
 permissions:
   contents: write
 
+# Two merges in quick succession must not race: without this the older build
+# can finish last and force-push a stale zip over the newer one.
+concurrency:
+  group: build-latest
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
 
+    - name: Stamp the build
+      run: |
+        cat > blender_importASE/BUILD_INFO.txt <<EOF
+        blender-importASE rolling build
+        commit:     ${{ github.sha }}
+        ref:        ${{ github.ref_name }}
+        built (UTC): $(date -u +'%Y-%m-%d %H:%M:%S')
+        run:        ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+        Built straight from source by .github/workflows/build-latest.yml.
+        For a stable, versioned copy use a tagged release instead.
+        EOF
+        cat blender_importASE/BUILD_INFO.txt
+
     - name: Build addon zip
       run: |
         zip -r /tmp/blender_importASE.zip blender_importASE \
           -x "*/__pycache__/*" "*.pyc" "*/.pytest_cache/*" "*/.ruff_cache/*"
+
+    # A zip that installs into Blender must have the package directory at the
+    # top level. Catching that here beats shipping a zip that silently fails
+    # in the add-on installer.
+    - name: Verify the zip
+      run: |
+        unzip -l /tmp/blender_importASE.zip
+        for required in \
+            blender_importASE/__init__.py \
+            blender_importASE/render_vpts.py \
+            blender_importASE/BUILD_INFO.txt ; do
+          unzip -l /tmp/blender_importASE.zip | grep -q " $required\$" \
+            || { echo "::error::$required missing from the zip"; exit 1; }
+        done
+        unzip -l /tmp/blender_importASE.zip | grep -q "__pycache__" \
+          && { echo "::error::__pycache__ leaked into the zip"; exit 1; }
+        echo "zip OK"
+
+    - name: Publish the rolling pre-release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Delete and recreate rather than upload-overwrite: a fresh release gets
+        # a fresh asset URL behind the /releases/download/ redirect, so there is
+        # no previously-cached copy anywhere to hand back. --cleanup-tag removes
+        # the tag too, otherwise `release create` would fail on the stale one.
+        gh release delete latest-build --repo "$GITHUB_REPOSITORY" \
+          --cleanup-tag --yes || true
+        gh release create latest-build /tmp/blender_importASE.zip \
+          --repo "$GITHUB_REPOSITORY" \
+          --target "$GITHUB_SHA" \
+          --title "Latest build (${GITHUB_SHA:0:7})" \
+          --notes "Rolling build from \`main\` @ \`${GITHUB_SHA:0:7}\`, rebuilt on every push. Not a stable release - see the [tagged releases](../../releases/latest) for those." \
+          --prerelease
 
     - name: Publish to the build branch
       run: |
