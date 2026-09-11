@@ -99,6 +99,24 @@ def run_polyhedra():
     import_polyhedra(f'{SCRATCH}/nacl.extxyz', 'nacl.extxyz', outline=True)
     faces_obj = next(o for o in bpy.data.objects if o.name.endswith('_faces'))
     assert len(faces_obj.data.polygons) > 0, 'no polyhedra faces generated'
+    # the faces are shaded by a Principled/Glass mix, both halves tinted by
+    # the atom_color attribute
+    material = faces_obj.data.materials[0]
+    kinds = {n.bl_idname for n in material.node_tree.nodes}
+    assert {'ShaderNodeBsdfPrincipled', 'ShaderNodeBsdfGlass', 'ShaderNodeMixShader',
+            'ShaderNodeAttribute'} <= kinds, sorted(kinds)
+    mix = next(n for n in material.node_tree.nodes if n.bl_idname == 'ShaderNodeMixShader')
+    assert mix.inputs[0].default_value == 0.5, mix.inputs[0].default_value
+    output = next(n for n in material.node_tree.nodes
+                  if n.bl_idname == 'ShaderNodeOutputMaterial')
+    # == not is: every lookup hands out a fresh python proxy for the node,
+    # so identity comparison fails even on the same node
+    assert output.inputs['Surface'].links[0].from_node == mix, \
+        'the mix does not drive the surface'
+    for node_type, socket in (('ShaderNodeBsdfPrincipled', 'Base Color'),
+                              ('ShaderNodeBsdfGlass', 'Color')):
+        node = next(n for n in material.node_tree.nodes if n.bl_idname == node_type)
+        assert node.inputs[socket].is_linked, f'{node_type} is not tinted by atom_color'
     assert not faces_obj.modifiers, 'polyhedra faces must stay modifier-free'
     structure = next(o for o in bpy.data.objects
                      if 'polyhedra' in o.name and o.type == 'MESH'
@@ -676,7 +694,7 @@ def run_element_colors():
 def run_lead_defaults():
     """Lead's own entry in the color scheme: a violet, fully metallic."""
     from blender_importASE.utils import default_element_color
-    assert default_element_color('Pb') == (0.2, 0.0, 0.5, 1.0), default_element_color('Pb')
+    assert default_element_color('Pb') == (0.0, 0.4, 0.2, 1.0), default_element_color('Pb')
 
     fresh_scene()
     ase.io.write(f'{SCRATCH}/lead.xyz', ase.Atoms('Pb2', positions=[(0, 0, 0), (3.5, 0, 0)]))
@@ -685,7 +703,7 @@ def run_lead_defaults():
     bsdf = next(n for n in bpy.data.materials['Pb'].node_tree.nodes
                 if n.type == 'BSDF_PRINCIPLED')
     assert tuple(round(v, 4) for v in bsdf.inputs['Base Color'].default_value) \
-        == (0.2, 0.0, 0.5, 1.0), tuple(bsdf.inputs['Base Color'].default_value)
+        == (0.0, 0.4, 0.2, 1.0), tuple(bsdf.inputs['Base Color'].default_value)
     assert bsdf.inputs['Metallic'].default_value == 1.0, bsdf.inputs['Metallic'].default_value
     assert bsdf.inputs['Roughness'].default_value == 0.5, bsdf.inputs['Roughness'].default_value
 

@@ -73,7 +73,7 @@ Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`),
 - `animate=True`, `imageslice=n` — for trajectories, import only every *n*th image (`overwrite=True` forces `nodes`). Use this to thin out long trajectories.
 - `frame_interpolation=n` — spacing of the imported images on the timeline. `1` (default) puts each image on its own frame; `10` leaves 9 empty frames between images for Blender to interpolate, turning a short path (e.g. a 6-image NEB) into a smooth animation. Note this is the opposite of `imageslice`: that one *removes* images, this one *adds* in-between frames. Caveat: on a trajectory whose atom count changes, atoms that appear/disappear slide in from their parked position across the interpolated frames (the images themselves stay exact); the importer prints a warning in that case.
 - element colors, roughness and metallic come from `utils.atomcolors` (lead, say, is the violet
-  `(0.2, 0.0, 0.5)` — `#7C00BC` in the picker — fully metallic at roughness 0.5); see
+  `(0.0, 0.4, 0.2)` — `#00AA7C` in the picker — fully metallic at roughness 0.5); see
   [§6](#6-live-controls-the-ase-n-panel) for editing them per structure.
 - `colorbonds=True` — color bond halves by their atoms; `unit_cell=True` draws the cell box as cylinders joined into one object, shaded by the `'unit_cell'` material: flat black (0,0,0) wired straight into the Surface output, so the edges read like the outline instead of catching lights. Editing that RGB node re-colors every later import; the old shaded Principled version is rebuilt on the next import.
 
@@ -91,7 +91,7 @@ import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
     single_element_corners=True, complete_molecules=True, bond_cutoff=1.3,
     cell_margin=0.0, all_images=True, framework_shells=1, unit_cell=False, **kwargs)
 ```
-Builds a coordination polyhedron (convex hull, `scipy.spatial.ConvexHull`) around every atom with ≥`min_neighbors` neighbors within `poly_cutoff`×covalent radius. Produces the atoms/bonds structure object **plus** a separate `<name>_faces` mesh carrying `atom_color`/`element` attributes and the semi-transparent `'polyhedra material'`. Outline (when on) goes on the atoms/bonds only, never the faces. `unit_cell=True` draws the cell (skipped when the file has no 3d cell).
+Builds a coordination polyhedron (convex hull, `scipy.spatial.ConvexHull`) around every atom with ≥`min_neighbors` neighbors within `poly_cutoff`×covalent radius. Produces the atoms/bonds structure object **plus** a separate `<name>_faces` mesh carrying `atom_color`/`element` attributes and the `'polyhedra material'` — a Principled BSDF (roughness 0.6, IOR 1.45, alpha 0.3) and a Glass BSDF (multiscatter GGX, roughness 0, IOR 1.5) mixed half and half, both tinted by `atom_color`: the principled half carries the color and the transparency, the glass half the refraction and the bright edges. It is only built when the material does not already have that glass half, so an older one is rebuilt and tweaks to a current one survive a re-import. Outline (when on) goes on the atoms/bonds only, never the faces. `unit_cell=True` draws the cell (skipped when the file has no 3d cell).
 
 **How the structure is extended past the cell** (`build_polyhedra_atoms`). With
 `complete_molecules=True` (default), `select_complete_molecules` grows every molecule **shell by

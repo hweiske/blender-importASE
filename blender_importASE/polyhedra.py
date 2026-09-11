@@ -26,25 +26,58 @@ POLYHEDRA_MATERIAL = 'polyhedra material'
 
 
 def _polyhedra_material():
-    """Semi-transparent material reading the per-vertex 'atom_color' attribute,
-    so every polyhedron is tinted by the element colors of its corner
-    atoms (e.g. brown SbBr6 octahedra from the Br corners)."""
+    """Material of the polyhedra faces: a Principled BSDF and a Glass BSDF
+    mixed half and half, both tinted by the per-vertex 'atom_color'
+    attribute, so every polyhedron takes the element colors of its corner
+    atoms (e.g. brown SbBr6 octahedra from the Br corners).
+
+    The principled half carries the color and the transparency, the glass
+    half the refraction and the bright edges a solid polyhedron gets where
+    it is seen at a glancing angle.
+
+    Only built when the material does not already have that glass half:
+    an older 'polyhedra material' is rebuilt, one that is already this
+    keeps whatever was tweaked on it.
+    """
     mat = newMaterial(POLYHEDRA_MATERIAL)
-    nodes = mat.node_tree.nodes
-    links = mat.node_tree.links
-    principled = nodes.get('Principled BSDF')
-    principled.inputs[1].default_value = 0.0   # metallic
-    principled.inputs[2].default_value = 0.6   # roughness
-    principled.inputs[3].default_value = 1.45  # IOR
-    principled.inputs[4].default_value = 0.6   # alpha
-    attr = nodes.get('Attribute')
-    if attr is None:
-        attr = nodes.new('ShaderNodeAttribute')
-        attr.name = 'Attribute'
-        attr.location = (-300, 200)
-    attr.attribute_name = 'atom_color'
-    attr.attribute_type = 'GEOMETRY'
-    links.new(attr.outputs['Color'], principled.inputs['Base Color'])
+    tree = mat.node_tree
+    nodes, links = tree.nodes, tree.links
+    if any(node.bl_idname == 'ShaderNodeBsdfGlass' for node in nodes):
+        return mat
+    for node in list(nodes):
+        nodes.remove(node)
+
+    attribute = nodes.new('ShaderNodeAttribute')
+    attribute.name = 'Attribute'
+    attribute.attribute_name = 'atom_color'
+    attribute.attribute_type = 'GEOMETRY'
+    attribute.location = (-320, 60)
+
+    principled = nodes.new('ShaderNodeBsdfPrincipled')
+    principled.location = (-60, 300)
+    principled.inputs['Metallic'].default_value = 0.0
+    principled.inputs['Roughness'].default_value = 0.6
+    principled.inputs['IOR'].default_value = 1.45
+    principled.inputs['Alpha'].default_value = 0.3
+
+    glass = nodes.new('ShaderNodeBsdfGlass')
+    glass.location = (-60, -120)
+    glass.distribution = 'MULTI_GGX'
+    glass.inputs['Roughness'].default_value = 0.0
+    glass.inputs['IOR'].default_value = 1.5
+
+    mix = nodes.new('ShaderNodeMixShader')
+    mix.location = (280, 160)
+    mix.inputs[0].default_value = 0.5   # index: the socket is 'Fac' on 4.x, 'Factor' on 5.x
+
+    output = nodes.new('ShaderNodeOutputMaterial')
+    output.location = (500, 160)
+
+    links.new(attribute.outputs['Color'], principled.inputs['Base Color'])
+    links.new(attribute.outputs['Color'], glass.inputs['Color'])
+    links.new(principled.outputs['BSDF'], mix.inputs[1])
+    links.new(glass.outputs['BSDF'], mix.inputs[2])
+    links.new(mix.outputs[0], output.inputs['Surface'])
     return mat
 
 
