@@ -2,7 +2,7 @@
 
 This is a Blender add-on for importing atomistic structures (via [ASE](https://wiki.fysik.dtu.dk/ase/)) and turning them into publication-quality renders: molecules, crystals, coordination polyhedra, electron-density isosurfaces (volume or mesh), partial-charge colorings, and 3D-printable models. This document is the reference for driving it — both from the Blender GUI and from Python scripts. Everything the GUI does calls the same functions you can call directly, so scripting and clicking are interchangeable.
 
-- **Package:** `blender_importASE/` (add-on version 2.4.1, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
+- **Package:** `blender_importASE/` (add-on version 2.5.0, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
 - **Dependencies:** `ase`, plus `scipy` (polyhedra), `scikit-image` (density-as-mesh), `scm.plams` (AMS TAPE41 volumes), `openvdb`/`pyopenvdb` (volumetric density) — none installed automatically; each has its own "Install" button in the add-on preferences. See [§8](#8-dependencies).
 
 ---

@@ -11,7 +11,7 @@ authors:
   given-names: "Franz"
 title: "Blender Import ASE"
 license: CC-BY-4.0
-version: "2.2"
+version: "2.5.0"
 doi: 10.5281/zenodo.10776696
 date-released: 2026-05-04
 url: "https://github.com/Tonner-Zech-Group/blender-importASE"
