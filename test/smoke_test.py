@@ -213,6 +213,89 @@ def run_led_pair():
         'structure object missing'
 
 step('led_pair', run_led_pair)
+def run_element_colors():
+    """Per-element colors: the default scheme, the sidebar swatch's path
+    into the materials, and the sync of the 'atom_color' attribute the
+    colored bonds read."""
+    from blender_importASE import element_colors as ec
+    from blender_importASE.utils import default_element_color
+    # antimony's default is #C75D8F, stored linear like every base color
+    assert max(abs(a - b) for a, b in
+               zip(default_element_color('Sb'),
+                   (0.571125, 0.109462, 0.274677, 1.0))) < 1e-5, \
+        default_element_color('Sb')
+
+    fresh_scene()
+    ase.io.write(f'{SCRATCH}/antimony.xyz',
+                 ase.Atoms('SbH', positions=[(0, 0, 0), (1.7, 0, 0)]))
+    import_ase_molecule(f'{SCRATCH}/antimony.xyz', 'antimony.xyz',
+                        representation='nodes', animate=False,
+                        read_density=False)
+    obj = next(o for o in bpy.data.objects
+               if o.type == 'MESH' and 'atom_color' in o.data.attributes)
+    assert ec.structure_symbols(obj) == ['H', 'Sb'], ec.structure_symbols(obj)
+    assert ec.element_color_socket('Sb') is not None, 'no Sb color to draw'
+
+    def sb_color():
+        numbers = [round(d.value) for d in obj.data.attributes['element'].data]
+        i = numbers.index(51)
+        return tuple(obj.data.attributes['atom_color'].data[i].color)
+
+    # imported at the default color, materials and attribute agreeing
+    assert max(abs(a - b) for a, b in
+               zip(sb_color(), default_element_color('Sb'))) < 1e-5, sb_color()
+
+    # a picked color reaches the atom material, the bond materials and the
+    # attribute
+    ec.set_element_color('Sb', (0.1, 0.2, 0.3))
+    assert sb_color()[:3] == (0.10000000149011612, 0.20000000298023224,
+                              0.30000001192092896), sb_color()
+    bsdf = bpy.data.materials['Sb-bond'].node_tree.nodes['Principled BSDF']
+    assert tuple(bsdf.inputs[0].default_value)[:3] == sb_color()[:3], 'bond material'
+
+    # editing the material alone (Material Properties, a script) is carried
+    # over to the attribute by the depsgraph handler
+    atom_bsdf = bpy.data.materials['Sb'].node_tree.nodes['Principled BSDF']
+    atom_bsdf.inputs[0].default_value = (0.4, 0.5, 0.6, 1.0)
+    bpy.context.view_layer.update()
+    assert abs(sb_color()[0] - 0.4) < 1e-6, sb_color()
+
+    # a second import keeps the picked color instead of resetting it
+    import_ase_molecule(f'{SCRATCH}/antimony.xyz', 'antimony.xyz',
+                        representation='nodes', animate=False,
+                        read_density=False)
+    assert abs(ec.get_element_color('Sb')[0] - 0.4) < 1e-6, ec.get_element_color('Sb')
+    again = [o for o in bpy.data.objects
+             if o.type == 'MESH' and 'atom_color' in o.data.attributes][-1]
+    numbers = [round(d.value) for d in again.data.attributes['element'].data]
+    color = tuple(again.data.attributes['atom_color'].data[numbers.index(51)].color)
+    assert abs(color[0] - 0.4) < 1e-6, color
+
+    # ... and the operators put it back
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.ase.reset_element_colors()
+    bpy.ops.ase.sync_element_colors()
+    assert max(abs(a - b) for a, b in
+               zip(sb_color(), default_element_color('Sb'))) < 1e-5, sb_color()
+
+def run_lead_defaults():
+    """Lead's own entry in the color scheme: a violet, fully metallic."""
+    from blender_importASE.utils import default_element_color
+    assert default_element_color('Pb') == (0.2, 0.0, 0.5, 1.0), default_element_color('Pb')
+
+    fresh_scene()
+    ase.io.write(f'{SCRATCH}/lead.xyz', ase.Atoms('Pb2', positions=[(0, 0, 0), (3.5, 0, 0)]))
+    import_ase_molecule(f'{SCRATCH}/lead.xyz', 'lead.xyz', representation='nodes',
+                        animate=False, read_density=False)
+    bsdf = next(n for n in bpy.data.materials['Pb'].node_tree.nodes
+                if n.type == 'BSDF_PRINCIPLED')
+    assert tuple(round(v, 4) for v in bsdf.inputs['Base Color'].default_value) \
+        == (0.2, 0.0, 0.5, 1.0), tuple(bsdf.inputs['Base Color'].default_value)
+    assert bsdf.inputs['Metallic'].default_value == 1.0, bsdf.inputs['Metallic'].default_value
+    assert bsdf.inputs['Roughness'].default_value == 0.5, bsdf.inputs['Roughness'].default_value
+
+step('lead_defaults', run_lead_defaults)
+step('element_colors', run_element_colors)
 step('operator_via_ops', lambda: (
     fresh_scene(),
     bpy.ops.import_mesh.ase(directory=SCRATCH, files=[{"name": "crystal.cif"}]),

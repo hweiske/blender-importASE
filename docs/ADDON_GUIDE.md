@@ -2,7 +2,7 @@
 
 This is a Blender add-on for importing atomistic structures (via [ASE](https://wiki.fysik.dtu.dk/ase/)) and turning them into publication-quality renders: molecules, crystals, coordination polyhedra, electron-density isosurfaces (volume or mesh), partial-charge colorings, and 3D-printable models. This document is the reference for driving it — both from the Blender GUI and from Python scripts. Everything the GUI does calls the same functions you can call directly, so scripting and clicking are interchangeable.
 
-- **Package:** `blender_importASE/` (add-on version 2.4.0, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
+- **Package:** `blender_importASE/` (add-on version 2.4.1, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
 - **Dependencies:** `ase`, plus `scipy` (polyhedra), `scikit-image` (density-as-mesh), `scm.plams` (AMS TAPE41 volumes), `openvdb`/`pyopenvdb` (volumetric density) — none installed automatically; each has its own "Install" button in the add-on preferences. See [§8](#8-dependencies).
 
 ---
@@ -72,6 +72,9 @@ Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`),
 - `add_supercell=True` — adds the supercell modifier when the cell is periodic; repeat counts live on `Socket_2/3/4` of that modifier ([§5](#5-the-nodes-modifier-stack-scripting-internals)).
 - `animate=True`, `imageslice=n` — for trajectories, import only every *n*th image (`overwrite=True` forces `nodes`). Use this to thin out long trajectories.
 - `frame_interpolation=n` — spacing of the imported images on the timeline. `1` (default) puts each image on its own frame; `10` leaves 9 empty frames between images for Blender to interpolate, turning a short path (e.g. a 6-image NEB) into a smooth animation. Note this is the opposite of `imageslice`: that one *removes* images, this one *adds* in-between frames. Caveat: on a trajectory whose atom count changes, atoms that appear/disappear slide in from their parked position across the interpolated frames (the images themselves stay exact); the importer prints a warning in that case.
+- element colors, roughness and metallic come from `utils.atomcolors` (lead, say, is the violet
+  `(0.2, 0.0, 0.5)` — `#7C00BC` in the picker — fully metallic at roughness 0.5); see
+  [§6](#6-live-controls-the-ase-n-panel) for editing them per structure.
 - `colorbonds=True` — color bond halves by their atoms; `unit_cell=True` draws the cell box.
 
 The GUI operator passes different defaults (`scale=0.5`, `color=0.6`, `representation="nodes"`; its `zero_cell` maps to `shift_cell`).
@@ -193,6 +196,18 @@ obj.update_tag()
 - a per-pair bond-cut grid (`ase.toggle_pair_cut`, prop `pair_id`),
 - a **3D printing** box with **Rebuild 3D-print supports** (`ase.rebuild_supports`) when the collection holds real element meshes,
 - one box per sibling density/geometry modifier.
+
+**Element colors** (`element_colors.py`). An element's color lives in two places: its materials (`'Sb'`, `'Sb-bond'`, and the two-sided `'Sb-C-bond'` gradients) shade the atoms and the ball'n'stick bonds, while the structure mesh's `atom_color` point attribute is what the geometry-node bonds sample at both ends and blend along the curve (`colorbonds`) - and what tints polyhedra faces. The panel's swatch edits the element's atom material; a `depsgraph_update_post` handler notices the change - from the swatch, the Material Properties tab, a driver or a script - and rewrites the `atom_color` entries of that element in every mesh of the file, so the bonds follow. Any mesh pairing `atom_color` with an `element` attribute on the same point domain is covered.
+
+```python
+from blender_importASE.element_colors import (set_element_color, get_element_color,
+                                              sync_atom_color_attributes)
+set_element_color('Sb', (0.571125, 0.109462, 0.274677))   # materials + attributes
+get_element_color('Sb')                                    # what it is drawn in now
+sync_atom_color_attributes(['Sb', 'C'])                    # attributes from the materials
+```
+
+Colors are **linear**, the way Blender reads a base color or a FLOAT_COLOR attribute; the hex codes noted in `utils.atomcolors.color_dict` are their sRGB equivalents, i.e. what the color picker shows. `utils.default_element_color(symbol)` gives the add-on's default (jmol colors for elements the scheme doesn't cover), `ase.reset_element_colors` puts the structure's elements back to it, and `ase.sync_element_colors` runs the sync pass on demand. An element material that already exists in the file keeps its color when another structure is imported, so a re-import never resets a picked color.
 
 **Custom bonds** (`ase.add_dotted_bond`, `dotted_bond.add_bond`) draw a bond between two atoms that the distance-based search does not - a partial bond in a transition state, a hydrogen bond, and so on. Select exactly two atoms (vertices) and click *Add custom bond*; the `bond type` dropdown in the redo panel picks the style:
 

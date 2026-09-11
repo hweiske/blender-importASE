@@ -10,7 +10,7 @@ from os.path import join
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.4.0"
+__version__ = "2.4.1"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -18,7 +18,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (2, 4, 0),
+    "version": (2, 4, 1),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
@@ -991,8 +991,9 @@ def _register_feature_operators():
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
     # deferred so the addon can load (and show its preferences) when
     # ase is not installed yet - controls imports ase at module level
-    from . import controls
+    from . import controls, element_colors
     controls.register()
+    element_colors.register()
 
 
 class ASEInstallDependency(bpy.types.Operator):
@@ -1069,6 +1070,11 @@ def unregister():
         controls.unregister()
     except Exception:
         print("ASE controls were not registered, skipping.")
+    try:
+        from . import element_colors
+        element_colors.unregister()
+    except Exception:
+        print("ASE element colors were not registered, skipping.")
     for cls in (ImportASEMolecule, ImportASEPolyhedra, ImportASEDensityMesh,
                 ImportASECharges, ExportASEXyz, ExportASE3DPrint):
         try:

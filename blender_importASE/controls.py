@@ -17,6 +17,7 @@ the 'ASE' tab.
 import bpy
 from ase.data import chemical_symbols
 
+from .element_colors import draw_element_colors
 from .node_networks.compat import get_mod_input, mod_input_keys, mod_input_ui
 
 PAIR_STRIDE = 119  # > max atomic number, so pair ids are unique
@@ -398,6 +399,10 @@ class ASE_PT_controls(bpy.types.Panel):
                     box.label(text=f'select 2 atoms ({selected} selected)',
                               icon='INFO')
                 self.draw_custom_bonds(obj, box)
+
+        # per-element colors: the atom materials plus the 'atom_color'
+        # attribute the colored bonds read (see element_colors.py)
+        draw_element_colors(self.layout, obj)
 
         # 3D-print supports: offered when the collection has real atom
         # meshes (the 3D print representation)

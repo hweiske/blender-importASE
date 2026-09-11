@@ -1,8 +1,9 @@
 import bpy
-from ..utils import atomcolors, get_vdw_radius
+from ..utils import get_vdw_radius
+from ..element_colors import get_element_color
 from ..controls import make_control_tables, PAIR_STRIDE
 from .compat import setup_merge_by_distance, setup_curve_to_mesh, cin, set_mod_input
-from ase.data import covalent_radii, chemical_symbols, colors
+from ase.data import covalent_radii, chemical_symbols
 
 # Absent atoms in a variable-count trajectory are parked here so the hide-atoms
 # node group can cull them; any point farther than SENTINEL_CUTOFF from the
@@ -36,7 +37,7 @@ def read_structure(atoms,name, animate=True, faces=None, frame_interpolation=1):
         mesh.attributes.new(name="atom_radius", type='FLOAT', domain='POINT')
     if 'vdw_radius' not in mesh.attributes:
         mesh.attributes.new(name="vdw_radius", type='FLOAT', domain='POINT')
-    if 'color' not in mesh.attributes:
+    if 'atom_color' not in mesh.attributes:
         mesh.attributes.new(name="atom_color", type='FLOAT_COLOR', domain='POINT')
 
     element = mesh.attributes["element"].data
@@ -44,7 +45,6 @@ def read_structure(atoms,name, animate=True, faces=None, frame_interpolation=1):
     rad_vdw=mesh.attributes["vdw_radius"].data
     col = mesh.attributes["atom_color"].data
 
-    atomcolor = atomcolors()
     for i, value in enumerate(element):
         atom=atoms[i]
         value.value = atom.number  # Example: setting index value
@@ -55,12 +55,15 @@ def read_structure(atoms,name, animate=True, faces=None, frame_interpolation=1):
     for i, value in enumerate(rad_vdw):
         atom=atoms[i]
         value.value = get_vdw_radius(atom.number)
+    element_color = {}  # one material lookup per element, not per atom
     for i, value in enumerate(col):
         sym = chemical_symbols[atoms[i].number]
-        if sym in atomcolor.color_dict:
-            value.color = list(atomcolor.color_dict[sym]) + [1]
-        else:
-            value.color = list(colors.jmol_colors[atoms[i].number]) + [1]
+        if sym not in element_color:
+            # the material of an already-imported element may carry a color
+            # the user picked in the sidebar - match it, so a second import
+            # of the same element doesn't bring back the default
+            element_color[sym] = get_element_color(sym)
+        value.color = element_color[sym]
 
     mesh.update()
     if animate:

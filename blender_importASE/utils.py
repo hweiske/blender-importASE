@@ -31,8 +31,9 @@ class atomcolors():
     'N'     :(      0.00, 0.00, 1.00        ),
     'P'     :( 0.099349, 0.004972, 0.000206 ),
     'As'    :(      0.482, 0.378, 0.00      ),
-    'Sb'    :(      0.74, 0.46, 0.17        ),
+    'Sb'    :(0.571125, 0.109462, 0.274677  ),# C75D8F
     'Bi'    :(      0.82, 0.71, 0.55        ),
+    'Pb'    :(      0.2, 0.0, 0.5          ),
     'O'     :(      1.00, 0.00, 0.00        ),
     'S'     :(      1.00, 1.00, 0.00        ),
     'Se'    :(      1,0.3,0                 ), #
@@ -62,6 +63,7 @@ class atomcolors():
     'As'    :   0.7,
     'Sb'    :   0.6,
     'Bi'    :   0.5,
+    'Pb'    :   0.5,
     'O'     :   0.5,
     'S'     :   0.5,
     'F'     :   0.5,
@@ -93,6 +95,7 @@ class atomcolors():
     'As'    :   0.8,
     'Sb'    :   0.7,
     'Bi'    :   0.9,
+    'Pb'    :   1,
     'O'     :   0,
     'S'     :   0,
     'F'     :   0,
@@ -162,11 +165,19 @@ class atomcolors():
         bpy.data.objects['ref_sphere'].select_set(True)
         
         for n,atom_type in enumerate(atom_types):
-                if atom_type not in bpy.data.materials:
+                # a material that is already in the file carries whatever
+                # color/finish this element was last given - a picked color
+                # from the sidebar swatch, say - so only a freshly created
+                # one gets the defaults written into it (see
+                # element_colors.py). 'Defaults' in the ASE sidebar is what
+                # puts an element back to the color scheme below.
+                fresh_atom = atom_type not in bpy.data.materials
+                fresh_bond = atom_type+'-bond' not in bpy.data.materials
+                if fresh_atom:
                     matat=bpy.data.materials.new(name = str(atom_type))
                 else:
                     matat=bpy.data.materials[atom_type]
-                if atom_type+'-bond' not in bpy.data.materials:
+                if fresh_bond:
                     matb=bpy.data.materials.new(name = str(atom_type)+'-bond')
                 else:
                     matb=bpy.data.materials[atom_type+'-bond']
@@ -195,16 +206,18 @@ class atomcolors():
                 #     specular = specular_dict[atom_type]
                 # else:
                 #     specular = 0.5
-                sa.inputs[0].default_value=COL
-                sa.inputs[12].default_value=0
-                sa.inputs[3].default_value=1.45
-                sa.inputs[2].default_value=rough
-                sa.inputs[1].default_value=metal
-                sb.inputs[0].default_value=COL
-                sb.inputs[12].default_value=0
-                sb.inputs[3].default_value=1.45
-                sb.inputs[2].default_value=rough
-                sb.inputs[1].default_value=metal
+                if fresh_atom:
+                    sa.inputs[0].default_value=COL
+                    sa.inputs[12].default_value=0
+                    sa.inputs[3].default_value=1.45
+                    sa.inputs[2].default_value=rough
+                    sa.inputs[1].default_value=metal
+                if fresh_bond:
+                    sb.inputs[0].default_value=COL
+                    sb.inputs[12].default_value=0
+                    sb.inputs[3].default_value=1.45
+                    sb.inputs[2].default_value=rough
+                    sb.inputs[1].default_value=metal
         bpy.data.objects['ref_sphere'].select_set(True)
         bpy.ops.object.delete()
         bpy.ops.object.select_all(action='DESELECT') 
@@ -383,6 +396,20 @@ class atomcolors():
 
         return mat
 
+
+
+def default_element_color(symbol):
+    """Default base color (RGBA) of an element: the add-on's own scheme
+    where it defines one, ASE's jmol colors for everything else.
+
+    The colors are linear, the way Blender reads a base color or a
+    FLOAT_COLOR attribute - the hex code noted next to an entry in
+    color_dict is its sRGB equivalent, i.e. what the color picker shows.
+    """
+    colordict = atomcolors().color_dict
+    if symbol in colordict:
+        return tuple(colordict[symbol]) + (1.0,)
+    return tuple(colors.jmol_colors[atomic_numbers[symbol]]) + (1.0,)
 
 
 def group_atoms(atoms):
