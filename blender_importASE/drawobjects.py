@@ -195,6 +195,42 @@ def make_shortbond(atom, atoms, offset, neighbor, bond, list_of_bonds, bondlengt
     bondlengths.append('short1') #anim
 
 
+UNIT_CELL_COLOR = (0.0, 0.0, 0.0, 1.0)
+
+
+def _unit_cell_material():
+    """Flat black material for the cell edges.
+
+    The color goes straight into the Surface output rather than through a
+    Principled BSDF, so the cylinders render as unshaded black lines that
+    read like the outline instead of picking up scene lighting and
+    specular highlights.
+
+    Reused across imports: a cell material that is already wired this way
+    keeps its color (change it once in the RGB node and every later import
+    matches), while the old shaded one is rebuilt.
+    """
+    mat = bpy.data.materials.get('unit_cell')
+    if mat is None:
+        mat = bpy.data.materials.new(name='unit_cell')
+    mat.use_nodes = True
+    tree = mat.node_tree
+    output = next((n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+    surface = output.inputs['Surface'] if output is not None else None
+    if surface is not None and surface.is_linked and \
+            surface.links[0].from_node.type == 'RGB':
+        return mat  # already a flat-color cell - leave the color alone
+    for node in list(tree.nodes):
+        tree.nodes.remove(node)
+    output = tree.nodes.new('ShaderNodeOutputMaterial')
+    output.location = (200, 0)
+    rgb = tree.nodes.new('ShaderNodeRGB')
+    rgb.location = (0, 0)
+    rgb.outputs[0].default_value = UNIT_CELL_COLOR
+    tree.links.new(rgb.outputs[0], output.inputs['Surface'])
+    return mat
+
+
 def draw_unit_cell(atoms):
     bpy.ops.object.select_all(action='DESELECT')
     try:
@@ -202,13 +238,7 @@ def draw_unit_cell(atoms):
     except Exception:
         None
 
-    # SETUP MATERIAL
-    matu = bpy.data.materials.new(name='unit_cell')
-    matu.use_nodes = True
-    tu = matu.node_tree
-    su = tu.nodes['Principled BSDF']
-    COL = (0.1, 0.1, 0.1, 1)
-    su.inputs[0].default_value = COL
+    matu = _unit_cell_material()
     bpy.ops.mesh.primitive_cylinder_add(vertices=16)
     if bpy.app.version < (4, 1, 0): #use_auto_smooth dropped after 4.0
         bpy.ops.object.shade_smooth(use_auto_smooth=True)
@@ -232,8 +262,7 @@ def draw_unit_cell(atoms):
         ob.data = cell.data.copy()
         bpy.context.view_layer.active_layer_collection.collection.objects.link(ob)
         ob.name = 'unitcell-cylinder'
-        bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(
-            bpy.data.materials['unit_cell'])
+        bpy.context.view_layer.active_layer_collection.collection.objects[-1].data.materials.append(matu)
         ob.location = location1 + (displacement / 2)
         ob.scale = (1, 1, 1)
         ob.dimensions = (0.1, 0.1, distance)

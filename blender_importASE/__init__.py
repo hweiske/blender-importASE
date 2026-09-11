@@ -208,10 +208,64 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
 
     expand_cutoff: bpy.props.FloatProperty(
         name="expansion cutoff",
-        description="covalent-radius multiplier used to pull in periodic neighbor images so polyhedra at the cell boundary are closed",
+        description="covalent-radius multiplier for the plain image expansion (used when complete molecules is off): pulls in the periodic neighbor images that close polyhedra at the cell boundary",
         default=1.2,
         min=0.5,
         soft_max=2.0,
+    )
+    complete_molecules: bpy.props.BoolProperty(
+        name="complete molecules",
+        description="import whole molecules: grow each molecule shell by shell "
+                    "out of the periodic cell, so a molecule the cell cuts in "
+                    "half arrives in one piece instead of as open fragments. "
+                    "Atoms of an extended framework (chain, layer, 3d network) "
+                    "have no molecule to complete and are grown by bonded "
+                    "shells instead",
+        default=True,
+    )
+    bond_cutoff: bpy.props.FloatProperty(
+        name="molecule bond cutoff",
+        description="what counts as a bond while growing molecules: two atoms "
+                    "belong to the same molecule when they are closer than this "
+                    "multiple of the sum of their covalent radii. 1.3 keeps "
+                    "N-H...Br style hydrogen bonds out, which would otherwise "
+                    "fuse separate molecules into one endless network; raise it "
+                    "if a long bond is missed, lower it if separate molecules "
+                    "come out joined",
+        default=1.3,
+        min=0.5,
+        soft_max=2.0,
+    )
+    all_images: bpy.props.BoolProperty(
+        name="all molecule images",
+        description="import every periodic image of a molecule that reaches "
+                    "into the cell, so the cell stays fully populated (a "
+                    "molecule on a cell face has 2 images, on an edge 4, on a "
+                    "corner 8). Off imports one whole copy per molecule, the "
+                    "one holding most of the cell's own atoms",
+        default=True,
+    )
+    framework_shells: bpy.props.IntProperty(
+        name="framework shells",
+        description="for extended frameworks only (chains, layers, 3d "
+                    "networks, which have no molecule to complete): how many "
+                    "bonded shells to grow around the atoms of the cell. 1 is "
+                    "enough to close their coordination polyhedra at the "
+                    "boundary, 0 cuts at the cell",
+        default=1,
+        min=0,
+        soft_max=3,
+    )
+    cell_margin: bpy.props.FloatProperty(
+        name="molecule margin",
+        description="grow the selection region around the unit cell by this "
+                    "distance (angstrom): whole molecules with at least one atom "
+                    "that close to the cell are imported as well. 0 imports the "
+                    "molecules reaching into the cell itself",
+        default=0.0,
+        min=0.0,
+        soft_max=10.0,
+        unit='LENGTH',
     )
     trim_cutoff: bpy.props.FloatProperty(
         name="trim cutoff",
@@ -276,6 +330,11 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         description='add outline modifier to the atoms and bonds (the polyhedra faces stay outline-free)',
         default=True,
     )
+    unit_cell: bpy.props.BoolProperty(
+        name='import unit cell',
+        description='draw the unit cell as flat black edges (periodic structures only)',
+        default=False,
+    )
     files: bpy.props.CollectionProperty(
         type=bpy.types.OperatorFileListElement,
         options={'HIDDEN', 'SKIP_SAVE'},
@@ -289,8 +348,17 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, 'expand_cutoff')
-        layout.prop(self, 'trim_cutoff')
+        layout.prop(self, 'complete_molecules')
+        # only the knobs that apply to the chosen way of extending the
+        # structure past the cell
+        if self.complete_molecules:
+            layout.prop(self, 'bond_cutoff')
+            layout.prop(self, 'all_images')
+            layout.prop(self, 'cell_margin')
+            layout.prop(self, 'framework_shells')
+        else:
+            layout.prop(self, 'expand_cutoff')
+            layout.prop(self, 'trim_cutoff')
         layout.prop(self, 'poly_cutoff')
         layout.prop(self, 'min_neighbors')
         layout.prop(self, 'include_hydrogen')
@@ -300,6 +368,7 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'bond_distance')
         layout.prop(self, 'bond_radius')
         layout.prop(self, 'outline')
+        layout.prop(self, 'unit_cell')
 
     def execute(self, context):
         if self.files:
@@ -322,11 +391,17 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
                 min_neighbors=self.min_neighbors,
                 include_hydrogen=self.include_hydrogen,
                 single_element_corners=self.single_element_corners,
+                complete_molecules=self.complete_molecules,
+                bond_cutoff=self.bond_cutoff,
+                cell_margin=self.cell_margin,
+                all_images=self.all_images,
+                framework_shells=self.framework_shells,
                 resolution=self.resolution,
                 colorbonds=self.colorbonds,
                 bond_distance=self.bond_distance,
                 bond_radius=self.bond_radius,
                 outline=self.outline,
+                unit_cell=self.unit_cell,
             )
         return {"FINISHED"}
 

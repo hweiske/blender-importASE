@@ -108,6 +108,123 @@ def run_polyhedra():
 
 step('polyhedra', run_polyhedra)
 
+def run_polyhedra_molecules():
+    """The 3x3x3 molecule selection: every molecule reaching into the cell
+    comes out whole, a framework still closes its boundary polyhedra, the
+    margin pulls in the surrounding molecules, and 'import unit cell'
+    draws the flat black cell."""
+    import numpy as np
+    from blender_importASE.polyhedra import build_polyhedra_atoms, import_polyhedra
+
+    def per_carbon(new_atoms):
+        """(C, H) neighbor counts of every carbon, measured on the
+        imported non-periodic positions - a whole benzene is all (2, 1)."""
+        pos = new_atoms.get_positions()
+        sym = new_atoms.get_chemical_symbols()
+        dist = np.linalg.norm(pos[:, None, :] - pos[None, :, :], axis=-1)
+        np.fill_diagonal(dist, 99.0)
+        return [(sum(1 for j in range(len(pos)) if sym[j] == 'C' and dist[i, j] < 1.5),
+                 sum(1 for j in range(len(pos)) if sym[j] == 'H' and dist[i, j] < 1.2))
+                for i in range(len(pos)) if sym[i] == 'C']
+
+    # a benzene ring centered on the cell corner: four of its images reach
+    # into the cell, and each of those arrives as a complete ring
+    atoms = ase.io.read(f'{SCRATCH}/molcrystal.extxyz')
+    whole, _ = build_polyhedra_atoms(atoms, complete_molecules=True)
+    assert whole.get_chemical_formula() == 'C24H24', whole.get_chemical_formula()
+    assert all(c == (2, 1) for c in per_carbon(whole)), sorted(set(per_carbon(whole)))
+    # ... which the plain image expansion does not manage: open fragments
+    cut, _ = build_polyhedra_atoms(atoms, complete_molecules=False)
+    assert any(c != (2, 1) for c in per_carbon(cut)), sorted(set(per_carbon(cut)))
+
+    # a real bromoantimonate: every alkylammonium carbon and nitrogen must
+    # come out 4-coordinate and every Sb with its six Br, or a molecule was
+    # cut by the cell
+    real = ase.io.read(f'{SCRATCH}/crystal.cif')
+
+    def miscoordinated(new_atoms):
+        pos = new_atoms.get_positions()
+        sym = np.array(new_atoms.get_chemical_symbols())
+        dist = np.linalg.norm(pos[:, None, :] - pos[None, :, :], axis=-1)
+        np.fill_diagonal(dist, 99.0)
+        light = ((dist < 1.8) & np.isin(sym, ['C', 'N', 'H'])[None, :]).sum(1)
+        bromine = ((dist < 3.2) & (sym == 'Br')[None, :]).sum(1)
+        return (int((light[np.isin(sym, ['C', 'N'])] != 4).sum()),
+                int((bromine[sym == 'Sb'] != 6).sum()))
+
+    grown, faces = build_polyhedra_atoms(real, complete_molecules=True)
+    assert miscoordinated(grown) == (0, 0), miscoordinated(grown)
+    assert len(faces) > 0, 'no polyhedra on the bromoantimonate'
+    legacy, _ = build_polyhedra_atoms(real, complete_molecules=False)
+    assert miscoordinated(legacy)[0] > 0, 'expansion-only path unexpectedly complete'
+    # the margin brings the neighboring molecules along
+    wider, _ = build_polyhedra_atoms(real, complete_molecules=True, cell_margin=3.0)
+    assert len(wider) > len(grown), (len(wider), len(grown))
+    assert miscoordinated(wider) == (0, 0), miscoordinated(wider)
+
+    # one whole copy per molecule instead of every image reaching the cell
+    single, _ = build_polyhedra_atoms(real, complete_molecules=True,
+                                      all_images=False)
+    assert single.get_chemical_formula() == real.get_chemical_formula(), \
+        single.get_chemical_formula()
+    assert miscoordinated(single) == (0, 0), miscoordinated(single)
+
+    # the regression the fixtures above cannot catch: a Br bridging the
+    # hydrogens of a benzene and of its own periodic image. At a bond
+    # criterion loose enough to count that 2.30 A H...Br contact (which is
+    # what ASE's neighbor-list skin silently did) the ring is part of an
+    # endless chain and cannot be completed; at 1.3 x (r1+r2) = 1.96 A it
+    # is a molecule and the Br is a free ion.
+    from blender_importASE.polyhedra import (bond_neighbors, grow_shells,
+                                             _components)
+    chain = ase.io.read(f'{SCRATCH}/hbond_chain.extxyz')
+
+    def closed_components(cutoff):
+        nl = bond_neighbors(chain, cutoff)
+        nl.update(chain)
+        neighbors = [nl.get_neighbors(i) for i in range(len(chain))]
+        return [grow_shells(neighbors, [(component[0], (0, 0, 0))])[2]
+                for component in _components([idx for idx, _ in neighbors])]
+
+    assert closed_components(1.3) == [True, True], closed_components(1.3)
+    assert closed_components(1.6) == [False], closed_components(1.6)
+    tight, _ = build_polyhedra_atoms(chain, complete_molecules=True)
+    assert tight.get_chemical_formula() == 'C6H6Br', tight.get_chemical_formula()
+    assert all(c == (2, 1) for c in per_carbon(tight)), sorted(set(per_carbon(tight)))
+
+    # a framework has no molecule to complete - its atoms in the cell are
+    # grown by framework_shells bonded shells, and every boundary
+    # polyhedron still closes at the default of 1
+    nacl = ase.io.read(f'{SCRATCH}/nacl.extxyz')
+    counts = []
+    for shells in (0, 1, 2):
+        frame, faces = build_polyhedra_atoms(nacl, complete_molecules=True,
+                                             framework_shells=shells)
+        counts.append((len(frame), len(faces)))
+    assert counts[0] == (len(nacl), 16), counts[0]
+    assert counts[1] == (71, 244), counts[1]   # unchanged by this rewrite
+    assert counts[2][0] > counts[1][0], counts
+
+    fresh_scene()
+    import_polyhedra(f'{SCRATCH}/molcrystal.extxyz', 'molcrystal.extxyz',
+                     unit_cell=True)
+    cells = [o for o in bpy.data.objects if 'unitcell' in o.name]
+    assert len(cells) == 1, [o.name for o in cells]
+    mats = [m.name for m in bpy.data.materials if m.name.startswith('unit_cell')]
+    assert mats == ['unit_cell'], mats
+    mat = cells[0].data.materials[0]
+    output = next(n for n in mat.node_tree.nodes if n.type == 'OUTPUT_MATERIAL')
+    source = output.inputs['Surface'].links[0].from_node
+    assert source.type == 'RGB', source.type
+    assert tuple(source.outputs[0].default_value) == (0.0, 0.0, 0.0, 1.0), \
+        tuple(source.outputs[0].default_value)
+    # a molecule without a cell gets no cell object (and no 3x3x3 pass)
+    fresh_scene()
+    import_polyhedra(f'{SCRATCH}/water.xyz', 'water.xyz', unit_cell=True)
+    assert not [o for o in bpy.data.objects if 'unitcell' in o.name], 'cell drawn without a cell'
+
+step('polyhedra_molecules', run_polyhedra_molecules)
+
 def run_density_mesh():
     from importlib import util
     if util.find_spec('skimage') is None:

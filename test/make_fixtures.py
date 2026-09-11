@@ -10,7 +10,7 @@ Run with any python that has ase + numpy:
 import os
 import numpy as np
 from ase import Atoms
-from ase.build import bulk
+from ase.build import bulk, molecule
 from ase.io.cube import write_cube
 from ase.calculators.vasp import VaspChargeDensity
 import ase.io  # noqa: F401 - used via ase.io.write
@@ -51,6 +51,37 @@ def main():
 
     # rocksalt supercell: coordination-polyhedra importer
     ase.io.write(f'{FIXTURES}/nacl.extxyz', bulk('NaCl', 'rocksalt', a=5.64) * (2, 2, 2))
+
+    # molecular crystal whose molecule is cut by the cell faces (a benzene
+    # ring centered on the cell corner, wrapped): the polyhedra importer's
+    # molecule completion has to put it back together across the boundary
+    benzene = molecule('C6H6')
+    benzene.set_cell([9, 9, 9])
+    benzene.pbc = True
+    benzene.center()
+    benzene.positions += [4.5, 4.5, 0.0]
+    benzene.wrap()
+    ase.io.write(f'{FIXTURES}/molcrystal.extxyz', benzene)
+
+    # a molecule linked to its own periodic image by hydrogen-bond-like
+    # contacts: the polyhedra importer's molecule search must NOT treat
+    # those as bonds. A Br sits 2.30 A from the H at one end of a benzene
+    # and, across the cell face, 2.30 A from the H at the other end - so a
+    # criterion that counts a 2.41 A H...Br contact as a bond (ASE's
+    # NeighborList skin does exactly that at multiplier 1.2) turns the
+    # whole thing into an endless chain and nothing can be completed.
+    # 1.3 x (r_H + r_Br) = 1.96 A leaves 0.34 A of headroom.
+    contact = 2.30
+    ring = molecule('C6H6')
+    hydrogens = [i for i, s in enumerate(ring.get_chemical_symbols()) if s == 'H']
+    ring.rotate(ring.positions[hydrogens[0]], 'x', center=(0, 0, 0))
+    reach = ring.positions[hydrogens[0]][0]
+    ring.append('Br')
+    ring.positions[-1] = [reach + contact, 0.0, 0.0]
+    ring.set_cell([2 * reach + 2 * contact, 12.0, 12.0])
+    ring.pbc = True
+    ring.center()
+    ase.io.write(f'{FIXTURES}/hbond_chain.extxyz', ring)
 
     # density grids around a water molecule: volume density importers
     water_cell = Atoms('OH2', positions=[(2, 2, 2), (2.76, 2.59, 2), (1.24, 2.59, 2)],
