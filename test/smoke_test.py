@@ -313,6 +313,39 @@ def run_density_mesh_shells():
                       if n.type == 'BSDF_PRINCIPLED')
     assert principled.inputs['Alpha'].is_linked, 'the shells are opaque'
 
+    # the near wall of every shell has to be invisible to the camera, or
+    # the outermost one hides the whole nest: Backfacing x Is Camera Ray
+    # picks between a Transparent BSDF and the shaded one
+    nodes = material.node_tree.nodes
+    assert any(n.bl_idname == 'ShaderNodeLightPath' for n in nodes), 'no light path'
+    assert any(n.bl_idname == 'ShaderNodeBsdfTransparent' for n in nodes), 'no transparent'
+    output = next(n for n in nodes if n.bl_idname == 'ShaderNodeOutputMaterial')
+    surface = output.inputs['Surface'].links[0].from_node
+    assert surface.bl_idname == 'ShaderNodeMixShader', surface.bl_idname
+    facing = surface.inputs[0].links[0].from_node
+    sources = {link.from_node.bl_idname for socket in facing.inputs
+               for link in socket.links}
+    assert sources == {'ShaderNodeNewGeometry', 'ShaderNodeLightPath'}, sources
+
+    # every shell must wind outwards, or that trick culls the far wall of
+    # half of them and they render as a solid blob (marching cubes winds
+    # by the gradient, which flips between the two signs)
+    mesh = nest.data
+    positions = np.empty(len(mesh.vertices) * 3)
+    mesh.vertices.foreach_get('co', positions)
+    positions = positions.reshape(-1, 3)
+    attr = mesh.color_attributes[COLOR_ATTRIBUTE]
+    rgba = np.empty(len(attr.data) * 4)
+    attr.data.foreach_get('color', rgba)
+    shade = rgba.reshape(-1, 4)[:, 0]
+    for value in sorted({round(float(v), 4) for v in shade}):
+        group = [p for p in mesh.polygons
+                 if round(float(shade[p.vertices[0]]), 4) == value]
+        centre = np.mean([positions[v] for p in group for v in p.vertices], axis=0)
+        outward = np.mean([np.dot(np.array(p.normal), np.array(p.center) - centre)
+                           for p in group])
+        assert outward > 0, f'shell {value} winds inwards ({outward:.3f})'
+
     # a density with only one sign uses the whole ramp for its levels
     fresh_scene()
     positive = import_density_mesh(f'{SCRATCH}/water.cube', 'water.cube',

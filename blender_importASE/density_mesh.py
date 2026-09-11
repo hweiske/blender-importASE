@@ -47,10 +47,11 @@ SHADER_PRESETS = {
                 (1.0, (0.90, 0.10, 0.05, 1))]),
 }
 
-# how transparent the shells get: the outermost (weakest) shell at the low
-# end, the innermost at the high end. Without this a nest of closed
-# surfaces would show nothing but its outside.
-SHELL_ALPHA = (0.10, 0.75)
+# how solid the shells get: the outermost (weakest) shell at the low end,
+# the innermost at the high end. Seeing into the nest is the job of
+# _see_inside, which culls the near wall of every shell, so this only has
+# to add a little depth cueing - hence the narrow range.
+SHELL_ALPHA = (0.85, 1.0)
 
 
 def _ensure_skimage():
@@ -156,6 +157,21 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
             if not (volume.min() < sign * level < volume.max()):
                 continue  # this shell is deeper than the data goes
             verts, faces, normals, _ = marching_cubes(volume, level=sign * level)
+            # marching cubes winds its triangles by the gradient, which
+            # points the other way for the negative lobe. Make every shell
+            # face outwards - measured from the winding itself, the way
+            # Blender reads it, not from the gradient normals skimage
+            # returns (those point into a positive lobe, i.e. the other
+            # way again). Without this the 'see inside' material culls the
+            # far wall of half the shells instead of the near one, and
+            # that half renders as a solid blob.
+            triangles = verts[faces]
+            winding = np.cross(triangles[:, 1] - triangles[:, 0],
+                               triangles[:, 2] - triangles[:, 0])
+            outward = np.einsum('ij,ij->i', winding,
+                                triangles.mean(axis=1) - verts.mean(axis=0)).mean()
+            if outward < 0:
+                faces = faces[:, ::-1]
             if both_signs:
                 # 0.5 is the weakest level, the two signs run out to the
                 # ends of the ramp from there
@@ -267,7 +283,50 @@ def _density_mesh_material(preset='DEFAULT'):
             mat.surface_render_method = 'BLENDED'
         elif hasattr(mat, 'blend_method'):
             mat.blend_method = 'BLEND'
+    if preset == 'SHELLS' and not any(n.bl_idname == 'ShaderNodeLightPath'
+                                      for n in nodes):
+        _see_inside(mat, principled)
     return mat
+
+
+def _see_inside(mat, shaded):
+    """Make the near side of every shell invisible, so the inside shows.
+
+    The same trick the outline material uses: a face is only shaded when
+    it is *backfacing* and the ray comes straight from the camera,
+    otherwise it is a Transparent BSDF. The camera therefore looks
+    through the near wall of each shell and sees the far wall of it and
+    everything nested inside; the shells also stop shadowing each other
+    and stop showing up in reflections, which is what turns a nest of
+    closed surfaces from mud into something readable.
+    """
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    output = next(n for n in nodes if n.bl_idname == 'ShaderNodeOutputMaterial')
+
+    geometry = nodes.new('ShaderNodeNewGeometry')
+    geometry.name = 'Shell Geometry'
+    geometry.location = (-300, -420)
+    light_path = nodes.new('ShaderNodeLightPath')
+    light_path.name = 'Shell Light Path'
+    light_path.location = (-300, -620)
+    facing = nodes.new('ShaderNodeMath')
+    facing.name = 'Shell Facing'
+    facing.operation = 'MULTIPLY'
+    facing.location = (-60, -500)
+    transparent = nodes.new('ShaderNodeBsdfTransparent')
+    transparent.name = 'Shell Transparent'
+    transparent.location = (-60, -300)
+    mix = nodes.new('ShaderNodeMixShader')
+    mix.name = 'Shell See Inside'
+    mix.location = (160, -200)
+
+    links.new(geometry.outputs['Backfacing'], facing.inputs[0])
+    links.new(light_path.outputs['Is Camera Ray'], facing.inputs[1])
+    links.new(facing.outputs[0], mix.inputs[0])
+    links.new(transparent.outputs[0], mix.inputs[1])   # front faces: see through
+    links.new(shaded.outputs['BSDF'], mix.inputs[2])   # back faces, camera only
+    links.new(mix.outputs[0], output.inputs['Surface'])
+    return mix
 
 
 def import_density_mesh(filepath, filename, color_filepath=None,
@@ -278,8 +337,10 @@ def import_density_mesh(filepath, filename, color_filepath=None,
     """Import a density isosurface as a mesh.
 
     shells > 1 imports a nest of isosurfaces instead of one, each colored
-    by the isovalue it stands for and made more transparent the further
-    out it is - a density colored by its own value. The levels run from
+    by the isovalue it stands for - a density colored by its own value.
+    The near wall of every shell is invisible to the camera (see
+    _see_inside), so the nest reads as contour bands with the innermost
+    shell, and whatever sits inside it, always in view. The levels run from
     iso_value inwards to shell_max (see shell_levels), and a nest defaults
     to the 'SHELLS' preset since the other ramps are opaque.
     """

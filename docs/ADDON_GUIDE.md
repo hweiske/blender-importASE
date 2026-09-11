@@ -155,10 +155,22 @@ colored by its own value. `shell_levels()` spreads the levels from `iso_value` i
 density falls off exponentially and linear steps bunch every shell against the outer surface;
 `shell_spacing='LINEAR'` gives equal steps.
 
+**Seeing the inside** is the shells material's job, with the same trick the outline material uses:
+`Backfacing × Is Camera Ray` picks between a Transparent BSDF and the shaded one, so the **near wall
+of every shell is invisible to the camera** and you look straight through it at the far wall and
+everything nested inside. The shells also stop shadowing each other and stop appearing in
+reflections, which is what turns a nest of closed surfaces from mud into readable contour bands.
+
+That only works if every shell winds outwards, and marching cubes winds its triangles by the
+gradient — which points the other way for the negative lobe. `density_to_mesh_data` measures the
+winding itself (the cross product against the surface's own centroid, the way Blender reads it, not
+the gradient normals skimage returns) and flips the faces where needed. Without it the trick culls
+the far wall of half the shells and that half renders as a solid blob.
+
 Each shell writes two things into its vertices' `density_color`: the **color channel** is the level
 it stands for, and the **alpha channel** is how deep it sits (0 outermost, 1 innermost), which the
-material turns into transparency (`SHELL_ALPHA`, 0.10 → 0.75) so the outer shells let you see the
-inner ones. For a signed density (an MO, a deformation density) 0.5 is the weakest level and the
+material maps to `SHELL_ALPHA` (0.85 → 1.0) for a little depth cueing — the narrow range is enough
+because the culling above, not transparency, is what reveals the nest. For a signed density (an MO, a deformation density) 0.5 is the weakest level and the
 two signs run out to the ends of the ramp from there; for a one-sign density the levels use the
 whole ramp. A nest switches to the `'SHELLS'` preset automatically, because the other ramps are
 opaque — pass `preset` explicitly to override. `shells=1` is unchanged in every respect, alpha
