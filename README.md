@@ -9,7 +9,7 @@
 
 Import molecules, crystals, trajectories, and volumetric data (electron densities, molecular orbitals) into Blender through [ASE](https://gitlab.com/ase/ase) — with geometry-nodes representations, coordination polyhedra, and isosurfaces.
 
-[![Download Add-on](https://img.shields.io/badge/Download-blender__importASE.zip-blue?style=for-the-badge&logo=blender&logoColor=white)](https://raw.githubusercontent.com/hweiske/blender-importASE/build/blender_importASE.zip)
+[![Download Add-on](https://img.shields.io/badge/Download-blender__importASE.zip-blue?style=for-the-badge&logo=blender&logoColor=white)](https://github.com/hweiske/blender-importASE/releases/download/latest-build/blender_importASE.zip)
 
 <table>
   <tr>
@@ -62,7 +62,9 @@ In case no internet connection is available. [ASE](https://gitlab.com/ase/ase) n
 * 
 ## Installation
 
-Click the **Download Add-on** button above for `blender_importASE.zip` built straight from the current `main` (rebuilt automatically on every push - see `.github/workflows/build-latest.yml`). For a stable, versioned copy instead, grab it from a [tagged release](https://github.com/hweiske/blender-importASE/releases/latest) instead. Either way: in Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. Viewpoint rendering (render -> render vpts) is part of the addon, so there is nothing else to install.
+Click the **Download Add-on** button above for `blender_importASE.zip` built straight from the current `main` — rebuilt and republished on every push (see `.github/workflows/build-latest.yml`). For a stable, versioned copy instead, grab it from a [tagged release](https://github.com/hweiske/blender-importASE/releases/latest). Either way: in Blender go to edit -> preferences -> addons; click install; find the zip file and install it. Then activate the new addon in the list. Viewpoint rendering (render -> render vpts, render -> render multiple animations) is part of the addon, so there is nothing else to install.
+
+Every rolling build carries a `BUILD_INFO.txt` naming the commit it came from, so if you ever wonder whether a download is current, open the zip and check it against the [latest commit on `main`](https://github.com/hweiske/blender-importASE/commits/main). If it is behind, your browser served a cached copy — hard-reload the download (Ctrl+Shift+R) or grab it from the [`latest-build` pre-release](https://github.com/hweiske/blender-importASE/releases/tag/latest-build) page directly.
 
 ### Developement Install
 

@@ -695,6 +695,75 @@ step('operator_via_ops', lambda: (
     fresh_scene(),
     bpy.ops.import_mesh.ase(directory=SCRATCH, files=[{"name": "crystal.cif"}]),
 ))
+
+
+def run_render_animations_plan():
+    """The 'Render multiple animations' machinery, without actually rendering.
+
+    Covers the two things that are easy to get wrong when a scene holds several
+    trajectories: the per-collection frame range must come from that
+    collection's own shape keys (the importer rewrites scene.frame_end on every
+    import, so the scene range belongs to the last one imported), and restoring
+    a collection must not un-hide the importer's hidden helper meshes.
+    """
+    from blender_importASE import render_vpts as rv
+
+    fresh_scene()
+    bpy.ops.object.camera_add(location=(0, 0, 20))
+    scene = bpy.context.scene
+
+    # two trajectories of different length in one scene
+    traj = ase.io.read(f'{SCRATCH}/traj.xyz', index=':')
+    ase.io.write(f'{SCRATCH}/traj_short.xyz', traj[:3])
+    for fname in ('traj.xyz', 'traj_short.xyz'):
+        import_ase_molecule(f'{SCRATCH}/{fname}', fname, representation='nodes',
+                            animate=True, read_density=False)
+
+    by_name = {c.name: c for c in scene.collection.children}
+    assert len(by_name) == 2, sorted(by_name)
+    ranges = {n: rv.collection_frame_range(c) for n, c in by_name.items()}
+    lengths = sorted((hi - lo + 1) for lo, hi in ranges.values())
+    assert lengths == [3, 5], f'per-collection ranges wrong: {ranges}'
+
+    cams = rv.scene_cameras(scene)
+    assert len(cams) == 1, cams
+    jobs = rv.build_jobs(scene, SCRATCH, cams)
+    assert len(jobs) == 8, f'expected 3+5 jobs, got {len(jobs)}'
+    # single camera -> no <camera>_ prefix, and one subfolder per collection
+    assert jobs[0][3].name == '0000.png', jobs[0][3].name
+    assert jobs[0][3].parent.name in by_name, jobs[0][3].parent
+
+    # ... and two cameras -> prefixed names, twice the jobs
+    bpy.ops.object.camera_add(location=(20, 0, 0))
+    cams2 = rv.scene_cameras(scene)
+    jobs2 = rv.build_jobs(scene, SCRATCH, cams2)
+    assert len(jobs2) == 16, len(jobs2)
+    assert jobs2[0][3].name.startswith(cams2[0].name + '_'), jobs2[0][3].name
+
+    # stride and an explicit range
+    assert len(rv.build_jobs(scene, SCRATCH, cams, stride=2)) == 2 + 3
+    assert len(rv.build_jobs(scene, SCRATCH, cams, start=0, end=1)) == 4
+
+    # hide/restore must reproduce the baseline exactly, helper meshes included
+    base = rv.visibility_snapshot(scene)
+    hidden = {ob.name for c in scene.collection.children
+              for ob in c.objects if ob.hide_render}
+    assert hidden, 'expected the importer to leave helper meshes hidden'
+    for coll in scene.collection.children:
+        rv.set_collection_visible(coll, base[coll.name], False)
+    assert all(ob.hide_render for c in scene.collection.children for ob in c.objects)
+    for coll in scene.collection.children:
+        rv.set_collection_visible(coll, base[coll.name], True)
+    after = {ob.name for c in scene.collection.children
+             for ob in c.objects if ob.hide_render}
+    assert after == hidden, f'visibility not restored: {after} != {hidden}'
+
+
+step('render_animations_plan', run_render_animations_plan)
+step('render_animations_registered', lambda: (
+    None if hasattr(bpy.ops.render, 'render_animations')
+    else (_ for _ in ()).throw(AssertionError('render.render_animations missing'))
+))
 step('unregister', blender_importASE.unregister)
 
 print('### SUMMARY')
