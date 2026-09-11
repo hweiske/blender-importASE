@@ -253,6 +253,284 @@ def run_charges():
 
 step('charges', run_charges)
 
+def run_density_supercell():
+    """The density volume must be able to span a supercell, and its
+    isosurfaces must take their material from the object's slots."""
+    from importlib import util
+    if util.find_spec('openvdb') is None and util.find_spec('pyopenvdb') is None:
+        print('openvdb not installed - skipping')
+        return
+    try:
+        import openvdb as vdb
+    except ImportError:
+        import pyopenvdb as vdb
+    from blender_importASE.import_cubefiles import density_supercell
+
+    def grid_dims(volume_obj):
+        grid = vdb.read(bpy.path.abspath(volume_obj.data.filepath), 'density')
+        box = grid.evalActiveVoxelBoundingBox()
+        import numpy as np
+        return tuple(int(n) for n in np.asarray(box[1]) - np.asarray(box[0]) + 1)
+
+    run_import(f'{SCRATCH}/CHGCAR', representation='nodes', animate=False,
+               read_density=True)
+    vol = next(o for o in bpy.data.objects
+               if o.type == 'VOLUME' and 'spin' not in o.name)
+
+    # materials come from the object's own slots now, not from a modifier
+    # input: slot 0 is the positive lobe, slot 1 the negative one. The slots
+    # must be OBJECT-linked: a material index resolves against the material
+    # list the geometry carries, and the isosurface Volume to Mesh builds
+    # carries none, so data-linked slots render plain white however right
+    # the indices are.
+    slots = [(sl.link, sl.material.name if sl.material else None)
+             for sl in vol.material_slots]
+    assert slots == [('OBJECT', '+ material'), ('OBJECT', '- material')], slots
+    group = vol.modifiers[0].node_group
+    inputs = [i for i in group.interface.items_tree
+              if getattr(i, 'in_out', None) == 'INPUT']
+    assert not any(i.socket_type == 'NodeSocketMaterial' for i in inputs), \
+        [i.name for i in inputs]
+    # both halves are needed: Set Material gives the geometry a material list
+    # (Cycles clamps the index to it), Set Material Index makes that index
+    # resolve against the object's slots
+    assert len([n for n in group.nodes
+                if n.bl_idname == 'GeometryNodeSetMaterial']) == 2, 'no Set Material per sign'
+    assert any(n.bl_idname == 'GeometryNodeSetMaterialIndex' for n in group.nodes), \
+        'no Set Material Index in the density group'
+
+    base = grid_dims(vol)
+    assert list(vol['ase_grid_shape']) == list(base), (vol['ase_grid_shape'], base)
+    density_supercell(vol, (2, 2, 1))
+    assert grid_dims(vol) == (base[0] * 2, base[1] * 2, base[2]), grid_dims(vol)
+    assert list(vol['ase_density_repeat']) == [2, 2, 1], vol['ase_density_repeat'][:]
+    # always tiled from the single-cell grid, never compounded
+    density_supercell(vol, (3, 1, 1))
+    assert grid_dims(vol) == (base[0] * 3, base[1], base[2]), grid_dims(vol)
+    density_supercell(vol, (1, 1, 1))
+    assert grid_dims(vol) == base, grid_dims(vol)
+    assert vol.data.filepath == vol['ase_base_vdb'], vol.data.filepath
+
+    # the offset is the supercell group's Offset_x/y/z for densities, and
+    # unlike the repeat it stays a live modifier input: a plain translation
+    # of the isosurface along the lattice vectors, nothing rewritten
+    from blender_importASE.node_networks.compat import set_mod_input, get_mod_input
+    mod = vol.modifiers[0]
+    names = {i.name: i.identifier for i in mod.node_group.interface.items_tree
+             if getattr(i, 'in_out', None) == 'INPUT'}
+    for axis in 'abc':
+        assert f'offset {axis}' in names and f'cell {axis}' in names, sorted(names)
+    cell = [list(get_mod_input(mod, names[f'cell {axis}'])) for axis in 'abc']
+    assert all(any(abs(v) > 1e-6 for v in vec) for vec in cell), cell
+    transform = [n for n in mod.node_group.nodes
+                 if n.bl_idname == 'GeometryNodeTransform']
+    assert transform and transform[0].inputs['Translation'].is_linked, \
+        'the offset does not reach a Transform node'
+    before = vol.data.filepath
+    set_mod_input(mod, names['offset a'], 1)
+    assert vol.data.filepath == before, 'the offset rewrote the grid'
+    set_mod_input(mod, names['offset a'], 0)
+
+    # ... and the operator does it for every density of the structure
+    structure = next(o for o in bpy.data.objects
+                     if o.type == 'MESH' and 'atom_color' in o.data.attributes)
+    bpy.context.view_layer.objects.active = structure
+    assert bpy.ops.ase.density_supercell.poll(), 'operator not available on the structure'
+    bpy.ops.ase.density_supercell(repeat_x=2, repeat_y=1, repeat_z=1, offset_x=-1)
+    for volume_obj in [o for o in bpy.data.objects if o.type == 'VOLUME']:
+        assert list(volume_obj['ase_density_repeat']) == [2, 1, 1], volume_obj.name
+        vmod = volume_obj.modifiers[0]
+        vnames = {i.name: i.identifier for i in vmod.node_group.interface.items_tree
+                  if getattr(i, 'in_out', None) == 'INPUT'}
+        assert get_mod_input(vmod, vnames['offset a']) == -1, volume_obj.name
+
+step('density_supercell', run_density_supercell)
+
+def run_density_node_upgrade():
+    """A density imported by an older add-on keeps that version's node
+    group - a modifier never swaps group by itself - so the offsets are
+    missing until it is upgraded. That is what 'Update density nodes' is
+    for, and it must carry the settings and the cell vectors across."""
+    from importlib import util
+    if util.find_spec('openvdb') is None and util.find_spec('pyopenvdb') is None:
+        print('openvdb not installed - skipping')
+        return
+    from blender_importASE.node_networks.compat import get_mod_input, set_mod_input
+    from blender_importASE import controls
+
+    run_import(f'{SCRATCH}/CHGCAR', representation='nodes', animate=False,
+               read_density=True)
+    vol = next(o for o in bpy.data.objects
+               if o.type == 'VOLUME' and 'spin' not in o.name)
+    mod = vol.modifiers[0]
+    names = {i.name: i.identifier for i in mod.node_group.interface.items_tree
+             if getattr(i, 'in_out', None) == 'INPUT'}
+    set_mod_input(mod, names['isovalue'], 0.125)
+
+    # turn its group back into an older one: no stamp, no offsets
+    group = mod.node_group
+    group.description = ''
+    for item in list(group.interface.items_tree):
+        if item.name.startswith(('offset ', 'cell ')):
+            group.interface.remove(item)
+    assert controls._density_nodes_outdated(vol), 'outdated group not detected'
+
+    bpy.context.view_layer.objects.active = vol
+    assert bpy.ops.ase.upgrade_density_nodes.poll(), 'upgrade not offered'
+    bpy.ops.ase.upgrade_density_nodes()
+    assert not controls._density_nodes_outdated(vol), 'still outdated after the upgrade'
+
+    mod = vol.modifiers[0]
+    names = {i.name: i.identifier for i in mod.node_group.interface.items_tree
+             if getattr(i, 'in_out', None) == 'INPUT'}
+    assert abs(get_mod_input(mod, names['isovalue']) - 0.125) < 1e-6, \
+        'the isovalue was lost in the upgrade'
+    cell = [list(get_mod_input(mod, names[f'cell {axis}'])) for axis in 'abc']
+    assert all(any(abs(v) > 1e-6 for v in vec) for vec in cell), cell
+    slots = [(sl.link, sl.material.name if sl.material else None)
+             for sl in vol.material_slots]
+    assert slots == [('OBJECT', '+ material'), ('OBJECT', '- material')], slots
+
+step('density_node_upgrade', run_density_node_upgrade)
+
+def run_density_material_render():
+    """Both isosurfaces must actually render in their own color, and the
+    object's material slots must drive them - in Cycles, not just EEVEE.
+
+    Renders with Cycles on the CPU on purpose: this is the engine that
+    exposed the bug (it clamps a face's material index to the material list
+    the geometry itself carries, where EEVEE falls back to the object's
+    slots), and it needs no GL context in a headless run.
+    """
+    from importlib import util
+    if util.find_spec('openvdb') is None and util.find_spec('pyopenvdb') is None:
+        print('openvdb not installed - skipping')
+        return
+    import numpy as np
+    from blender_importASE.node_networks.compat import set_mod_input
+
+    run_import(f'{SCRATCH}/mo.cube', representation='nodes', animate=False,
+               read_density=True, outline=False)
+    vol = next(o for o in bpy.data.objects if o.type == 'VOLUME')
+    for ob in bpy.data.objects:
+        ob.hide_render = (ob is not vol)
+    mod = vol.modifiers[0]
+    names = {i.name: i.identifier for i in mod.node_group.interface.items_tree
+             if getattr(i, 'in_out', None) == 'INPUT'}
+    set_mod_input(mod, names['isovalue'], 0.02)
+
+    scene = bpy.context.scene
+    scene.render.engine = 'CYCLES'
+    scene.cycles.samples = 8
+    scene.cycles.device = 'CPU'
+    scene.render.resolution_x = scene.render.resolution_y = 120
+    scene.render.film_transparent = True
+    scene.world = bpy.data.worlds.new('render world')
+    scene.world.use_nodes = True
+    scene.world.node_tree.nodes['Background'].inputs[1].default_value = 1.0
+    camera_data = bpy.data.cameras.new('render cam')
+    camera_data.type = 'ORTHO'
+    camera_data.ortho_scale = 12
+    camera = bpy.data.objects.new('render cam', camera_data)
+    scene.collection.objects.link(camera)
+    scene.camera = camera
+    camera.location = (4, 4, 30)
+
+    def channels():
+        scene.render.filepath = f'{SCRATCH}/density_material_render.png'
+        bpy.ops.render.render(write_still=True)
+        img = bpy.data.images.load(scene.render.filepath)
+        px = np.array(img.pixels[:]).reshape(img.size[1], img.size[0], 4)
+        lit = px[..., :3][px[..., 3] > 0.5]
+        bpy.data.images.remove(img)
+        assert len(lit), 'the density did not render at all'
+        # pixels whose brightest channel is red / green / blue
+        return [int((lit.argmax(axis=1) == channel).sum()) for channel in range(3)]
+
+    red, green, blue = channels()
+    assert red > 100 and blue > 100, \
+        f'the +/- lobes did not both render in color: R{red} G{green} B{blue}'
+
+    # the Material Properties tab has to drive it: slot 0 is the + lobe
+    from blender_importASE.node_networks.electron_density_nodes import newShader
+    lime = newShader('lime test', 0, 1, 0)
+    assert vol.material_slots[0].link == 'OBJECT', vol.material_slots[0].link
+    vol.material_slots[0].material = lime
+    red, green, blue = channels()
+    assert green > 100 and blue < 50, \
+        f'swapping slot 0 did not repaint the + lobe: R{red} G{green} B{blue}'
+
+step('density_material_render', run_density_material_render)
+
+def run_density_cutoffs():
+    """Every cutoff is a depth in from its own face of the density's
+    bounding box: 0 cuts nothing wherever the density sits, and raising
+    one eats into that side. Checked by rendering, because only the
+    picture says which face actually lost geometry."""
+    from importlib import util
+    if util.find_spec('openvdb') is None and util.find_spec('pyopenvdb') is None:
+        print('openvdb not installed - skipping')
+        return
+    import numpy as np
+    from blender_importASE.node_networks.compat import set_mod_input
+
+    run_import(f'{SCRATCH}/mo.cube', representation='nodes', animate=False,
+               read_density=True, outline=False)
+    vol = next(o for o in bpy.data.objects if o.type == 'VOLUME')
+    for ob in bpy.data.objects:
+        ob.hide_render = (ob is not vol)
+    mod = vol.modifiers[0]
+    cutoffs = [i for i in mod.node_group.interface.items_tree
+               if i.name.startswith('cutoff')]
+    assert len(cutoffs) == 6, [i.name for i in cutoffs]
+    for socket in cutoffs:
+        assert (socket.default_value, socket.min_value, socket.max_value) == (0.0, 0.0, 100.0), \
+            (socket.name, socket.default_value, socket.min_value, socket.max_value)
+        assert socket.subtype == 'DISTANCE', (socket.name, socket.subtype)
+
+    names = {i.name: i.identifier for i in mod.node_group.interface.items_tree
+             if getattr(i, 'in_out', None) == 'INPUT'}
+    set_mod_input(mod, names['isovalue'], 0.02)
+    scene = bpy.context.scene
+    scene.render.engine = 'CYCLES'
+    scene.cycles.samples = 4
+    scene.cycles.device = 'CPU'
+    scene.render.resolution_x = scene.render.resolution_y = 150
+    scene.render.film_transparent = True
+    camera_data = bpy.data.cameras.new('cut cam')
+    camera_data.type = 'ORTHO'
+    camera_data.ortho_scale = 12
+    camera = bpy.data.objects.new('cut cam', camera_data)
+    scene.collection.objects.link(camera)
+    scene.camera = camera
+    camera.location = (4, 4, 30)
+
+    def extent():
+        scene.render.filepath = f'{SCRATCH}/density_cut.png'
+        bpy.ops.render.render(write_still=True)
+        img = bpy.data.images.load(scene.render.filepath)
+        px = np.array(img.pixels[:]).reshape(img.size[1], img.size[0], 4)
+        columns = np.nonzero((px[..., 3] > 0.5).any(axis=0))[0]
+        bpy.data.images.remove(img)
+        assert len(columns), 'the density did not render'
+        scale = camera_data.ortho_scale / px.shape[1]
+        return columns.min() * scale, columns.max() * scale
+
+    left, right = extent()
+    set_mod_input(mod, names['cut'], True)
+    assert extent() == (left, right), 'cut with every cutoff at 0 removed geometry'
+    set_mod_input(mod, names['cutoff X'], 2.0)
+    cut_left, cut_right = extent()
+    assert cut_left - left > 1.5 and abs(cut_right - right) < 0.2, \
+        f'cutoff X did not eat in from the low-x face: {left, right} -> {cut_left, cut_right}'
+    set_mod_input(mod, names['cutoff X'], 0.0)
+    set_mod_input(mod, names['cutoff -X'], 2.0)
+    cut_left, cut_right = extent()
+    assert right - cut_right > 1.5 and abs(cut_left - left) < 0.2, \
+        f'cutoff -X did not eat in from the high-x face: {left, right} -> {cut_left, cut_right}'
+
+step('density_cutoffs', run_density_cutoffs)
+
 def run_export_3dprint():
     import zipfile
     from ase.data import chemical_symbols

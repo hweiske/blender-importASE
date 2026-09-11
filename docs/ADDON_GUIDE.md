@@ -9,7 +9,7 @@ This is a Blender add-on for importing atomistic structures (via [ASE](https://w
 
 ## 1. Two ways to drive it
 
-**From the GUI.** *File ▸ Import* gains four entries and *File ▸ Export* gains two (see [§2](#2-operators-file--importexport)). After importing, the **N-panel ▸ ASE tab** (`ASE_PT_controls`) exposes live controls for the active structure: per-element radius mode, per-pair bond hiding, and the 3D-print support rebuilder ([§6](#6-live-controls-the-ase-n-panel)).
+**From the GUI.** *File ▸ Import* gains four entries and *File ▸ Export* gains two (see [§2](#2-operators-file--importexport)). After importing, the **N-panel ▸ ASE tab** (`ASE_PT_controls`) exposes live controls for the active structure: per-element radius mode, per-pair bond hiding, per-element colors, and the 3D-print support rebuilder ([§6](#6-live-controls-the-ase-n-panel)).
 
 **From Python.** Every operator is a thin wrapper over a module-level function. In a headless render or a notebook:
 
@@ -75,7 +75,7 @@ Reads via `ase.io.read(index=':')` (VASP CHGCAR-family via `read_vasp_density`),
 - element colors, roughness and metallic come from `utils.atomcolors` (lead, say, is the violet
   `(0.2, 0.0, 0.5)` — `#7C00BC` in the picker — fully metallic at roughness 0.5); see
   [§6](#6-live-controls-the-ase-n-panel) for editing them per structure.
-- `colorbonds=True` — color bond halves by their atoms; `unit_cell=True` draws the cell box.
+- `colorbonds=True` — color bond halves by their atoms; `unit_cell=True` draws the cell box as cylinders joined into one object, shaded by the `'unit_cell'` material: flat black (0,0,0) wired straight into the Surface output, so the edges read like the outline instead of catching lights. Editing that RGB node re-colors every later import; the old shaded Principled version is rebuilt on the next import.
 
 The GUI operator passes different defaults (`scale=0.5`, `color=0.6`, `representation="nodes"`; its `zero_cell` maps to `shift_cell`).
 
@@ -87,9 +87,58 @@ The GUI operator passes different defaults (`scale=0.5`, `color=0.6`, `represent
 ```python
 import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
     poly_cutoff=1.1, min_neighbors=4, include_hydrogen=False, resolution=16,
-    colorbonds=True, bond_distance=0.66, bond_radius=0.1, outline=False, **kwargs)
+    colorbonds=True, bond_distance=0.66, bond_radius=0.1, outline=False,
+    single_element_corners=True, complete_molecules=True, bond_cutoff=1.3,
+    cell_margin=0.0, all_images=True, framework_shells=1, unit_cell=False, **kwargs)
 ```
-Builds a coordination polyhedron (convex hull, `scipy.spatial.ConvexHull`) around every atom with ≥`min_neighbors` neighbors within `poly_cutoff`×covalent radius. `expand_cutoff` pulls in periodic images so boundary polyhedra close; `trim_cutoff` removes stragglers. Produces the atoms/bonds structure object **plus** a separate `<name>_faces` mesh carrying an `atom_color` attribute and the semi-transparent `'polyhedra material'`. Outline (when on) goes on the atoms/bonds only, never the faces.
+Builds a coordination polyhedron (convex hull, `scipy.spatial.ConvexHull`) around every atom with ≥`min_neighbors` neighbors within `poly_cutoff`×covalent radius. Produces the atoms/bonds structure object **plus** a separate `<name>_faces` mesh carrying `atom_color`/`element` attributes and the semi-transparent `'polyhedra material'`. Outline (when on) goes on the atoms/bonds only, never the faces. `unit_cell=True` draws the cell (skipped when the file has no 3d cell).
+
+**How the structure is extended past the cell** (`build_polyhedra_atoms`). With
+`complete_molecules=True` (default), `select_complete_molecules` grows every molecule **shell by
+shell** over `(atom index, cell image)` nodes, using only the neighbor list of the N-atom cell —
+each step carries the accumulated image offset along every bond, so growth crosses the cell
+boundary in unwrapped space. A molecule is finished when one more shell would not add anything;
+if a bond path returns to an atom already in the cluster at a *different* image, the component is
+an extended framework (chain, layer, 3d network) and has no finite molecule at all. No supercell
+is built, and molecules **larger than one cell** work.
+
+Each atom already lies in some lattice cell (`home = floor(fractional)`), so a molecule moved by
+the lattice translation `t` puts an atom inside the central cell exactly when `offset + t ==
+-home`. The translations that place at least one atom in the cell are therefore just the negated
+`offset + home` values — the copy set falls out of the growth itself.
+
+- `all_images=True` (default, "all molecule images") imports the molecule at every one of them:
+  a molecule on a cell face arrives twice, on an edge four times, on a corner eight. The cell
+  stays fully populated instead of keeping the hole a cut molecule came from.
+- `all_images=False` imports one copy per molecule — the image holding most of the cell's own
+  atoms, ties going to the shortest translation so the result is reproducible.
+- `cell_margin` (Å) grows the region a molecule must reach, pulling in surrounding molecules.
+- `framework_shells` (default 1) grows an extended framework's cell atoms by that many bonded
+  shells; 1 closes the coordination polyhedra at the boundary, 0 cuts at the cell.
+
+**The bond criterion, and ASE's skin.** `bond_neighbors()` builds every neighbor list in the
+module and takes `skin` explicitly, because ASE's `NeighborList` defaults to `skin=0.3` and adds
+it to *each* atom's radius: the criterion silently becomes `d < mult·r₁ + mult·r₂ + 0.6 Å`. An
+additive term over-inflates small radii — H goes from `1.3·0.31 = 0.40` to `0.70 Å` — so
+N–H···Br hydrogen bonds count as covalent bonds. In a relaxed hybrid antimony bromide that fuses
+the organic spacers and the Sb₂Br₁₀ anions into one endless network, and nothing can be completed.
+Molecule growth therefore uses **`bond_cutoff` with skin 0** (default 1.3, i.e. `d < 1.3·(r₁+r₂)`);
+the expansion, trim and hull searches pass ASE's 0.3 back in, since `expand_cutoff=1.2`,
+`trim_cutoff=1.0` and `poly_cutoff=1.1` were tuned with it (the hull needs ≈3.45 Å to catch the
+bridging Br of an SbBr₆ octahedron). 1.3 also matches what the geometry nodes actually draw —
+3.37 Å for Sb–Br versus the node tree's 3.42 Å at `bond_distance=0.66`.
+
+| structure (cell content) | complete molecules | one copy (`all_images=False`) | expansion only |
+|---|---|---|---|
+| relaxed hybrid Sb₂Br₁₀ + spacers (120 atoms) | 360 atoms, 96 faces, **every C/N 4-coordinate, every Sb with 6 Br** | 120 atoms, 32 faces, also clean | 136 atoms, 18 of 34 C miscoordinated |
+| `crystal.cif` (120 atoms) | 360 atoms, 96 faces | 120 atoms | 136 atoms, cut cations |
+| `crystal.cif`, `cell_margin=3.0` | 840 atoms, 352 faces | — | — |
+| benzene on the cell corner (12 atoms) | 48 atoms, 4 whole rings | 12 atoms | 19 atoms, rings cut |
+| rocksalt 2×2×2 (framework, 16 atoms) | 71 atoms / 244 faces at `framework_shells=1` (16/16 at 0, 229/1124 at 2) | same (framework path) | 44 atoms, 114 faces |
+
+`complete_molecules=False` restores the older behavior for everything: images of higher-indexed
+neighbors only, every atom trimmable. Input without a 3d cell always takes that path — there is
+nothing to complete.
 
 ### Density as mesh — `density_mesh.import_density_mesh`
 ```python
@@ -137,6 +186,96 @@ its KF variable, each independently toggleable and using the same
 `read_tape41(filepath, volumes=[...])` directly to select specific names
 instead of importing every volume in the file, or `is_ams_tape41(filename)`
 to test a path before deciding how to import it.
+
+### Electron density volumes — supercell and materials
+
+A density volume is a VDB grid with the `visualize_edensity` node group on it (Volume to Mesh at
+`isovalue`, the `- material` lobe at the mirrored threshold, optional cutoff planes behind the
+`cut` switch).
+
+**Cutting.** All six cutoffs are a **depth in angstrom measured in from their own face** of the
+density's bounding box: `cutoff X/Y/Z` add to the box minimum, `cutoff -X/-Y/-Z` subtract from the
+maximum, and everything past the plane is deleted. 0 therefore cuts nothing *wherever* the density
+sits — which an absolute coordinate could not do, since a cube file centred on the origin runs into
+negative x, y and z. They share one range (0–100 Å, `DISTANCE` subtype so they read in the scene's
+unit) instead of the 100/1000/10000 mixture they had. Measured on `mo.cube`: `cut` on with every
+cutoff at 0 renders pixel-identical to `cut` off, `cutoff X = 2` moves the low-x edge in by 2.0 Å
+and `cutoff -X = 2` moves the high-x edge in by 2.1 Å.
+
+**Supercell.** Repeating the *isosurface mesh* of one cell cannot extend a density: every copy is
+still capped at the cell face it was generated in, so a lobe crossing the boundary keeps its flat
+cut. The grid of a periodic calculation is itself periodic — one cell's worth of samples, far
+plane not repeated — so tiling the grid *is* the supercell density, and the marching cubes then
+runs across the interior boundaries. `import_cubefiles.density_supercell(volume_obj, (nx, ny, nz))`
+does that, writing `<name>_<nx>x<ny>x<nz>.vdb` next to the original and repointing the volume at
+it. The ASE sidebar's **Density supercell** button (`ase.density_supercell`) applies it to every
+density of the structure's collection and defaults its repeats to the structure's own supercell
+modifier, so one click matches the two. It always tiles from the single-cell grid recorded at
+import (`ase_base_vdb`, with `ase_grid_shape` for the true grid extent), so repeats never
+compound; `(1, 1, 1)` restores the original file. Measured on the CHGCAR fixture: a 2.88 Å
+footprint becomes 5.72 × 5.72 Å at 2×2×1 and 8.56 × 2.88 Å at 3×1×1, with the quarter-lobes at the
+old cell corners joining into whole ones.
+
+**Offset.** `offset a/b/c` (int, one per lattice vector) matches the supercell group's
+`Offset_x/y/z`: it translates the finished isosurface by whole cells along `cell a/b/c` (vector
+sockets the import fills in from the grid spacing x sample count, since one group is shared by
+every density in the file). Being a plain transform it stays **live in the modifier** — nothing is
+rewritten, and setting it back to 0 restores the original position. Clicking **Density supercell**
+copies both the repeats and the offsets from the structure's own supercell modifier.
+
+**Why the repeat is a rebuild and the offset is not.** A volume cannot be tiled inside geometry
+nodes on either supported version: the nodes that could resample a grid live (Sample Grid feeding
+a Volume Cube) do not evaluate in 4.4 or in 5.2.1, and tiling the *isosurface mesh* instead gives
+what a plain supercell node network gives — every copy still capped at the cell face it was
+generated in. Deleting those cap faces after realizing the instances was measured to give the
+right extent (5.71 A vs the grid tiling's 5.72 A at 2x2x1) but leaves visible seams where the
+half-lobes of neighbouring copies meet, instead of one continuous surface. Rewriting the grid is
+therefore the only way to a genuinely cut-free density supercell; it is kept reversible (the base
+grid is never touched, `(1,1,1)` restores it) rather than live.
+
+**Upgrading an older density.** A geometry-nodes modifier keeps the group it was created with, so
+a .blend saved by an earlier version never gains what a new group revision adds — its densities
+have no `offset a/b/c` at all, and still take their materials from modifier sockets. The sidebar
+detects that (`_density_nodes_outdated`) and offers **Update density nodes**
+(`ase.upgrade_density_nodes`, also run automatically by the supercell button): it repoints the
+modifier at the current group, carries every setting over *by socket name*, recovers `cell a/b/c`
+from the grid's own transform (`density_cell_vectors`, one `indexToWorld` step per axis × the
+sample count, so a triclinic cell works too) and leaves the material slots as they are. Verified
+against a scene saved by the previous version: isovalue preserved, cell recovered as 2.831 Å, and
+the offset then moves the isosurface by exactly one cell.
+
+**Materials.** The two isosurfaces are tagged with a `mat_slot` face attribute (0 = positive,
+1 = negative) that a Set Material Index node at the end of the group turns into the real material
+index, exactly as `atoms_and_bonds` does — so the Material Properties tab of the volume object is
+in control (slot 0 `+ material`, slot 1 `- material`, or the spin pair for a CHGCAR's second
+volume) instead of a material picked in the modifier.
+
+Making that work in **both render engines** needs three pieces, and dropping any one of them
+breaks it in a way only a render shows (measured on `mo.cube`, pixels of the two lobes):
+
+| setup | EEVEE | Cycles |
+|---|---|---|
+| data-linked slots, index only | 12648 grey | 12648 grey |
+| object-linked slots, index only | 2792 blue + 2783 red | **5601 blue, 0 red** |
+| object-linked + Set Material per sign + Set Material Index | 2792 blue + 2783 red | 2808 blue + 2786 red |
+
+- **A Set Material per sign** inside the group (the `+`/`- material` defaults) gives the geometry a
+  two-entry material list. A material index only means something within the list the *geometry*
+  carries, and a mesh built by Volume to Mesh starts with an empty one: EEVEE quietly falls back to
+  the object's slots, Cycles clamps every face to the first entry — which is why Cycles painted
+  both lobes with slot 0.
+- **Set Material Index** from `mat_slot` at the end is what makes that index resolve against the
+  *object's* slots. Without it the geometry keeps the materials the group assigned and the
+  Properties tab has no effect (measured: swapping slot 0 changed nothing).
+- **`slot.link = 'OBJECT'`** (`density_materials`), because the isosurface carries no material list
+  to link against; a mesh structure gets away with data links since the geometry flowing through
+  its tree is the object's own mesh.
+
+With all three, swapping the material in slot 0 repaints the positive lobe in EEVEE and in Cycles —
+that is the point of putting the Properties tab in charge, and `density_material_render` in the
+smoke test renders it with Cycles to keep it that way. The group carries a revision stamp in its
+description; a `visualize_edensity` from an older version is renamed `visualize_edensity_old` and
+rebuilt on the next import rather than silently reused.
 
 ### Charges — `charges.import_charges`
 ```python
@@ -194,20 +333,9 @@ obj.update_tag()
 `ASE_PT_controls` (VIEW_3D ▸ N-panel ▸ **ASE** tab) appears when the active object has a recognized geometry-node modifier. It draws:
 - a per-element radius-mode grid (`ase.set_radius_mode`, prop `number`) — covalent ↔ vdW,
 - a per-pair bond-cut grid (`ase.toggle_pair_cut`, prop `pair_id`),
+- an **Element colors** box: one swatch per element of the structure (see below),
 - a **3D printing** box with **Rebuild 3D-print supports** (`ase.rebuild_supports`) when the collection holds real element meshes,
 - one box per sibling density/geometry modifier.
-
-**Element colors** (`element_colors.py`). An element's color lives in two places: its materials (`'Sb'`, `'Sb-bond'`, and the two-sided `'Sb-C-bond'` gradients) shade the atoms and the ball'n'stick bonds, while the structure mesh's `atom_color` point attribute is what the geometry-node bonds sample at both ends and blend along the curve (`colorbonds`) - and what tints polyhedra faces. The panel's swatch edits the element's atom material; a `depsgraph_update_post` handler notices the change - from the swatch, the Material Properties tab, a driver or a script - and rewrites the `atom_color` entries of that element in every mesh of the file, so the bonds follow. Any mesh pairing `atom_color` with an `element` attribute on the same point domain is covered.
-
-```python
-from blender_importASE.element_colors import (set_element_color, get_element_color,
-                                              sync_atom_color_attributes)
-set_element_color('Sb', (0.571125, 0.109462, 0.274677))   # materials + attributes
-get_element_color('Sb')                                    # what it is drawn in now
-sync_atom_color_attributes(['Sb', 'C'])                    # attributes from the materials
-```
-
-Colors are **linear**, the way Blender reads a base color or a FLOAT_COLOR attribute; the hex codes noted in `utils.atomcolors.color_dict` are their sRGB equivalents, i.e. what the color picker shows. `utils.default_element_color(symbol)` gives the add-on's default (jmol colors for elements the scheme doesn't cover), `ase.reset_element_colors` puts the structure's elements back to it, and `ase.sync_element_colors` runs the sync pass on demand. An element material that already exists in the file keeps its color when another structure is imported, so a re-import never resets a picked color.
 
 **Custom bonds** (`ase.add_dotted_bond`, `dotted_bond.add_bond`) draw a bond between two atoms that the distance-based search does not - a partial bond in a transition state, a hydrogen bond, and so on. Select exactly two atoms (vertices) and click *Add custom bond*; the `bond type` dropdown in the redo panel picks the style:
 
@@ -225,6 +353,18 @@ reset_custom_bonds(structure_obj)          # restore solid bonds, delete the cus
 Each style is its own node group sharing one front-end: both atom positions are sampled from the structure, so the bond follows it (including trajectory animation). All write the `COLOR_CURVE` attribute the bond material reads, blended between the two atoms' colors, and set the material index of the structure's bond slot; the outline modifier is added as usual. Dashes are made by resampling the line, dropping every other edge and running the rest through Curve to Mesh with a circle profile - the segments come out aligned with the bond with no rotation maths.
 
 `replace` stores a per-atom `dotted_partner` int on the structure mesh (the other atom's index + 1; 0/missing = none) which atoms_and_bonds ORs into its bond delete selection. That is **one partner per atom**: replacing 0-1 then 0-2 leaves the 0-1 bond visible again. `ase.reset_custom_bonds` / `reset_custom_bonds()` clears them all and removes the bond objects (`remove_objects=False` keeps the objects). Because the delete-selection wiring lives in atoms_and_bonds, structures imported before this feature need a re-import for `replace` (adding the bond itself works either way).
+
+**Element colors** (`element_colors.py`). An element's color lives in two places: its materials (`'Sb'`, `'Sb-bond'`, and the two-sided `'Sb-C-bond'` gradients) shade the atoms and the ball'n'stick bonds, while the structure mesh's `atom_color` point attribute is what the geometry-node bonds sample at both ends and blend along the curve (`colorbonds`) - and what tints polyhedra faces. The panel's swatch edits the element's atom material; a `depsgraph_update_post` handler notices the change - from the swatch, the Material Properties tab, a driver or a script - and rewrites the `atom_color` entries of that element in every mesh of the file, so the bonds follow. Any mesh pairing `atom_color` with an `element` attribute on the same point domain is covered.
+
+```python
+from blender_importASE.element_colors import (set_element_color, get_element_color,
+                                              sync_atom_color_attributes)
+set_element_color('Sb', (0.571125, 0.109462, 0.274677))   # materials + attributes
+get_element_color('Sb')                                    # what it is drawn in now
+sync_atom_color_attributes(['Sb', 'C'])                    # attributes from the materials
+```
+
+Colors are **linear**, the way Blender reads a base color or a FLOAT_COLOR attribute; the hex codes noted in `utils.atomcolors.color_dict` are their sRGB equivalents, i.e. what the color picker shows. `utils.default_element_color(symbol)` gives the add-on's default (jmol colors for elements the scheme doesn't cover), `ase.reset_element_colors` puts the structure's elements back to it, and `ase.sync_element_colors` runs the sync pass on demand. An element material that already exists in the file keeps its color when another structure is imported, so a re-import never resets a picked color.
 
 `ase.rebuild_supports` is live-adjustable in the F9 redo panel: `base_radius` (0.25), `tip_radius`/"contact radius" (0.1), `support_layer`/"support drop" (0.3), `plate_thickness` (0.6), `plate_holes` (True), `plate_gap` (2.0). It removes existing auto-supports and rebuilds via `exports.build_supports`.
 

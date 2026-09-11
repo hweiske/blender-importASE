@@ -16,8 +16,9 @@ except ImportError:
     except ImportError:
         vdb = None
 import os
-from .node_networks.electron_density_nodes import visualize_edensity_node_group, newShader
-from .node_networks.compat import set_mod_input
+from .node_networks.compat import set_mod_input, get_mod_input
+from .node_networks.electron_density_nodes import (visualize_edensity_node_group,
+                                                   density_materials, newShader)
 from .utils import toggle
 import os.path
 
@@ -114,18 +115,166 @@ def data2vol(volume, spacing, origin, filepath, modifier='GeometryNodes',
     vdb.write(TMPFILE, GRID)
     _ = bpy.ops.object.volume_import(filepath=TMPFILE, location=origin)
     density_obj = bpy.context.active_object
-    visualize_edensity_node_group()
+    node = visualize_edensity_node_group()
     bpy.ops.object.modifier_add(type='NODES')
-    node = bpy.data.node_groups["visualize_edensity"]
     bpy.context.object.modifiers[modifier].node_group = node
-    if plus_material is None:
-        plus_material = bpy.data.materials["+ material"]
-    if minus_material is None:
-        minus_material = bpy.data.materials["- material"]
-    set_mod_input(bpy.context.object.modifiers[modifier], "Socket_9", plus_material)
-    set_mod_input(bpy.context.object.modifiers[modifier], "Socket_10", minus_material)
+    # the isosurfaces take their material from the object's own slots
+    # (slot 0 = positive, slot 1 = negative), not from a modifier input
+    density_materials(density_obj, plus_material, minus_material)
+    # the lattice vectors the 'offset a/b/c' sockets step along: one grid
+    # spacing times the number of samples along that axis
+    mod = bpy.context.object.modifiers[modifier]
+    identifiers = {item.name: item.identifier for item in node.interface.items_tree
+                   if getattr(item, 'in_out', None) == 'INPUT'}
+    for axis, step, count in zip('abc', spacing, np.shape(volume)):
+        if f'cell {axis}' in identifiers:
+            set_mod_input(mod, identifiers[f'cell {axis}'],
+                          [float(v) * int(count) for v in step])
+    # what a later supercell rebuild tiles from: the single-cell grid and
+    # its true shape (the VDB's own active-voxel box can be smaller when
+    # the density is zero at the border)
+    density_obj['ase_base_vdb'] = TMPFILE
+    density_obj['ase_grid_shape'] = list(np.shape(volume))
     toggle(bpy.context.object, SET=False)
     return density_obj
+
+
+def density_cell_vectors(density_obj):
+    """The lattice vectors of a density's own grid, from the VDB transform.
+
+    One index step along each axis is that lattice vector divided by the
+    number of samples, and the transform carries it for a triclinic cell
+    too - which is why this asks the grid rather than the bounding box.
+    Returns None when the grid cannot be read.
+    """
+    if vdb is None:
+        return None
+    path = density_obj.get('ase_base_vdb') or density_obj.data.filepath
+    path = bpy.path.abspath(path) if path else ''
+    if not path or not os.path.exists(path):
+        return None
+    grid = vdb.read(path, 'density')
+    shape = density_obj.get('ase_grid_shape')
+    if shape is None:
+        box = grid.evalActiveVoxelBoundingBox()
+        shape = tuple(np.asarray(box[1]) - np.asarray(box[0]) + 1)
+    origin = np.asarray(grid.transform.indexToWorld((0, 0, 0)))
+    vectors = []
+    for axis, count in enumerate(shape):
+        step = np.zeros(3)
+        step[axis] = 1
+        vectors.append((np.asarray(grid.transform.indexToWorld(tuple(step))) - origin)
+                       * int(count))
+    return vectors
+
+
+def upgrade_density_nodes(density_obj):
+    """Point an existing density at the current visualize_edensity group.
+
+    A modifier keeps whatever node group it was created with, so a file
+    saved by an older add-on never gains what a new revision adds - the
+    offsets, or the material indices - until its densities are rebuilt.
+    This carries the settings over by socket name, fills in the lattice
+    vectors from the grid itself and leaves the material slots as they are.
+    Returns True when something was changed.
+    """
+    node = visualize_edensity_node_group()
+    changed = False
+    for mod in density_obj.modifiers:
+        if (mod.type != 'NODES' or mod.node_group is None
+                or not mod.node_group.name.startswith('visualize_edensity')):
+            continue
+        if mod.node_group is not node:
+            old = {item.name: get_mod_input(mod, item.identifier)
+                   for item in mod.node_group.interface.items_tree
+                   if getattr(item, 'in_out', None) == 'INPUT'
+                   and item.socket_type not in ('NodeSocketGeometry',
+                                                'NodeSocketMaterial')}
+            mod.node_group = node
+            for item in node.interface.items_tree:
+                if (getattr(item, 'in_out', None) == 'INPUT'
+                        and item.name in old and old[item.name] is not None):
+                    set_mod_input(mod, item.identifier, old[item.name])
+            changed = True
+        identifiers = {item.name: item.identifier for item in node.interface.items_tree
+                       if getattr(item, 'in_out', None) == 'INPUT'}
+        cell = None
+        for axis, name in enumerate('abc'):
+            key = identifiers.get(f'cell {name}')
+            if key is None:
+                continue
+            current = get_mod_input(mod, key)
+            if current is not None and any(abs(float(v)) > 1e-9 for v in current):
+                continue
+            if cell is None:
+                cell = density_cell_vectors(density_obj)
+                if cell is None:
+                    break
+            set_mod_input(mod, key, [float(v) for v in cell[axis]])
+            changed = True
+    if changed:
+        density_materials(density_obj, keep_existing=True)
+    return changed
+
+
+def density_supercell(density_obj, repeat=(1, 1, 1)):
+    """Rebuild a density volume as a supercell by tiling its grid.
+
+    The grid of a periodic calculation is itself periodic - it holds one
+    cell's worth of samples and does not repeat the far plane - so tiling
+    it *is* the density of the supercell. That is what repeating the
+    isosurface mesh of a single cell cannot do: each copy would still be
+    capped at the cell boundary it was generated in, leaving a flat cut
+    face wherever a lobe crosses it. Here the marching cubes runs over the
+    whole tiled grid instead, so the surface continues through the interior
+    boundaries and only the outside of the supercell is closed off.
+
+    Always tiles from the single-cell grid the import wrote, so changing
+    the repeats never compounds. Returns the written .vdb path.
+    """
+    if vdb is None:
+        raise ImportError("openvdb is needed to rebuild a density supercell.")
+    upgrade_density_nodes(density_obj)
+    base = density_obj.get('ase_base_vdb')
+    if base is None:
+        # imported before this was recorded: the volume still points at its
+        # own single-cell grid, so adopt that as the base
+        base = density_obj.data.filepath
+        if not base:
+            raise ValueError(f"{density_obj.name} has no grid file to tile from")
+        density_obj['ase_base_vdb'] = base
+    base = bpy.path.abspath(base)
+    if not os.path.exists(base):
+        raise FileNotFoundError(f"the density grid {base} is gone - re-import the file")
+
+    grid = vdb.read(base, 'density')
+    shape = density_obj.get('ase_grid_shape')
+    if shape is None:
+        # an older import: fall back to the active voxel box, which is the
+        # true shape unless the density is exactly zero at a border plane
+        bbox = grid.evalActiveVoxelBoundingBox()
+        shape = tuple(np.asarray(bbox[1]) - np.asarray(bbox[0]) + 1)
+    volume = np.zeros(tuple(int(n) for n in shape), dtype=float)
+    grid.copyToArray(volume, ijk=(0, 0, 0))
+
+    repeat = tuple(max(1, int(n)) for n in repeat)
+    if repeat == (1, 1, 1):
+        path = base
+    else:
+        tiled = vdb.FloatGrid()
+        tiled.copyFromArray(np.ascontiguousarray(np.tile(volume, repeat)))
+        tiled.transform = grid.transform      # voxel size is unchanged
+        tiled.gridClass = grid.gridClass
+        tiled.name = 'density'
+        stem = os.path.splitext(base)[0]
+        path = f'{stem}_{repeat[0]}x{repeat[1]}x{repeat[2]}.vdb'
+        vdb.write(path, tiled)
+
+    density_obj.data.filepath = path
+    density_obj['ase_density_repeat'] = list(repeat)
+    density_obj.data.update_tag()
+    density_obj.update_tag()
+    return path
 
 
 def cube2vol(filename, filepath=os.environ.get('HOME'), modifier='GeometryNodes'):

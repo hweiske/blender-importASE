@@ -1,9 +1,56 @@
 import bpy
 from .compat import setup_volume_to_mesh
+from .. import __version__
+
+EDENSITY_GROUP = 'visualize_edensity'
+# Revision on top of the add-on version, so that changing the definition
+# forces a rebuild within one release (same scheme as the custom bond
+# groups). Revision 2 dropped the '+ material'/'- material' sockets for
+# material indices read from the object's own slots; revision 3 added the
+# cell vectors and the offset the supercell node group also has; revision 4
+# assigns the two materials in the tree again so that Cycles renders them,
+# with the object's slots still overriding; revision 5 keeps both halves of
+# that (see the comment below) after 4 lost the override; revision 6 made
+# all six cutoffs depths measured in from their own face.
+_EDENSITY_REVISION = 6
+_GROUP_STAMP = f'{__version__}-edensity{_EDENSITY_REVISION}'
+
+# Getting the two isosurfaces to follow the object's material slots in both
+# render engines needs two things in the tree, and neither alone is enough:
+#
+# 1. a Set Material per sign, with the default +/- materials. A material
+#    index only means something within the material list the geometry itself
+#    carries, and a mesh built by Volume to Mesh starts with an empty one.
+#    EEVEE quietly falls back to the object's slots, Cycles clamps every
+#    face to the first entry - it painted both lobes of mo.cube with slot 0
+#    until the geometry carried both materials.
+# 2. a Set Material Index at the end, from this face attribute. That is what
+#    makes the index resolve against the *object's* slots, so swapping the
+#    material in slot 0 repaints the positive lobe. With only the Set
+#    Material nodes the geometry keeps the materials the group assigned and
+#    the Properties tab has no effect.
+#
+# The density object's slots are OBJECT-linked as well (density_materials):
+# the isosurface carries no material list of its own to link against.
+MAT_SLOT_ATTRIBUTE = 'mat_slot'
+
 
 #initialize visualize_edensity node group
 def visualize_edensity_node_group(): #from node2python
-    visualize_edensity= bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "visualize_edensity")
+    """Build (or reuse) the density node group and return it.
+
+    A group of this name built by an older add-on version is renamed
+    aside rather than reused: it still carries the material sockets this
+    revision replaced with material indices, and data2vol would otherwise
+    attach that stale group to a fresh import.
+    """
+    existing = bpy.data.node_groups.get(EDENSITY_GROUP)
+    if existing is not None:
+        if existing.description == _GROUP_STAMP:
+            return existing
+        existing.name = f'{EDENSITY_GROUP}_old'
+    visualize_edensity= bpy.data.node_groups.new(type = 'GeometryNodeTree', name = EDENSITY_GROUP)
+    visualize_edensity.description = _GROUP_STAMP
 
     #initialize visualize_edensity nodes
     #node Frame
@@ -104,8 +151,25 @@ def visualize_edensity_node_group(): #from node2python
     delete_geometry_002.domain = 'POINT'
     delete_geometry_002.mode = 'ALL'
 
-    #node Separate XYZ.001
+    #node Separate XYZ.001 - the bounding box maximum (- direction)
     separate_xyz_001 = visualize_edensity.nodes.new("ShaderNodeSeparateXYZ")
+
+    #node Separate XYZ.002 - the bounding box minimum (+ direction)
+    separate_xyz_002 = visualize_edensity.nodes.new("ShaderNodeSeparateXYZ")
+    separate_xyz_002.name = "Separate XYZ.002"
+
+    # every cutoff is a depth measured in from its own face: the + ones add
+    # to the box minimum, the - ones (math_001/002/003 below) subtract from
+    # the maximum. 0 therefore cuts nothing whatever coordinates the density
+    # sits at, which an absolute coordinate could not do - a cube file
+    # centred on the origin runs into negative x, y and z.
+    cut_from_min = []
+    for axis in range(3):
+        add = visualize_edensity.nodes.new("ShaderNodeMath")
+        add.operation = 'ADD'
+        add.name = f"cut from min {'XYZ'[axis]}"
+        add.location = (-300, 500 - 60 * axis)
+        cut_from_min.append(add)
 
     #node Math.002
     math_002 = visualize_edensity.nodes.new("ShaderNodeMath")
@@ -147,8 +211,6 @@ def visualize_edensity_node_group(): #from node2python
     visualize_edensity.interface.new_socket('cutoff -X',in_out='INPUT',socket_type='NodeSocketFloat')
     visualize_edensity.interface.new_socket('cutoff -Y',in_out='INPUT',socket_type='NodeSocketFloat')
     visualize_edensity.interface.new_socket('cutoff -Z',in_out='INPUT',socket_type='NodeSocketFloat')
-    visualize_edensity.interface.new_socket('+ material',in_out='INPUT',socket_type='NodeSocketMaterial')
-    visualize_edensity.interface.new_socket('- material',in_out='INPUT',socket_type='NodeSocketMaterial')
 
     #input isovalue
 
@@ -157,71 +219,57 @@ def visualize_edensity_node_group(): #from node2python
     visualize_edensity.interface.items_tree[2].max_value = 100
     visualize_edensity.interface.items_tree[2].attribute_domain = 'POINT'
 
-    #input cutoff X
-    visualize_edensity.interface.items_tree[3].default_value = 0.0
-    visualize_edensity.interface.items_tree[3].min_value = 0.0
-    visualize_edensity.interface.items_tree[3].max_value = 10000.0
-    visualize_edensity.interface.items_tree[3].attribute_domain = 'POINT'
+    # the six cutoffs, all of them a depth in angstrom measured in from
+    # their own face of the density's bounding box. 0 = no cut; the soft
+    # range is what the slider drags over, the hard maximum is generous
+    # enough for any cell.
+    for name in ('cutoff X', 'cutoff Y', 'cutoff Z',
+                 'cutoff -X', 'cutoff -Y', 'cutoff -Z'):
+        socket = next(item for item in visualize_edensity.interface.items_tree
+                      if item.name == name)
+        socket.default_value = 0.0
+        socket.min_value = 0.0
+        socket.max_value = 100.0
+        socket.subtype = 'DISTANCE'
+        socket.attribute_domain = 'POINT'
 
-    #input cutoff Y
-    visualize_edensity.interface.items_tree[4].default_value = 0.0
-    visualize_edensity.interface.items_tree[4].min_value = 0.0
-    visualize_edensity.interface.items_tree[4].max_value = 100.0
-    visualize_edensity.interface.items_tree[4].attribute_domain = 'POINT'
-
-    #input cutoff Z
-    visualize_edensity.interface.items_tree[5].default_value = 0.0
-    visualize_edensity.interface.items_tree[5].min_value = 0.0
-    visualize_edensity.interface.items_tree[5].max_value = 100.0
-    visualize_edensity.interface.items_tree[5].attribute_domain = 'POINT'
-
-   #input cutoff -X
-    visualize_edensity.interface.items_tree[6].default_value = 0.0
-    visualize_edensity.interface.items_tree[6].min_value = 0.0
-    visualize_edensity.interface.items_tree[6].max_value = 1000.0
-    visualize_edensity.interface.items_tree[6].attribute_domain = 'POINT'
-
-    #input cutoff -Y
-    visualize_edensity.interface.items_tree[7].default_value = 0.0
-    visualize_edensity.interface.items_tree[7].min_value = 0.0
-    visualize_edensity.interface.items_tree[7].max_value = 10000.0
-    visualize_edensity.interface.items_tree[7].attribute_domain = 'POINT'
-
-    #input cutoff -Z
-    visualize_edensity.interface.items_tree[8].default_value = 0.0
-    visualize_edensity.interface.items_tree[8].min_value = 0.0
-    visualize_edensity.interface.items_tree[8].max_value = 10000.0
-    visualize_edensity.interface.items_tree[8].attribute_domain = 'POINT'
-
-    
-    matp = newShader("+ material",  0, 0, 1)
-    bpy.context.active_object.data.materials.append(matp)
-    matm = newShader("- material",  1, 0, 0)
-    bpy.context.active_object.data.materials.append(matm)
-
-
-
-    #input material +
-    visualize_edensity.interface.items_tree[9].attribute_domain = 'POINT'
-    visualize_edensity.interface.items_tree[9].default_value = matp
-
-    #input material -
-    visualize_edensity.interface.items_tree[10].attribute_domain = 'POINT'
-    visualize_edensity.interface.items_tree[10].default_value = matm
+    # the default +/- shaders. Which object they end up on is data2vol's
+    # business (density_materials below); the group only tags faces with
+    # the slot they should use.
+    newShader("+ material",  0, 0, 1)
+    newShader("- material",  1, 0, 0)
 
 
     #node Group Input
     group_input = visualize_edensity.nodes.new("NodeGroupInput")
 
-    #node Set Material
+    #node Set Material -> the + isosurface, material index 0
     set_material = visualize_edensity.nodes.new("GeometryNodeSetMaterial")
     #Selection
     set_material.inputs[1].default_value = True
+    set_material.inputs['Material'].default_value = newShader("+ material", 0, 0, 1)
+    #node Store Named Attribute -> tag those faces as slot 0
+    store_slot = visualize_edensity.nodes.new("GeometryNodeStoreNamedAttribute")
+    store_slot.name = "mat_slot +"
+    store_slot.data_type = 'INT'
+    store_slot.domain = 'FACE'
+    store_slot.inputs[1].default_value = True
+    store_slot.inputs[2].default_value = MAT_SLOT_ATTRIBUTE
+    store_slot.inputs['Value'].default_value = 0
 
-    #node Set Material.001
+    #node Set Material.001 -> the - isosurface, material index 1
     set_material_001 = visualize_edensity.nodes.new("GeometryNodeSetMaterial")
     #Selection
     set_material_001.inputs[1].default_value = True
+    set_material_001.inputs['Material'].default_value = newShader("- material", 1, 0, 0)
+    #node Store Named Attribute.001 -> tag those faces as slot 1
+    store_slot_001 = visualize_edensity.nodes.new("GeometryNodeStoreNamedAttribute")
+    store_slot_001.name = "mat_slot -"
+    store_slot_001.data_type = 'INT'
+    store_slot_001.domain = 'FACE'
+    store_slot_001.inputs[1].default_value = True
+    store_slot_001.inputs[2].default_value = MAT_SLOT_ATTRIBUTE
+    store_slot_001.inputs['Value'].default_value = 1
 
     #node Volume to Mesh
     volume_to_mesh = visualize_edensity.nodes.new("GeometryNodeVolumeToMesh")
@@ -333,9 +381,11 @@ def visualize_edensity_node_group(): #from node2python
     #volume_to_mesh.Mesh -> set_material.Geometry
     visualize_edensity.links.new(volume_to_mesh.outputs[0], set_material.inputs[0])
     #set_material.Geometry -> join_geometry.Geometry
-    visualize_edensity.links.new(set_material.outputs[0], join_geometry.inputs[0])
+    visualize_edensity.links.new(set_material.outputs[0], store_slot.inputs[0])
+    visualize_edensity.links.new(store_slot.outputs[0], join_geometry.inputs[0])
     #set_material_001.Geometry -> join_geometry.Geometry
-    visualize_edensity.links.new(set_material_001.outputs[0], join_geometry.inputs[0])
+    visualize_edensity.links.new(set_material_001.outputs[0], store_slot_001.inputs[0])
+    visualize_edensity.links.new(store_slot_001.outputs[0], join_geometry.inputs[0])
     #volume_to_mesh_001.Mesh -> set_material_001.Geometry
     visualize_edensity.links.new(volume_to_mesh_001.outputs[0], set_material_001.inputs[0])
     #join_geometry.Geometry -> set_shade_smooth.Geometry
@@ -361,11 +411,14 @@ def visualize_edensity_node_group(): #from node2python
     #set_shade_smooth.Geometry -> delete_geometry.Geometry
     visualize_edensity.links.new(set_shade_smooth.outputs[0], delete_geometry.inputs[0])
     #group_input.cutoff X -> compare.B
-    visualize_edensity.links.new(group_input.outputs[2], compare.inputs[1])
+    visualize_edensity.links.new(bounding_box.outputs[1], separate_xyz_002.inputs[0])
+    for axis, (add, compare_node, socket_index) in enumerate(
+            zip(cut_from_min, (compare, compare_001, compare_002), (2, 3, 4))):
+        visualize_edensity.links.new(separate_xyz_002.outputs[axis], add.inputs[0])
+        visualize_edensity.links.new(group_input.outputs[socket_index], add.inputs[1])
+        visualize_edensity.links.new(add.outputs[0], compare_node.inputs[1])
     #group_input.cutoff Y -> compare_001.B
-    visualize_edensity.links.new(group_input.outputs[3], compare_001.inputs[1])
     #group_input.cutoff Z -> compare_002.B
-    visualize_edensity.links.new(group_input.outputs[4], compare_002.inputs[1])
     #compare_003.Result -> delete_geometry_003.Selection
     visualize_edensity.links.new(compare_003.outputs[0], delete_geometry_003.inputs[1])
     #compare_004.Result -> delete_geometry_005.Selection
@@ -408,10 +461,6 @@ def visualize_edensity_node_group(): #from node2python
     visualize_edensity.links.new(group_input.outputs[5], compare_003.inputs[1])
     #group_input.cutoff -Y -> compare_004.B
     visualize_edensity.links.new(group_input.outputs[6], compare_004.inputs[1])
-    #group_input.material + -> set_material.Material
-    visualize_edensity.links.new(group_input.outputs[8], set_material.inputs[2])
-    #group_input.material - -> set_material_001.Material
-    visualize_edensity.links.new(group_input.outputs[9], set_material_001.inputs[2])
 
     # 'cut' switch: the delete-geometry cutoff planes only apply when
     # enabled; by default the switch routes the uncut isosurface straight
@@ -427,8 +476,107 @@ def visualize_edensity_node_group(): #from node2python
     visualize_edensity.links.new(group_input.outputs['cut'], cut_switch.inputs[0])
     visualize_edensity.links.new(set_shade_smooth.outputs[0], cut_switch.inputs[1])       # False: uncut
     visualize_edensity.links.new(delete_geometry_004.outputs[0], cut_switch.inputs[2])    # True: cutoffs apply
-    visualize_edensity.links.new(cut_switch.outputs[0], group_output.inputs[0])
+    # offset: the same idea as the supercell group's Offset_x/y/z, whole
+    # cells along the lattice vectors. It is a plain translation of the
+    # finished isosurface, so it stays live in the modifier - unlike the
+    # repeat count, which has to tile the grid itself (see
+    # import_cubefiles.density_supercell).
+    for axis in 'abc':
+        socket = visualize_edensity.interface.new_socket(
+            f'offset {axis}', in_out='INPUT', socket_type='NodeSocketInt')
+        socket.default_value = 0
+        socket.min_value = -1000
+        socket.max_value = 1000
+    # the lattice vectors, written by data2vol from the grid spacing; the
+    # group is shared by every density in the file, so they cannot be baked
+    # into it as constants the way supercell_node_group does it
+    for axis in 'abc':
+        socket = visualize_edensity.interface.new_socket(
+            f'cell {axis}', in_out='INPUT', socket_type='NodeSocketVector')
+        socket.default_value = (0.0, 0.0, 0.0)
+
+    shift = None
+    for index, axis in enumerate('abc'):
+        scale = visualize_edensity.nodes.new("ShaderNodeVectorMath")
+        scale.operation = 'SCALE'
+        scale.name = f'offset {axis}'
+        scale.location = (1300, -200 - 120 * index)
+        visualize_edensity.links.new(group_input.outputs[f'cell {axis}'], scale.inputs[0])
+        visualize_edensity.links.new(group_input.outputs[f'offset {axis}'], scale.inputs['Scale'])
+        if shift is None:
+            shift = scale.outputs[0]
+        else:
+            add = visualize_edensity.nodes.new("ShaderNodeVectorMath")
+            add.operation = 'ADD'
+            add.location = (1420, -200 - 120 * index)
+            visualize_edensity.links.new(shift, add.inputs[0])
+            visualize_edensity.links.new(scale.outputs[0], add.inputs[1])
+            shift = add.outputs[0]
+    translate = visualize_edensity.nodes.new("GeometryNodeTransform")
+    translate.name = "Offset"
+    translate.location = (1550, 100)
+    visualize_edensity.links.new(shift, translate.inputs['Translation'])
+
+    # ... and the index the object's slots are looked up with
+    mat_slot_attribute = visualize_edensity.nodes.new("GeometryNodeInputNamedAttribute")
+    mat_slot_attribute.name = "mat_slot"
+    mat_slot_attribute.data_type = 'INT'
+    mat_slot_attribute.inputs[0].default_value = MAT_SLOT_ATTRIBUTE
+    mat_slot_attribute.location = (1600, -120)
+    set_material_index = visualize_edensity.nodes.new("GeometryNodeSetMaterialIndex")
+    set_material_index.name = "Set Material Index"
+    set_material_index.inputs[1].default_value = True
+    set_material_index.location = (1700, 100)
+    visualize_edensity.links.new(cut_switch.outputs[0], translate.inputs[0])
+    visualize_edensity.links.new(translate.outputs[0], set_material_index.inputs[0])
+    visualize_edensity.links.new(mat_slot_attribute.outputs[0],
+                                 set_material_index.inputs['Material Index'])
+    visualize_edensity.links.new(set_material_index.outputs[0], group_output.inputs[0])
     return visualize_edensity
+
+
+def density_materials(density_obj, plus_material=None, minus_material=None,
+                      keep_existing=False):
+    """Put the +/- isosurface materials into the volume object's own slots.
+
+    Slot 0 is the positive lobe and slot 1 the negative one - the order the
+    node group's mat_slot attribute refers to.
+
+    The slots are linked to the **object**, not to the volume data, and that
+    is what makes the material indices resolve at all: a material index is
+    looked up in the material list the *geometry* carries, and the isosurface
+    is a mesh that Volume to Mesh creates inside the modifier, so it carries
+    none. (A mesh structure works with data links because the geometry
+    flowing through its tree is the object's own mesh.) With data-linked
+    slots the isosurfaces render untextured - plain white - however correct
+    the indices are.
+
+    keep_existing leaves a slot that already holds a material alone, which is
+    what upgrading an older density wants: those slots may hold materials the
+    user picked.
+    """
+    if plus_material is None:
+        plus_material = newShader("+ material", 0, 0, 1)
+    if minus_material is None:
+        minus_material = newShader("- material", 1, 0, 0)
+    data_slots = density_obj.data.materials
+    while len(data_slots) < 2:
+        data_slots.append(None)
+
+    chosen = []
+    for index, default in enumerate((plus_material, minus_material)):
+        current = density_obj.material_slots[index].material
+        chosen.append(current if (keep_existing and current is not None) else default)
+    for index, material in enumerate(chosen):
+        slot = density_obj.material_slots[index]
+        slot.link = 'OBJECT'
+        slot.material = material
+        if data_slots[index] is None:
+            # keep the data list meaningful too, so the slot still shows a
+            # material if someone switches the link back to Data
+            data_slots[index] = material
+    return chosen[0], chosen[1]
+
 
 def newMaterial(id):
     

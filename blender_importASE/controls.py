@@ -18,7 +18,8 @@ import bpy
 from ase.data import chemical_symbols
 
 from .element_colors import draw_element_colors
-from .node_networks.compat import get_mod_input, mod_input_keys, mod_input_ui
+from .node_networks.compat import (get_mod_input, mod_input_keys, mod_input_ui,
+                                   set_mod_input)
 
 PAIR_STRIDE = 119  # > max atomic number, so pair ids are unique
 
@@ -194,6 +195,136 @@ def _find_density_modifiers(obj):
                     found.append((ob, mod))
                     seen.add(ob.name)
     return found
+
+
+def _density_objects(obj):
+    """Every ASE density volume of this structure's collection, including
+    the active object when that is one itself."""
+    found = [ob for ob, _ in _find_density_modifiers(obj)]
+    if any(m.type == 'NODES' and m.node_group is not None
+           and m.node_group.name.startswith('visualize_edensity')
+           for m in obj.modifiers):
+        found.insert(0, obj)
+    return found
+
+
+def _socket_identifiers(mod):
+    return {item.name: item.identifier
+            for item in mod.node_group.interface.items_tree
+            if getattr(item, 'in_out', None) == 'INPUT'}
+
+
+def _supercell_settings(obj):
+    """The structure's supercell repeats and offsets, so the density can be
+    made to match it in one click."""
+    for ob in list(obj.users_collection[0].all_objects if obj.users_collection else []) + [obj]:
+        for mod in ob.modifiers:
+            if (mod.type != 'NODES' or mod.node_group is None
+                    or not mod.node_group.name.startswith('supercell')):
+                continue
+            names = _socket_identifiers(mod)
+            repeats = [get_mod_input(mod, names[axis], 1)
+                       for axis in ('repeat_x', 'repeat_y', 'repeat_z') if axis in names]
+            offsets = [get_mod_input(mod, names[axis], 0)
+                       for axis in ('Offset_x', 'Offset_y', 'Offset_z') if axis in names]
+            if len(repeats) == 3:
+                return ([max(1, int(n)) for n in repeats],
+                        [int(n) for n in offsets] if len(offsets) == 3 else [0, 0, 0])
+    return [1, 1, 1], [0, 0, 0]
+
+
+def _density_nodes_outdated(density_obj):
+    """True when this density still uses a node group from an older add-on
+    version - a modifier keeps the group it was built with, so the offsets
+    (and the material indices) are simply absent until it is upgraded."""
+    for mod in density_obj.modifiers:
+        if (mod.type == 'NODES' and mod.node_group is not None
+                and mod.node_group.name.startswith('visualize_edensity')):
+            names = {item.name for item in mod.node_group.interface.items_tree
+                     if getattr(item, 'in_out', None) == 'INPUT'}
+            if not {'offset a', 'offset b', 'offset c'} <= names:
+                return True
+    return False
+
+
+class ASE_OT_upgrade_density_nodes(bpy.types.Operator):
+    """Rebuild this structure's density modifiers with the current node
+    group, keeping their settings - gives densities imported by an older
+    version the offset inputs and the material slots"""
+    bl_idname = 'ase.upgrade_density_nodes'
+    bl_label = 'Update density nodes'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and any(_density_nodes_outdated(ob)
+                                       for ob in _density_objects(obj))
+
+    def execute(self, context):
+        from .import_cubefiles import upgrade_density_nodes
+        upgraded = [ob.name for ob in _density_objects(context.active_object)
+                    if upgrade_density_nodes(ob)]
+        if not upgraded:
+            self.report({'INFO'}, 'density nodes are already up to date')
+            return {'CANCELLED'}
+        self.report({'INFO'}, f'updated {", ".join(upgraded)}')
+        return {'FINISHED'}
+
+
+class ASE_OT_density_supercell(bpy.types.Operator):
+    """Rebuild the electron density as a supercell, so it tiles with the
+    structure instead of stopping at the cell boundary"""
+    bl_idname = 'ase.density_supercell'
+    bl_label = 'Density supercell'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    repeat_x: bpy.props.IntProperty(name='repeat x', default=1, min=1, soft_max=6)
+    repeat_y: bpy.props.IntProperty(name='repeat y', default=1, min=1, soft_max=6)
+    repeat_z: bpy.props.IntProperty(name='repeat z', default=1, min=1, soft_max=6)
+    offset_x: bpy.props.IntProperty(name='offset a', default=0)
+    offset_y: bpy.props.IntProperty(name='offset b', default=0)
+    offset_z: bpy.props.IntProperty(name='offset c', default=0)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and bool(_density_objects(obj))
+
+    def invoke(self, context, event):
+        # start from what the structure's own supercell modifier is set to
+        repeats, offsets = _supercell_settings(context.active_object)
+        self.repeat_x, self.repeat_y, self.repeat_z = repeats
+        self.offset_x, self.offset_y, self.offset_z = offsets
+        return self.execute(context)
+
+    def execute(self, context):
+        from .import_cubefiles import density_supercell
+        repeat = (self.repeat_x, self.repeat_y, self.repeat_z)
+        offset = (self.offset_x, self.offset_y, self.offset_z)
+        rebuilt = []
+        for density_obj in _density_objects(context.active_object):
+            try:
+                density_supercell(density_obj, repeat)
+            except Exception as exc:
+                self.report({'ERROR'}, f'{density_obj.name}: {exc}')
+                return {'CANCELLED'}
+            # the offset stays a live modifier input - only the repeat has
+            # to touch the grid - so it is set rather than baked
+            for mod in density_obj.modifiers:
+                if (mod.type == 'NODES' and mod.node_group is not None
+                        and mod.node_group.name.startswith('visualize_edensity')):
+                    names = _socket_identifiers(mod)
+                    for axis, value in zip('abc', offset):
+                        if f'offset {axis}' in names:
+                            set_mod_input(mod, names[f'offset {axis}'], value)
+            rebuilt.append(density_obj.name)
+        if not rebuilt:
+            self.report({'WARNING'}, 'no ASE density volume on this structure')
+            return {'CANCELLED'}
+        self.report({'INFO'}, f'{"x".join(str(n) for n in repeat)} density: '
+                              f'{", ".join(rebuilt)}')
+        return {'FINISHED'}
 
 
 class ASE_OT_rebuild_supports(bpy.types.Operator):
@@ -399,6 +530,8 @@ class ASE_PT_controls(bpy.types.Panel):
                     box.label(text=f'select 2 atoms ({selected} selected)',
                               icon='INFO')
                 self.draw_custom_bonds(obj, box)
+            if mod.node_group.name.startswith('visualize_edensity'):
+                self.draw_density_supercell(obj, box)
 
         # per-element colors: the atom materials plus the 'atom_color'
         # attribute the colored bonds read (see element_colors.py)
@@ -421,6 +554,24 @@ class ASE_PT_controls(bpy.types.Panel):
                 title = 'Spin difference' if '_spin' in density_obj.name else 'Electron density'
                 box.label(text=f'{title} ({density_obj.name})')
                 _draw_modifier_inputs(box, density_mod)
+                self.draw_density_supercell(density_obj, box)
+
+    def draw_density_supercell(self, density_obj, layout):
+        """Tiling the volume itself is the only way to make a density span a
+        supercell - repeating its isosurface would keep the cut at every cell
+        face - so it is a rebuild button rather than a live socket."""
+        repeat = density_obj.get('ase_density_repeat')
+        row = layout.row(align=True)
+        row.operator('ase.density_supercell', icon='MOD_ARRAY',
+                     text='Density supercell')
+        if repeat:
+            row.label(text='x'.join(str(int(n)) for n in repeat))
+        if _density_nodes_outdated(density_obj):
+            # imported by an older add-on: its modifier still holds that
+            # version's node group, so the offsets are not there yet
+            column = layout.column(align=True)
+            column.operator('ase.upgrade_density_nodes', icon='FILE_REFRESH')
+            column.label(text='older density nodes - no offset yet', icon='INFO')
 
     def draw_custom_bonds(self, obj, layout):
         """List this structure's custom bonds so the two atoms (and the
@@ -488,8 +639,9 @@ class ASE_PT_controls(bpy.types.Panel):
 
 
 classes = (ASE_OT_toggle_pair_cut, ASE_OT_set_radius_mode,
-           ASE_OT_rebuild_supports, ASE_OT_add_custom_bond,
-           ASE_OT_reset_custom_bonds, ASE_PT_controls)
+           ASE_OT_upgrade_density_nodes, ASE_OT_density_supercell,
+           ASE_OT_rebuild_supports,
+           ASE_OT_add_custom_bond, ASE_OT_reset_custom_bonds, ASE_PT_controls)
 
 
 def register():
