@@ -155,11 +155,23 @@ colored by its own value. `shell_levels()` spreads the levels from `iso_value` i
 density falls off exponentially and linear steps bunch every shell against the outer surface;
 `shell_spacing='LINEAR'` gives equal steps.
 
+**Order.** The bands read by value — the highest-valued shell on top, the weakest outermost —
+because the shells nest and the camera sees the far wall of each. Two *separate* lobes can still
+overlap in depth (a strong band of one behind a weak band of another); ordering those by value
+rather than by depth is a compositing job, one view layer per shell, not something a single Cycles
+pass can express.
+
 **Seeing the inside** is the shells material's job, with the same trick the outline material uses:
 `Backfacing × Is Camera Ray` picks between a Transparent BSDF and the shaded one, so the **near wall
 of every shell is invisible to the camera** and you look straight through it at the far wall and
 everything nested inside. The shells also stop shadowing each other and stop appearing in
 reflections, which is what turns a nest of closed surfaces from mud into readable contour bands.
+
+**Cycles needs headroom for that.** Every shell the camera looks through costs one transparent
+bounce, and a ray that runs out of them is killed and returns **black** — past the default of 8 the
+innermost shells, the ones with the highest values that should be on top, come out as a black hole
+in the middle of the nest. `ensure_transparent_bounces()` raises `transparent_max_bounces` to
+`4·shells + 8` on import (never lowering a scene that already allows more).
 
 That only works if every shell winds outwards, and marching cubes winds its triangles by the
 gradient — which points the other way for the negative lobe. `density_to_mesh_data` measures the

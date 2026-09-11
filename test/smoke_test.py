@@ -346,6 +346,20 @@ def run_density_mesh_shells():
                            for p in group])
         assert outward > 0, f'shell {value} winds inwards ({outward:.3f})'
 
+    # Cycles kills a ray that runs out of transparent bounces and returns
+    # black, and every shell the camera looks through costs one: without
+    # this the innermost shells - the highest values - come out as a black
+    # hole in the middle of the nest
+    cycles = bpy.context.scene.cycles
+    assert cycles.transparent_max_bounces >= 4 * 3 + 8, cycles.transparent_max_bounces
+    # ... and a scene that already allows more keeps its own setting
+    cycles.transparent_max_bounces = 128
+    fresh_import = import_density_mesh(f'{SCRATCH}/mo.cube', 'mo.cube',
+                                       iso_value=0.02, shells=2, import_atoms=False)
+    assert bpy.context.scene.cycles.transparent_max_bounces == 128, \
+        bpy.context.scene.cycles.transparent_max_bounces
+    bpy.data.objects.remove(fresh_import, do_unlink=True)
+
     # a density with only one sign uses the whole ramp for its levels
     fresh_scene()
     positive = import_density_mesh(f'{SCRATCH}/water.cube', 'water.cube',

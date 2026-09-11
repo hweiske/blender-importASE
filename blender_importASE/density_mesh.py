@@ -289,6 +289,28 @@ def _density_mesh_material(preset='DEFAULT'):
     return mat
 
 
+def ensure_transparent_bounces(shells, scene=None):
+    """Give Cycles enough transparent bounces for a nest of shells.
+
+    Every shell the camera looks through costs one transparent bounce (the
+    near wall _see_inside culls, and the far wall too while its alpha is
+    below 1). Cycles kills a ray that runs out of them and returns
+    **black**, so past the default of 8 the innermost shells - the ones
+    with the highest values, the ones you actually want on top - come out
+    as a black hole in the middle of the nest.
+
+    Only ever raises the limit, never lowers it.
+    """
+    scene = scene or bpy.context.scene
+    cycles = getattr(scene, 'cycles', None)      # absent if the addon is off
+    if cycles is None:
+        return None
+    needed = 4 * shells + 8
+    if cycles.transparent_max_bounces < needed:
+        cycles.transparent_max_bounces = needed
+    return cycles.transparent_max_bounces
+
+
 def _see_inside(mat, shaded):
     """Make the near side of every shell invisible, so the inside shows.
 
@@ -339,13 +361,18 @@ def import_density_mesh(filepath, filename, color_filepath=None,
     shells > 1 imports a nest of isosurfaces instead of one, each colored
     by the isovalue it stands for - a density colored by its own value.
     The near wall of every shell is invisible to the camera (see
-    _see_inside), so the nest reads as contour bands with the innermost
-    shell, and whatever sits inside it, always in view. The levels run from
+    _see_inside), so the nest reads as contour bands, ordered by value:
+    the shell with the highest value sits on top, the weakest outermost.
+    Cycles needs enough transparent bounces for that - see
+    ensure_transparent_bounces, which this raises for you. The levels run from
     iso_value inwards to shell_max (see shell_levels), and a nest defaults
     to the 'SHELLS' preset since the other ramps are opaque.
     """
     if shells > 1 and preset == 'DEFAULT':
         preset = 'SHELLS'
+    if shells > 1:
+        # or the innermost shells render as a black hole, see the docstring
+        ensure_transparent_bounces(shells)
     if import_atoms:
         # the structure from the same file, as the nodes representation;
         # this also creates the collection the isomesh is linked into
