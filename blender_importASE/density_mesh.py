@@ -15,6 +15,8 @@ from ase.io.cube import read_cube
 from ase.calculators.vasp import VaspChargeDensity
 
 from .import_cubefiles import is_vasp_density
+from .node_networks.compat import (compositor_tree, compositor_output,
+                                   alpha_over_sockets)
 from .node_networks.electron_density_nodes import newMaterial
 
 DENSITY_MESH_MATERIAL = 'density_mesh material'
@@ -117,13 +119,19 @@ def shell_levels(iso_value, shells, shell_max=None, spacing='LOG', limit=None):
 
 def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
                          color_min=None, color_max=None, sample_interior=False,
-                         shells=1, shell_max=None, shell_spacing='LOG'):
+                         shells=1, shell_max=None, shell_spacing='LOG',
+                         per_shell=False):
     """Run marching cubes on the +/- isosurfaces of a density file.
 
     Returns (vertices, faces, colors): cartesian vertex positions, face
     index triples, and one RGBA color per vertex - the alpha channel
     carries how strong that vertex's shell is (0 outermost, 1 innermost),
-    which the 'SHELLS' material turns into transparency. Without a color file the
+    which the 'SHELLS' material turns into transparency.
+
+    per_shell returns a list of those triples instead, one per level
+    (both signs of a level together, since they are equally strong),
+    weakest first - what the compositor router needs to put each shell on
+    its own layer. Without a color file the
     positive surface is white and the negative one black; with a color
     file its values are sampled at each vertex (nearest voxel) and
     normalized to a black-to-white gradient.
@@ -150,7 +158,7 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
              if volume.min() < sign * abs(iso_value) < volume.max()]
     both_signs = len(signs) == 2
 
-    surfaces = []  # (index-space verts, faces, normals, color, strength)
+    surfaces = []  # (index-space verts, faces, normals, color, strength, level)
     for index, level in enumerate(levels):
         strength = index / (len(levels) - 1) if len(levels) > 1 else 1.0
         for sign in signs:
@@ -178,15 +186,36 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
                 color = 0.5 + sign * 0.5 * strength
             else:
                 color = strength if shells > 1 else (1.0 if sign > 0 else 0.0)
-            surfaces.append((verts, faces, normals, color, strength))
+            surfaces.append((verts, faces, normals, color, strength, index))
     if not surfaces:
         raise ValueError(
             f'isovalue {iso_value} is outside the data range '
             f'[{volume.min():.3g}, {volume.max():.3g}] of {filepath}')
 
+    if per_shell:
+        # one triple per level, so each can become its own object and its
+        # own render layer; the colors are constant within a shell, which
+        # is why they can skip the color-file path below
+        grouped = []
+        for index in range(len(levels)):
+            same = [entry for entry in surfaces if entry[5] == index]
+            if not same:
+                continue
+            shell_offset = 0
+            verts_list, faces_list, colors_list = [], [], []
+            for verts, faces, _normals, const_color, strength, _ in same:
+                verts_list.append(origin + verts @ spacing)
+                faces_list.append(faces + shell_offset)
+                colors_list.append(np.tile([const_color] * 3 + [strength],
+                                           (len(verts), 1)))
+                shell_offset += len(verts)
+            grouped.append((np.vstack(verts_list), np.vstack(faces_list),
+                            np.vstack(colors_list)))
+        return grouped
+
     offset = 0
     all_verts, all_faces, all_normals, const_colors, strengths = [], [], [], [], []
-    for verts, faces, normals, const_color, strength in surfaces:
+    for verts, faces, normals, const_color, strength, _level_index in surfaces:
         all_verts.append(verts)
         all_faces.append(faces + offset)
         all_normals.append(normals)
@@ -351,11 +380,111 @@ def _see_inside(mat, shaded):
     return mix
 
 
+def _isomesh_object(name, verts, faces, colors, shade_smooth, preset):
+    """One isosurface mesh object, colored by the density_color attribute."""
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts.tolist(), [], faces.tolist())
+    attr = mesh.color_attributes.new(name=COLOR_ATTRIBUTE,
+                                     type='FLOAT_COLOR', domain='POINT')
+    attr.data.foreach_set('color', np.ascontiguousarray(colors).ravel())
+    if shade_smooth:
+        mesh.polygons.foreach_set('use_smooth', [True] * len(mesh.polygons))
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collection = bpy.context.collection or bpy.context.scene.collection
+    collection.objects.link(obj)
+    obj.data.materials.append(_density_mesh_material(preset))
+    return obj
+
+
+def shell_compositor(shell_objects, scene=None, structure_on_top=True):
+    """Put every shell on its own view layer and composite them by value.
+
+    Within one render pass two surfaces are ordered by where they are in
+    space. For a nest that *is* the value order, but two separate lobes
+    can overlap the other way round - a weak band of one in front of a
+    strong band of another - and no shader can fix that, because the
+    ordering happens per ray. Compositing can: each shell renders on its
+    own view layer and they are alpha-overed weakest first, so a stronger
+    value always lands on top of a weaker one no matter where either sits
+    in space.
+
+    Everything else in the scene (the structure) keeps the original view
+    layer, composited last by default - atoms and bonds over the contour
+    bands, the way such a map is normally drawn.
+
+    `shell_objects` must be ordered weakest first. Returns the view layer
+    names, bottom to top.
+    """
+    scene = scene or bpy.context.scene
+    # the shells have to be alone in their collections to be separable
+    origins = []
+    shell_collections = []
+    for index, obj in enumerate(shell_objects, start=1):
+        origins.extend(obj.users_collection)
+        collection = bpy.data.collections.new(f'{obj.name}_layer')
+        scene.collection.children.link(collection)
+        for previous in list(obj.users_collection):
+            previous.objects.unlink(obj)
+        collection.objects.link(obj)
+        shell_collections.append(collection)
+    structure_collections = {c for c in origins if c not in shell_collections}
+
+    def isolate(view_layer, shell):
+        """Leave only this layer's shell in it - and the structure only in
+        the base layer (shell=None), or it would occlude the shells it is
+        being composited over."""
+        for child in view_layer.layer_collection.children:
+            if child.collection in shell_collections:
+                child.exclude = child.collection is not shell
+            elif child.collection in structure_collections:
+                child.exclude = shell is not None
+
+    base = scene.view_layers[0]
+    isolate(base, None)
+
+    layers = []
+    for collection in shell_collections:
+        view_layer = (scene.view_layers.get(collection.name)
+                      or scene.view_layers.new(collection.name))
+        isolate(view_layer, collection)
+        layers.append(view_layer.name)
+
+    # alpha over needs something to composite onto
+    scene.render.film_transparent = True
+    tree = compositor_tree(scene)
+    for node in list(tree.nodes):
+        tree.nodes.remove(node)
+
+    order = layers + [base.name] if structure_on_top else [base.name] + layers
+    stack = None
+    for height, layer_name in enumerate(order):
+        render_layer = tree.nodes.new('CompositorNodeRLayers')
+        render_layer.scene = scene
+        render_layer.layer = layer_name
+        render_layer.location = (-400, -220 * height)
+        if stack is None:
+            stack = render_layer.outputs['Image']
+            continue
+        over = tree.nodes.new('CompositorNodeAlphaOver')
+        over.location = (-100, -220 * height + 100)
+        background, foreground, factor = alpha_over_sockets(over)
+        factor.default_value = 1.0
+        tree.links.new(stack, background)
+        tree.links.new(render_layer.outputs['Image'], foreground)
+        stack = over.outputs['Image']
+    output, image_socket = compositor_output(tree)
+    output.location = (200, 0)
+    tree.links.new(stack, image_socket)
+    return order
+
+
 def import_density_mesh(filepath, filename, color_filepath=None,
                         iso_value=0.03, shade_smooth=True, preset='DEFAULT',
                         import_atoms=True, color_min=None, color_max=None,
                         sample_interior=False, outline=True, shells=1,
-                        shell_max=None, shell_spacing='LOG', **kwargs):
+                        shell_max=None, shell_spacing='LOG', layered=False,
+                        **kwargs):
     """Import a density isosurface as a mesh.
 
     shells > 1 imports a nest of isosurfaces instead of one, each colored
@@ -367,6 +496,12 @@ def import_density_mesh(filepath, filename, color_filepath=None,
     ensure_transparent_bounces, which this raises for you. The levels run from
     iso_value inwards to shell_max (see shell_levels), and a nest defaults
     to the 'SHELLS' preset since the other ramps are opaque.
+
+    layered=True puts every shell on its own view layer and composites
+    them by value (shell_compositor), so a stronger value lands on top of
+    a weaker one even when the two sit in lobes that overlap in depth. It
+    returns the list of shell objects, weakest first, instead of a single
+    object - and costs one render pass per shell.
     """
     if shells > 1 and preset == 'DEFAULT':
         preset = 'SHELLS'
@@ -381,6 +516,19 @@ def import_density_mesh(filepath, filename, color_filepath=None,
                             read_density=False, animate=False, outline=outline,
                             add_supercell=False)
 
+    name = filename.split('.')[0] + '_isomesh'
+    if layered and shells > 1:
+        groups = density_to_mesh_data(
+            filepath, iso_value=iso_value, shells=shells, shell_max=shell_max,
+            shell_spacing=shell_spacing, per_shell=True)
+        objects = [_isomesh_object(f'{name}_shell_{index}', verts, faces, colors,
+                                   shade_smooth, preset)
+                   for index, (verts, faces, colors) in enumerate(groups, start=1)]
+        print(f'density mesh: {shells} shells on their own render layers, '
+              f'{sum(len(o.data.vertices) for o in objects)} verts')
+        shell_compositor(objects)
+        return objects
+
     verts, faces, colors = density_to_mesh_data(
         filepath, color_filepath=color_filepath, iso_value=iso_value,
         color_min=color_min, color_max=color_max,
@@ -388,22 +536,4 @@ def import_density_mesh(filepath, filename, color_filepath=None,
         shell_spacing=shell_spacing)
     print(f'density mesh: {len(verts)} verts, {len(faces)} faces'
           + (f', {shells} shells' if shells > 1 else ''))
-
-    name = filename.split('.')[0] + '_isomesh'
-    mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(verts.tolist(), [], faces.tolist())
-
-    attr = mesh.color_attributes.new(name=COLOR_ATTRIBUTE,
-                                     type='FLOAT_COLOR', domain='POINT')
-    attr.data.foreach_set('color', np.ascontiguousarray(colors).ravel())
-
-    if shade_smooth:
-        mesh.polygons.foreach_set('use_smooth', [True] * len(mesh.polygons))
-    mesh.update()
-
-    obj = bpy.data.objects.new(name, mesh)
-    # context.collection can be None (e.g. headless after scene cleanup)
-    collection = bpy.context.collection or bpy.context.scene.collection
-    collection.objects.link(obj)
-    obj.data.materials.append(_density_mesh_material(preset))
-    return obj
+    return _isomesh_object(name, verts, faces, colors, shade_smooth, preset)

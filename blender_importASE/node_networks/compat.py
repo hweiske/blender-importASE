@@ -131,3 +131,49 @@ def setup_volume_to_mesh(node, resolution_mode='GRID', voxel_size=0.3,
     _input(node, 'Voxel Size').default_value = voxel_size
     _input(node, 'Voxel Amount').default_value = voxel_amount
     _input(node, 'Adaptivity').default_value = adaptivity
+
+
+# Blender 5.0 moved scene compositing into a node *group*: Scene.node_tree
+# and the Composite output node are gone, replaced by
+# Scene.compositing_node_group and an ordinary group output, and Alpha
+# Over's sockets were renamed (4.x: Fac / Image / Image, which cannot be
+# addressed by name at all since two of them share one).
+
+def compositor_tree(scene=None):
+    """The scene's compositing node tree, created if it has none yet."""
+    scene = scene or bpy.context.scene
+    if hasattr(scene, 'node_tree'):
+        scene.use_nodes = True
+        return scene.node_tree
+    group = scene.compositing_node_group
+    if group is None:
+        group = bpy.data.node_groups.new('Compositing', 'CompositorNodeTree')
+        scene.compositing_node_group = group
+    return group
+
+
+def compositor_output(tree):
+    """An output node for a compositing tree, of whichever kind it takes.
+
+    Returns (node, input socket to link the final image into).
+    """
+    try:
+        node = tree.nodes.new('CompositorNodeComposite')
+        return node, node.inputs['Image']
+    except RuntimeError:
+        # 5.x: the tree is a group, so its output is a group output - and
+        # it needs an interface socket before it has anything to link to
+        if not any(getattr(item, 'in_out', None) == 'OUTPUT'
+                   for item in tree.interface.items_tree):
+            tree.interface.new_socket('Image', in_out='OUTPUT',
+                                      socket_type='NodeSocketColor')
+        node = tree.nodes.new('NodeGroupOutput')
+        return node, node.inputs[0]
+
+
+def alpha_over_sockets(node):
+    """(background, foreground, factor) of a compositor Alpha Over node."""
+    if 'Background' in node.inputs:
+        return (node.inputs['Background'], node.inputs['Foreground'],
+                node.inputs['Factor'])
+    return node.inputs[1], node.inputs[2], node.inputs[0]

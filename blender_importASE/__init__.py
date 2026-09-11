@@ -486,6 +486,14 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         default=0.0,
         min=0.0,
     )
+    layered: bpy.props.BoolProperty(
+        name="layer shells by value",
+        description="give every shell its own view layer and composite them by "
+                    "value, so a stronger value always lands on top of a weaker "
+                    "one even where two lobes overlap in depth. Costs one render "
+                    "pass per shell",
+        default=False,
+    )
     shell_spacing: bpy.props.EnumProperty(
         name="shell spacing",
         description="how the shell isovalues are spread between the isovalue and "
@@ -543,6 +551,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         if self.shells > 1:
             layout.prop(self, 'shell_max')
             layout.prop(self, 'shell_spacing')
+            layout.prop(self, 'layered')
         layout.prop(self, 'color_choice')
         row = layout.row(align=True)
         row.prop(self, 'color_min')
@@ -585,6 +594,7 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
                     shells=self.shells,
                     shell_max=self.shell_max or None,
                     shell_spacing=self.shell_spacing,
+                    layered=self.layered,
                 )
             except ValueError as exc:
                 self.report({'ERROR'}, str(exc))

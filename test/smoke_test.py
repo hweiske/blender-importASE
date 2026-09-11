@@ -370,6 +370,57 @@ def run_density_mesh_shells():
 
 step('density_mesh_shells', run_density_mesh_shells)
 
+def run_density_shell_layers():
+    """layered=True routes every shell through its own view layer and
+    composites them by value, so a stronger value lands on top of a weaker
+    one however the two sit in space."""
+    from importlib import util
+    if util.find_spec('skimage') is None:
+        print('scikit-image not installed - skipping the actual import')
+        return
+    from blender_importASE.density_mesh import import_density_mesh
+
+    fresh_scene()
+    shells = import_density_mesh(f'{SCRATCH}/water.cube', 'water.cube',
+                                 iso_value=0.03, shells=4, layered=True,
+                                 import_atoms=True, outline=False)
+    assert isinstance(shells, list) and len(shells) == 4, shells
+    scene = bpy.context.scene
+    base = scene.view_layers[0]
+
+    # one view layer per shell, each holding only its own shell: the
+    # structure stays on the base layer or it would occlude the shells it
+    # is composited over
+    layer_names = [vl.name for vl in scene.view_layers]
+    assert len(layer_names) == 5, layer_names
+    for obj in shells:
+        layer = scene.view_layers[f'{obj.name}_layer']
+        visible = {c.collection.name for c in layer.layer_collection.children
+                   if not c.exclude}
+        assert f'{obj.name}_layer' in visible, (layer.name, visible)
+        others = {f'{other.name}_layer' for other in shells if other is not obj}
+        assert not (others & visible), (layer.name, visible)
+
+    # composited weakest first, structure last - so highest value on top
+    from blender_importASE.node_networks.compat import (compositor_tree,
+                                                        alpha_over_sockets)
+    tree = compositor_tree(scene)
+    assert tree is not None, 'no compositor'
+    assert scene.render.film_transparent, 'the layers cannot be alpha-overed'
+    # 5.x composites through a group output, 4.x through a Composite node
+    composite = next(n for n in tree.nodes
+                     if n.bl_idname in ('CompositorNodeComposite', 'NodeGroupOutput'))
+    order, node = [], composite.inputs[0].links[0].from_node
+    while node.bl_idname == 'CompositorNodeAlphaOver':
+        background, foreground, _factor = alpha_over_sockets(node)
+        order.append(foreground.links[0].from_node.layer)
+        node = background.links[0].from_node
+    order.append(node.layer)
+    expected = [base.name] + [f'{obj.name}_layer' for obj in reversed(shells)]
+    assert order == expected, (order, expected)
+
+step('density_shell_layers', run_density_shell_layers)
+
 def run_charges():
     fresh_scene()
     from blender_importASE.charges import import_charges
