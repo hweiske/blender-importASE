@@ -37,7 +37,20 @@ SHADER_PRESETS = {
             [(0.8, (1.0, 0.0, 0.0, 1)),
              (0.9, (0.0, 1.0, 0.0, 1)),
              (1.0, (0.0, 0.0, 1.0, 1))]),
+    # isovalue shells: cold outside (weak) to hot inside (strong), and for a
+    # signed density the negative side mirrored through the middle
+    'SHELLS': ('density_shells material',
+               [(0.0, (0.10, 0.20, 0.90, 1)),
+                (0.25, (0.10, 0.75, 0.90, 1)),
+                (0.5, (0.95, 0.95, 0.95, 1)),
+                (0.75, (0.98, 0.70, 0.10, 1)),
+                (1.0, (0.90, 0.10, 0.05, 1))]),
 }
+
+# how transparent the shells get: the outermost (weakest) shell at the low
+# end, the innermost at the high end. Without this a nest of closed
+# surfaces would show nothing but its outside.
+SHELL_ALPHA = (0.10, 0.75)
 
 
 def _ensure_skimage():
@@ -81,12 +94,35 @@ def read_density_grid(filepath):
     return volume, spacing, origin
 
 
+def shell_levels(iso_value, shells, shell_max=None, spacing='LOG', limit=None):
+    """The isovalues of a nest of shells, outermost (weakest) first.
+
+    Densities fall off exponentially, so the levels are spaced
+    geometrically by default: linear spacing bunches every shell against
+    the outer surface. `shell_max` is the innermost level; left out, it is
+    half the largest value in the data (`limit`), which is deep enough to
+    sit inside the outer surface without collapsing to a point.
+    """
+    if shells <= 1:
+        return [abs(iso_value)]
+    low = abs(iso_value)
+    high = abs(shell_max) if shell_max else (abs(limit) * 0.5 if limit else low * 10)
+    if high <= low:
+        high = low * 10
+    if spacing == 'LINEAR':
+        return list(np.linspace(low, high, shells))
+    return list(np.geomspace(low, high, shells))
+
+
 def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
-                         color_min=None, color_max=None, sample_interior=False):
+                         color_min=None, color_max=None, sample_interior=False,
+                         shells=1, shell_max=None, shell_spacing='LOG'):
     """Run marching cubes on the +/- isosurfaces of a density file.
 
     Returns (vertices, faces, colors): cartesian vertex positions, face
-    index triples, and one RGB color per vertex. Without a color file the
+    index triples, and one RGBA color per vertex - the alpha channel
+    carries how strong that vertex's shell is (0 outermost, 1 innermost),
+    which the 'SHELLS' material turns into transparency. Without a color file the
     positive surface is white and the negative one black; with a color
     file its values are sampled at each vertex (nearest voxel) and
     normalized to a black-to-white gradient.
@@ -104,24 +140,42 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
     marching_cubes = _ensure_skimage()
     volume, spacing, origin = read_density_grid(filepath)
 
-    surfaces = []  # (index-space verts, faces, normals, constant color)
-    for level, const_color in ((abs(iso_value), 1.0), (-abs(iso_value), 0.0)):
-        if not (volume.min() < level < volume.max()):
-            continue  # e.g. total densities have no negative lobe
-        verts, faces, normals, _ = marching_cubes(volume, level=level)
-        surfaces.append((verts, faces, normals, const_color))
+    # one surface per level per sign. With shells=1 this is the familiar
+    # pair at +/- iso_value; beyond that the levels nest inwards, and each
+    # shell is colored by the level it stands for (see shell_levels).
+    levels = shell_levels(iso_value, shells, shell_max, shell_spacing,
+                          limit=np.abs(volume).max())
+    signs = [sign for sign in (1.0, -1.0)
+             if volume.min() < sign * abs(iso_value) < volume.max()]
+    both_signs = len(signs) == 2
+
+    surfaces = []  # (index-space verts, faces, normals, color, strength)
+    for index, level in enumerate(levels):
+        strength = index / (len(levels) - 1) if len(levels) > 1 else 1.0
+        for sign in signs:
+            if not (volume.min() < sign * level < volume.max()):
+                continue  # this shell is deeper than the data goes
+            verts, faces, normals, _ = marching_cubes(volume, level=sign * level)
+            if both_signs:
+                # 0.5 is the weakest level, the two signs run out to the
+                # ends of the ramp from there
+                color = 0.5 + sign * 0.5 * strength
+            else:
+                color = strength if shells > 1 else (1.0 if sign > 0 else 0.0)
+            surfaces.append((verts, faces, normals, color, strength))
     if not surfaces:
         raise ValueError(
             f'isovalue {iso_value} is outside the data range '
             f'[{volume.min():.3g}, {volume.max():.3g}] of {filepath}')
 
     offset = 0
-    all_verts, all_faces, all_normals, const_colors = [], [], [], []
-    for verts, faces, normals, const_color in surfaces:
+    all_verts, all_faces, all_normals, const_colors, strengths = [], [], [], [], []
+    for verts, faces, normals, const_color, strength in surfaces:
         all_verts.append(verts)
         all_faces.append(faces + offset)
         all_normals.append(normals)
         const_colors.append(np.full(len(verts), const_color))
+        strengths.append(np.full(len(verts), strength))
         offset += len(verts)
     verts_index = np.vstack(all_verts)
     faces = np.vstack(all_faces)
@@ -164,7 +218,10 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
     else:
         vals = np.concatenate(const_colors)
     colors = np.repeat(vals[:, None], 3, axis=1)
-    return verts_cart, faces, colors
+    # alpha carries the shell strength; a single surface stays opaque, so
+    # every path that is not a shell nest renders exactly as before
+    alpha = np.concatenate(strengths)[:, None] if shells > 1 else np.ones((len(colors), 1))
+    return verts_cart, faces, np.concatenate([colors, alpha], axis=1)
 
 
 def _density_mesh_material(preset='DEFAULT'):
@@ -195,13 +252,39 @@ def _density_mesh_material(preset='DEFAULT'):
             el.color = color
     links.new(color_attr.outputs['Color'], ramp.inputs['Fac'])
     links.new(ramp.outputs['Color'], principled.inputs['Base Color'])
+    if preset == 'SHELLS' and not principled.inputs['Alpha'].is_linked:
+        # the attribute's alpha channel holds how strong each shell is;
+        # mapped to transparency so the outer ones let you see the inner
+        alpha_range = nodes.new('ShaderNodeMapRange')
+        alpha_range.name = 'Shell Alpha'
+        alpha_range.location = (-300, -100)
+        alpha_range.inputs['To Min'].default_value = SHELL_ALPHA[0]
+        alpha_range.inputs['To Max'].default_value = SHELL_ALPHA[1]
+        links.new(color_attr.outputs['Alpha'], alpha_range.inputs['Value'])
+        links.new(alpha_range.outputs['Result'], principled.inputs['Alpha'])
+        # EEVEE needs to be told to blend; the property moved in 4.2
+        if hasattr(mat, 'surface_render_method'):
+            mat.surface_render_method = 'BLENDED'
+        elif hasattr(mat, 'blend_method'):
+            mat.blend_method = 'BLEND'
     return mat
 
 
 def import_density_mesh(filepath, filename, color_filepath=None,
                         iso_value=0.03, shade_smooth=True, preset='DEFAULT',
                         import_atoms=True, color_min=None, color_max=None,
-                        sample_interior=False, outline=True, **kwargs):
+                        sample_interior=False, outline=True, shells=1,
+                        shell_max=None, shell_spacing='LOG', **kwargs):
+    """Import a density isosurface as a mesh.
+
+    shells > 1 imports a nest of isosurfaces instead of one, each colored
+    by the isovalue it stands for and made more transparent the further
+    out it is - a density colored by its own value. The levels run from
+    iso_value inwards to shell_max (see shell_levels), and a nest defaults
+    to the 'SHELLS' preset since the other ramps are opaque.
+    """
+    if shells > 1 and preset == 'DEFAULT':
+        preset = 'SHELLS'
     if import_atoms:
         # the structure from the same file, as the nodes representation;
         # this also creates the collection the isomesh is linked into
@@ -213,8 +296,10 @@ def import_density_mesh(filepath, filename, color_filepath=None,
     verts, faces, colors = density_to_mesh_data(
         filepath, color_filepath=color_filepath, iso_value=iso_value,
         color_min=color_min, color_max=color_max,
-        sample_interior=sample_interior)
-    print(f'density mesh: {len(verts)} verts, {len(faces)} faces')
+        sample_interior=sample_interior, shells=shells, shell_max=shell_max,
+        shell_spacing=shell_spacing)
+    print(f'density mesh: {len(verts)} verts, {len(faces)} faces'
+          + (f', {shells} shells' if shells > 1 else ''))
 
     name = filename.split('.')[0] + '_isomesh'
     mesh = bpy.data.meshes.new(name)
@@ -222,8 +307,7 @@ def import_density_mesh(filepath, filename, color_filepath=None,
 
     attr = mesh.color_attributes.new(name=COLOR_ATTRIBUTE,
                                      type='FLOAT_COLOR', domain='POINT')
-    rgba = np.concatenate([colors, np.ones((len(colors), 1))], axis=1)
-    attr.data.foreach_set('color', rgba.ravel())
+    attr.data.foreach_set('color', np.ascontiguousarray(colors).ravel())
 
     if shade_smooth:
         mesh.polygons.foreach_set('use_smooth', [True] * len(mesh.polygons))

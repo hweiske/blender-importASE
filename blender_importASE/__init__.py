@@ -469,6 +469,32 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         default=0.0,
         precision=4,
     )
+    shells: bpy.props.IntProperty(
+        name="isovalue shells",
+        description="import a nest of isosurfaces instead of one, each colored by "
+                    "the isovalue it stands for and more transparent the further "
+                    "out it is. 1 is a single surface as before",
+        default=1,
+        min=1,
+        soft_max=8,
+    )
+    shell_max: bpy.props.FloatProperty(
+        name="innermost shell",
+        description="isovalue of the innermost shell; the levels run from the "
+                    "isovalue inwards to this one. 0 uses half the largest value "
+                    "in the data",
+        default=0.0,
+        min=0.0,
+    )
+    shell_spacing: bpy.props.EnumProperty(
+        name="shell spacing",
+        description="how the shell isovalues are spread between the isovalue and "
+                    "the innermost shell",
+        items=[('LOG', 'geometric', 'equal ratios - suits a density that falls off '
+                'exponentially, and keeps the shells apart'),
+               ('LINEAR', 'linear', 'equal steps')],
+        default='LOG',
+    )
     sample_interior: bpy.props.BoolProperty(
         name="sample interior",
         description="color each surface point with the strongest (largest magnitude) color-density value found along the surface normal through the whole volume, instead of the value directly on the surface - projects buried features onto the isosurface",
@@ -513,6 +539,10 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'iso_value')
+        layout.prop(self, 'shells')
+        if self.shells > 1:
+            layout.prop(self, 'shell_max')
+            layout.prop(self, 'shell_spacing')
         layout.prop(self, 'color_choice')
         row = layout.row(align=True)
         row.prop(self, 'color_min')
@@ -552,6 +582,9 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
                     color_min=self.color_min,
                     color_max=self.color_max,
                     sample_interior=self.sample_interior,
+                    shells=self.shells,
+                    shell_max=self.shell_max or None,
+                    shell_spacing=self.shell_spacing,
                 )
             except ValueError as exc:
                 self.report({'ERROR'}, str(exc))

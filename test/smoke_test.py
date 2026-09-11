@@ -258,6 +258,71 @@ def run_density_mesh():
 
 step('density_mesh', run_density_mesh)
 
+def run_density_mesh_shells():
+    """A nest of isosurfaces, each colored by the isovalue it stands for
+    and more transparent the further out it sits."""
+    from importlib import util
+    if util.find_spec('skimage') is None:
+        print('scikit-image not installed - skipping the actual import')
+        return
+    import numpy as np
+    from blender_importASE.density_mesh import (import_density_mesh, shell_levels,
+                                                COLOR_ATTRIBUTE)
+
+    # geometric by default, so the levels stay apart on a density that
+    # falls off exponentially
+    levels = shell_levels(0.02, 4, limit=0.5)
+    assert len(levels) == 4 and abs(levels[0] - 0.02) < 1e-9, levels
+    assert abs(levels[-1] - 0.25) < 1e-9, levels          # half the data maximum
+    ratios = [levels[i + 1] / levels[i] for i in range(3)]
+    assert max(ratios) - min(ratios) < 1e-6, ratios
+    assert shell_levels(0.02, 1, limit=0.5) == [0.02], shell_levels(0.02, 1, limit=0.5)
+    linear = shell_levels(0.02, 4, spacing='LINEAR', limit=0.5)
+    steps = [linear[i + 1] - linear[i] for i in range(3)]
+    assert max(steps) - min(steps) < 1e-9, steps
+
+    def shades(obj):
+        attr = obj.data.color_attributes[COLOR_ATTRIBUTE]
+        rgba = np.empty(len(attr.data) * 4)
+        attr.data.foreach_get('color', rgba)
+        rgba = rgba.reshape(-1, 4)
+        return (sorted({round(float(v), 4) for v in rgba[:, 0]}),
+                sorted({round(float(v), 4) for v in rgba[:, 3]}))
+
+    fresh_scene()
+    single = import_density_mesh(f'{SCRATCH}/mo.cube', 'mo.cube', iso_value=0.02,
+                                 shells=1, import_atoms=False)
+    colors, alphas = shades(single)
+    assert (colors, alphas) == ([0.0, 1.0], [1.0]), (colors, alphas)
+    assert single.data.materials[0].name == 'density_mesh material', \
+        single.data.materials[0].name
+    single_verts = len(single.data.vertices)
+
+    fresh_scene()
+    nest = import_density_mesh(f'{SCRATCH}/mo.cube', 'mo.cube', iso_value=0.02,
+                               shells=3, import_atoms=False)
+    colors, alphas = shades(nest)
+    # signed density: 0.5 is the weakest level, the two signs run out to
+    # the ends of the ramp, and alpha is the shell strength
+    assert colors == [0.0, 0.25, 0.5, 0.75, 1.0], colors
+    assert alphas == [0.0, 0.5, 1.0], alphas
+    assert len(nest.data.vertices) > single_verts, (len(nest.data.vertices), single_verts)
+    material = nest.data.materials[0]
+    assert material.name == 'density_shells material', material.name
+    principled = next(n for n in material.node_tree.nodes
+                      if n.type == 'BSDF_PRINCIPLED')
+    assert principled.inputs['Alpha'].is_linked, 'the shells are opaque'
+
+    # a density with only one sign uses the whole ramp for its levels
+    fresh_scene()
+    positive = import_density_mesh(f'{SCRATCH}/water.cube', 'water.cube',
+                                   iso_value=0.05, shells=4, import_atoms=False)
+    colors, alphas = shades(positive)
+    assert len(colors) == 4 and colors[0] == 0.0 and colors[-1] == 1.0, colors
+    assert alphas == colors, (colors, alphas)
+
+step('density_mesh_shells', run_density_mesh_shells)
+
 def run_charges():
     fresh_scene()
     from blender_importASE.charges import import_charges

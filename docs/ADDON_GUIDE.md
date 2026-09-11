@@ -144,14 +144,32 @@ nothing to complete.
 ```python
 import_density_mesh(filepath, filename, color_filepath=None, iso_value=0.03,
     shade_smooth=True, preset='DEFAULT', import_atoms=True, color_min=None,
-    color_max=None, sample_interior=False, outline=True, **kwargs)
+    color_max=None, sample_interior=False, outline=True, shells=1,
+    shell_max=None, shell_spacing='LOG', **kwargs)
 ```
 Runs marching cubes on the ±`iso_value` levels (`ValueError` if the iso is outside the data range). If `color_filepath` is given, samples that second density onto the surface into a `density_color` vertex attribute; `sample_interior=True` takes the strongest value along the surface normal through the whole volume rather than at the surface point. `color_min==color_max` (default 0) auto-normalizes.
+
+**Isovalue shells** (`shells > 1`) import a *nest* of isosurfaces instead of one — a density
+colored by its own value. `shell_levels()` spreads the levels from `iso_value` inwards to
+`shell_max` (default: half the largest value in the data), **geometrically** by default, since a
+density falls off exponentially and linear steps bunch every shell against the outer surface;
+`shell_spacing='LINEAR'` gives equal steps.
+
+Each shell writes two things into its vertices' `density_color`: the **color channel** is the level
+it stands for, and the **alpha channel** is how deep it sits (0 outermost, 1 innermost), which the
+material turns into transparency (`SHELL_ALPHA`, 0.10 → 0.75) so the outer shells let you see the
+inner ones. For a signed density (an MO, a deformation density) 0.5 is the weakest level and the
+two signs run out to the ends of the ramp from there; for a one-sign density the levels use the
+whole ramp. A nest switches to the `'SHELLS'` preset automatically, because the other ramps are
+opaque — pass `preset` explicitly to override. `shells=1` is unchanged in every respect, alpha
+included.
 
 **`preset`** picks the color-ramp material:
 - `'DEFAULT'` → `'density_mesh material'`, red (0.0) → white (0.5) → blue (1.0)
 - `'ELSTAT'` → `'elstat_potential material'`, blue → white → red
 - `'LED'` → `'LED material'`, red (0.8) → green (0.9) → blue (1.0)
+- `'SHELLS'` → `'density_shells material'`, blue → cyan → white → orange → red, with `Alpha` driven
+  from the attribute's alpha channel (the only preset that is transparent by itself)
 
 To make the isosurface semi-transparent, set the material's Principled BSDF `Alpha` after import:
 ```python
