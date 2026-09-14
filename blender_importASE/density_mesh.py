@@ -39,14 +39,18 @@ SHADER_PRESETS = {
             [(0.8, (1.0, 0.0, 0.0, 1)),
              (0.9, (0.0, 1.0, 0.0, 1)),
              (1.0, (0.0, 0.0, 1.0, 1))]),
-    # isovalue shells: cold outside (weak) to hot inside (strong), and for a
-    # signed density the negative side mirrored through the middle
-    'SHELLS': ('density_shells material',
-               [(0.0, (0.10, 0.20, 0.90, 1)),
-                (0.25, (0.10, 0.75, 0.90, 1)),
-                (0.5, (0.95, 0.95, 0.95, 1)),
-                (0.75, (0.98, 0.70, 0.10, 1)),
-                (1.0, (0.90, 0.10, 0.05, 1))]),
+    # isovalue shells: matplotlib's jet, keyed to how strong the shell is,
+    # so the innermost (largest isovalue) is red and the outermost blue -
+    # red -> green -> blue from the inside out. The stops are jet's own
+    # sRGB values converted to linear, which is what Blender's ramp wants
+    # and what makes it look like the matplotlib map.
+    'SHELLS': ('density_jet material',
+               [(0.0, (0.0, 0.0, 0.2140, 1)),
+                (0.125, (0.0, 0.0, 1.0, 1)),
+                (0.375, (0.0, 1.0, 1.0, 1)),
+                (0.625, (1.0, 1.0, 0.0, 1)),
+                (0.875, (1.0, 0.0, 0.0, 1)),
+                (1.0, (0.2140, 0.0, 0.0, 1))]),
 }
 
 # how solid the shells get: the outermost (weakest) shell at the low end,
@@ -156,7 +160,6 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
                           limit=np.abs(volume).max())
     signs = [sign for sign in (1.0, -1.0)
              if volume.min() < sign * abs(iso_value) < volume.max()]
-    both_signs = len(signs) == 2
 
     surfaces = []  # (index-space verts, faces, normals, color, strength, level)
     for index, level in enumerate(levels):
@@ -180,12 +183,14 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
                                 triangles.mean(axis=1) - verts.mean(axis=0)).mean()
             if outward < 0:
                 faces = faces[:, ::-1]
-            if both_signs:
-                # 0.5 is the weakest level, the two signs run out to the
-                # ends of the ramp from there
-                color = 0.5 + sign * 0.5 * strength
+            if shells > 1:
+                # the shell's own strength, so the ramp is read as a color
+                # map: 0 the outermost (weakest) level, 1 the innermost.
+                # Both signs use the same scale - a lobe's sign is not in
+                # the color any more, it is in where the lobe is.
+                color = strength
             else:
-                color = strength if shells > 1 else (1.0 if sign > 0 else 0.0)
+                color = 1.0 if sign > 0 else 0.0
             surfaces.append((verts, faces, normals, color, strength, index))
     if not surfaces:
         raise ValueError(
@@ -272,12 +277,18 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
 def _density_mesh_material(preset='DEFAULT'):
     """Material mapping the density_color attribute through a color ramp.
     One material per preset; the ramp is only initialized on creation, so
-    user edits survive re-imports."""
+    user edits survive re-imports.
+
+    The shells preset is shaded by an **Emission** rather than a Principled
+    BSDF: a contour map is a color map, not a lit surface, and emission
+    keeps every band the color the map says it is from any angle and under
+    any lighting. Its transparency therefore comes from mixing with a
+    Transparent BSDF instead of an Alpha input.
+    """
     name, stops = SHADER_PRESETS[preset]
     mat = newMaterial(name)
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
-    principled = nodes.get('Principled BSDF')
     color_attr = nodes.get('Color Attribute')
     if color_attr is None:
         color_attr = nodes.new('ShaderNodeVertexColor')
@@ -296,25 +307,52 @@ def _density_mesh_material(preset='DEFAULT'):
             el = elements.new(position)
             el.color = color
     links.new(color_attr.outputs['Color'], ramp.inputs['Fac'])
-    links.new(ramp.outputs['Color'], principled.inputs['Base Color'])
-    if preset == 'SHELLS' and not principled.inputs['Alpha'].is_linked:
-        # the attribute's alpha channel holds how strong each shell is;
-        # mapped to transparency so the outer ones let you see the inner
+
+    if preset != 'SHELLS':
+        principled = nodes.get('Principled BSDF')
+        links.new(ramp.outputs['Color'], principled.inputs['Base Color'])
+        return mat
+
+    emission = nodes.get('Shell Emission')
+    if emission is None:
+        for node in list(nodes):
+            if node.bl_idname == 'ShaderNodeBsdfPrincipled':
+                nodes.remove(node)          # the default shader, unused here
+        emission = nodes.new('ShaderNodeEmission')
+        emission.name = 'Shell Emission'
+        emission.location = (-60, 200)
+    links.new(ramp.outputs['Color'], emission.inputs['Color'])
+
+    shaded = emission.outputs['Emission']
+    if nodes.get('Shell Alpha') is None:
+        # the attribute's alpha channel holds how strong each shell is,
+        # mixed against a Transparent BSDF since an Emission has no alpha
         alpha_range = nodes.new('ShaderNodeMapRange')
         alpha_range.name = 'Shell Alpha'
         alpha_range.location = (-300, -100)
         alpha_range.inputs['To Min'].default_value = SHELL_ALPHA[0]
         alpha_range.inputs['To Max'].default_value = SHELL_ALPHA[1]
         links.new(color_attr.outputs['Alpha'], alpha_range.inputs['Value'])
-        links.new(alpha_range.outputs['Result'], principled.inputs['Alpha'])
+        see_through = nodes.new('ShaderNodeBsdfTransparent')
+        see_through.name = 'Shell Fade'
+        see_through.location = (-60, 40)
+        fade = nodes.new('ShaderNodeMixShader')
+        fade.name = 'Shell Opacity'
+        fade.location = (160, 160)
+        links.new(alpha_range.outputs['Result'], fade.inputs[0])
+        links.new(see_through.outputs[0], fade.inputs[1])
+        links.new(shaded, fade.inputs[2])
+        shaded = fade.outputs[0]
         # EEVEE needs to be told to blend; the property moved in 4.2
         if hasattr(mat, 'surface_render_method'):
             mat.surface_render_method = 'BLENDED'
         elif hasattr(mat, 'blend_method'):
             mat.blend_method = 'BLEND'
-    if preset == 'SHELLS' and not any(n.bl_idname == 'ShaderNodeLightPath'
-                                      for n in nodes):
-        _see_inside(mat, principled)
+    else:
+        shaded = nodes['Shell Opacity'].outputs[0]
+
+    if not any(n.bl_idname == 'ShaderNodeLightPath' for n in nodes):
+        _see_inside(mat, shaded)
     return mat
 
 
@@ -342,6 +380,8 @@ def ensure_transparent_bounces(shells, scene=None):
 
 def _see_inside(mat, shaded):
     """Make the near side of every shell invisible, so the inside shows.
+
+    `shaded` is the output socket to show on the back faces.
 
     The same trick the outline material uses: a face is only shaded when
     it is *backfacing* and the ray comes straight from the camera,
@@ -375,7 +415,7 @@ def _see_inside(mat, shaded):
     links.new(light_path.outputs['Is Camera Ray'], facing.inputs[1])
     links.new(facing.outputs[0], mix.inputs[0])
     links.new(transparent.outputs[0], mix.inputs[1])   # front faces: see through
-    links.new(shaded.outputs['BSDF'], mix.inputs[2])   # back faces, camera only
+    links.new(shaded, mix.inputs[2])                   # back faces, camera only
     links.new(mix.outputs[0], output.inputs['Surface'])
     return mix
 

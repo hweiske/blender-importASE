@@ -195,10 +195,12 @@ winding itself (the cross product against the surface's own centroid, the way Bl
 the gradient normals skimage returns) and flips the faces where needed. Without it the trick culls
 the far wall of half the shells and that half renders as a solid blob.
 
-Each shell writes two things into its vertices' `density_color`: the **color channel** is the level
-it stands for, and the **alpha channel** is how deep it sits (0 outermost, 1 innermost), which the
-material maps to `SHELL_ALPHA` (0.85 → 1.0) for a little depth cueing — the narrow range is enough
-because the culling above, not transparency, is what reveals the nest. For a signed density (an MO, a deformation density) 0.5 is the weakest level and the
+Each shell writes the same number into both channels of its vertices' `density_color`: **how strong
+it is**, 0 for the outermost level and 1 for the innermost. The color channel drives the ramp, so
+the nest reads as a color map; the alpha channel drives `SHELL_ALPHA` (0.85 → 1.0) for a little
+depth cueing — the narrow range is enough because the culling above, not transparency, is what
+reveals the nest. A lobe's **sign is no longer in the color** (both signs use the same scale); it is
+in where the lobe is. For a signed density (an MO, a deformation density) 0.5 is the weakest level and the
 two signs run out to the ends of the ramp from there; for a one-sign density the levels use the
 whole ramp. A nest switches to the `'SHELLS'` preset automatically, because the other ramps are
 opaque — pass `preset` explicitly to override. `shells=1` is unchanged in every respect, alpha
@@ -208,8 +210,12 @@ included.
 - `'DEFAULT'` → `'density_mesh material'`, red (0.0) → white (0.5) → blue (1.0)
 - `'ELSTAT'` → `'elstat_potential material'`, blue → white → red
 - `'LED'` → `'LED material'`, red (0.8) → green (0.9) → blue (1.0)
-- `'SHELLS'` → `'density_shells material'`, blue → cyan → white → orange → red, with `Alpha` driven
-  from the attribute's alpha channel (the only preset that is transparent by itself)
+- `'SHELLS'` → `'density_jet material'`, **matplotlib's jet** (its own sRGB stops converted to
+  linear), keyed to how strong each shell is: the innermost, largest isovalue is red and the
+  outermost blue — red → green → blue from the inside out. Shaded by an **Emission**, not a
+  Principled BSDF: a contour map is a color map, not a lit surface, so every band keeps the color
+  the map says it is from any angle and under any lighting. Its transparency comes from mixing
+  against a Transparent BSDF (an Emission has no `Alpha`), driven by the attribute's alpha channel
 
 To make the isosurface semi-transparent, set the material's Principled BSDF `Alpha` after import:
 ```python

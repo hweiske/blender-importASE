@@ -302,16 +302,28 @@ def run_density_mesh_shells():
     nest = import_density_mesh(f'{SCRATCH}/mo.cube', 'mo.cube', iso_value=0.02,
                                shells=3, import_atoms=False)
     colors, alphas = shades(nest)
-    # signed density: 0.5 is the weakest level, the two signs run out to
-    # the ends of the ramp, and alpha is the shell strength
-    assert colors == [0.0, 0.25, 0.5, 0.75, 1.0], colors
-    assert alphas == [0.0, 0.5, 1.0], alphas
+    # the color channel is the shell's own strength, so the ramp reads as
+    # a color map: 0 outermost, 1 innermost, both signs on the same scale
+    assert colors == [0.0, 0.5, 1.0], colors
+    assert alphas == colors, (colors, alphas)
     assert len(nest.data.vertices) > single_verts, (len(nest.data.vertices), single_verts)
+
+    # jet, and an Emission rather than a Principled BSDF: a contour map is
+    # a color map, not a lit surface
     material = nest.data.materials[0]
-    assert material.name == 'density_shells material', material.name
-    principled = next(n for n in material.node_tree.nodes
-                      if n.type == 'BSDF_PRINCIPLED')
-    assert principled.inputs['Alpha'].is_linked, 'the shells are opaque'
+    assert material.name == 'density_jet material', material.name
+    kinds = {n.bl_idname for n in material.node_tree.nodes}
+    assert 'ShaderNodeEmission' in kinds, sorted(kinds)
+    assert 'ShaderNodeBsdfPrincipled' not in kinds, sorted(kinds)
+    ramp = material.node_tree.nodes['Color Ramp'].color_ramp
+    stops = [(round(e.position, 3), tuple(round(c, 3) for c in e.color[:3]))
+             for e in ramp.elements]
+    assert stops[0] == (0.0, (0.0, 0.0, 0.214)), stops        # jet's dark blue
+    assert stops[-1] == (1.0, (0.214, 0.0, 0.0)), stops       # ... and dark red
+    assert (0.375, (0.0, 1.0, 1.0)) in stops, stops           # cyan
+    assert (0.625, (1.0, 1.0, 0.0)) in stops, stops           # yellow
+    opacity = material.node_tree.nodes['Shell Opacity']
+    assert opacity.inputs[0].is_linked, 'the shells are opaque'
 
     # the near wall of every shell has to be invisible to the camera, or
     # the outermost one hides the whole nest: Backfacing x Is Camera Ray
