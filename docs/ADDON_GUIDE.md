@@ -161,13 +161,21 @@ overlap the other way round, a weak band of one in front of a strong band of ano
 can fix that: the ordering happens per ray.
 
 `layered=True` ("layer shells by value") does fix it, by compositing instead of shading.
-`shell_compositor()` gives every shell its own collection and its own **view layer**, then builds a
-compositor tree that alpha-overs them **weakest first**, so a stronger value lands on top wherever
-the two sit in space. The rest of the scene keeps the original view layer and is composited **last**
-— atoms and bonds over the contour bands, the way such a map is normally drawn — and the structure
-is excluded from the shell layers so it cannot occlude the bands it is drawn over. `film_transparent`
-is switched on, since the layers have to be alpha-overed. Costs one render pass per shell, and the
-importer returns the list of shell objects (weakest first) instead of a single object.
+`shell_compositor()` gives every shell its own collection and its own **view layer**, the structure
+collection **a pass of its own**, and builds a compositor tree that alpha-overs them in this order,
+bottom to top:
+
+```
+rest of the scene  →  weakest shell … strongest shell  →  structure
+```
+
+so a stronger value lands on top wherever the two sit in space, and the atoms and bonds sit over the
+contour bands the way such a map is normally drawn. The structure is excluded from the shell passes
+so it cannot occlude the bands it is drawn over, and from the backdrop pass so it is not drawn
+twice; whatever else is in the scene stays on the original view layer at the bottom.
+`film_transparent` is switched on, since the layers have to be alpha-overed. Costs one render pass
+per shell plus one for the structure, and the importer returns the list of shell objects (weakest
+first) instead of a single object.
 
 **Seeing the inside** is the shells material's job, with the same trick the outline material uses:
 `Backfacing × Is Camera Ray` picks between a Transparent BSDF and the shaded one, so the **near wall

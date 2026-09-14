@@ -398,7 +398,7 @@ def _isomesh_object(name, verts, faces, colors, shade_smooth, preset):
 
 
 def shell_compositor(shell_objects, scene=None, structure_on_top=True):
-    """Put every shell on its own view layer and composite them by value.
+    """Put every shell on its own render pass and composite them by value.
 
     Within one render pass two surfaces are ordered by where they are in
     space. For a nest that *is* the value order, but two separate lobes
@@ -409,46 +409,61 @@ def shell_compositor(shell_objects, scene=None, structure_on_top=True):
     value always lands on top of a weaker one no matter where either sits
     in space.
 
-    Everything else in the scene (the structure) keeps the original view
-    layer, composited last by default - atoms and bonds over the contour
-    bands, the way such a map is normally drawn.
+    The structure gets a pass of its own, composited last, so the atoms
+    and bonds sit over the contour bands the way such a map is normally
+    drawn - and it is excluded from the shell passes so it cannot occlude
+    the bands it is drawn over. Whatever else is in the scene keeps the
+    original view layer and goes at the bottom, as the backdrop.
+
+    So the stack, bottom to top, is
+
+        rest of the scene -> weakest shell .. strongest shell -> structure
 
     `shell_objects` must be ordered weakest first. Returns the view layer
-    names, bottom to top.
+    names in that order.
     """
     scene = scene or bpy.context.scene
+    master = scene.collection
+
     # the shells have to be alone in their collections to be separable
     origins = []
     shell_collections = []
-    for index, obj in enumerate(shell_objects, start=1):
+    for obj in shell_objects:
         origins.extend(obj.users_collection)
         collection = bpy.data.collections.new(f'{obj.name}_layer')
-        scene.collection.children.link(collection)
+        master.children.link(collection)
         for previous in list(obj.users_collection):
             previous.objects.unlink(obj)
         collection.objects.link(obj)
         shell_collections.append(collection)
-    structure_collections = {c for c in origins if c not in shell_collections}
+    # where the shells came from is where the structure is - unless they
+    # were linked straight into the scene's master collection, which is
+    # the view layer's root and cannot be excluded from anything
+    structure_collections = [c for c in dict.fromkeys(origins)
+                             if c not in shell_collections and c is not master]
 
-    def isolate(view_layer, shell):
-        """Leave only this layer's shell in it - and the structure only in
-        the base layer (shell=None), or it would occlude the shells it is
-        being composited over."""
+    def isolate(view_layer, keep):
+        """Leave only the collections in `keep` of the ones this router
+        owns; everything it does not own is left alone."""
         for child in view_layer.layer_collection.children:
-            if child.collection in shell_collections:
-                child.exclude = child.collection is not shell
-            elif child.collection in structure_collections:
-                child.exclude = shell is not None
+            if child.collection in shell_collections or \
+                    child.collection in structure_collections:
+                child.exclude = child.collection not in keep
 
-    base = scene.view_layers[0]
-    isolate(base, None)
+    def layer_for(name, keep):
+        view_layer = scene.view_layers.get(name) or scene.view_layers.new(name)
+        isolate(view_layer, keep)
+        return view_layer.name
 
-    layers = []
-    for collection in shell_collections:
-        view_layer = (scene.view_layers.get(collection.name)
-                      or scene.view_layers.new(collection.name))
-        isolate(view_layer, collection)
-        layers.append(view_layer.name)
+    # the backdrop: the original layer, with everything this router owns
+    # taken out of it
+    order = [layer_for(scene.view_layers[0].name, [])]
+    order += [layer_for(collection.name, [collection])
+              for collection in shell_collections]
+    if structure_collections:
+        structure_layer = layer_for(f'{structure_collections[0].name}_structure',
+                                    structure_collections)
+        order.insert(0 if not structure_on_top else len(order), structure_layer)
 
     # alpha over needs something to composite onto
     scene.render.film_transparent = True
@@ -456,7 +471,6 @@ def shell_compositor(shell_objects, scene=None, structure_on_top=True):
     for node in list(tree.nodes):
         tree.nodes.remove(node)
 
-    order = layers + [base.name] if structure_on_top else [base.name] + layers
     stack = None
     for height, layer_name in enumerate(order):
         render_layer = tree.nodes.new('CompositorNodeRLayers')

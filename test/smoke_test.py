@@ -371,14 +371,15 @@ def run_density_mesh_shells():
 step('density_mesh_shells', run_density_mesh_shells)
 
 def run_density_shell_layers():
-    """layered=True routes every shell through its own view layer and
-    composites them by value, so a stronger value lands on top of a weaker
-    one however the two sit in space."""
+    """layered=True gives every shell its own render pass and composites
+    them by value, with the structure on a pass of its own on top."""
     from importlib import util
     if util.find_spec('skimage') is None:
         print('scikit-image not installed - skipping the actual import')
         return
     from blender_importASE.density_mesh import import_density_mesh
+    from blender_importASE.node_networks.compat import (compositor_tree,
+                                                        alpha_over_sockets)
 
     fresh_scene()
     shells = import_density_mesh(f'{SCRATCH}/water.cube', 'water.cube',
@@ -387,23 +388,31 @@ def run_density_shell_layers():
     assert isinstance(shells, list) and len(shells) == 4, shells
     scene = bpy.context.scene
     base = scene.view_layers[0]
+    structure_layer = next(vl for vl in scene.view_layers
+                           if vl.name.endswith('_structure'))
 
-    # one view layer per shell, each holding only its own shell: the
-    # structure stays on the base layer or it would occlude the shells it
-    # is composited over
-    layer_names = [vl.name for vl in scene.view_layers]
-    assert len(layer_names) == 5, layer_names
+    def visible(view_layer):
+        return {c.collection.name for c in view_layer.layer_collection.children
+                if not c.exclude}
+
+    # base + one per shell + the structure's own
+    assert len(scene.view_layers) == 6, [vl.name for vl in scene.view_layers]
+    shell_collections = {f'{obj.name}_layer' for obj in shells}
     for obj in shells:
         layer = scene.view_layers[f'{obj.name}_layer']
-        visible = {c.collection.name for c in layer.layer_collection.children
-                   if not c.exclude}
-        assert f'{obj.name}_layer' in visible, (layer.name, visible)
-        others = {f'{other.name}_layer' for other in shells if other is not obj}
-        assert not (others & visible), (layer.name, visible)
+        seen = visible(layer)
+        assert f'{obj.name}_layer' in seen, (layer.name, seen)
+        assert not (shell_collections - {f'{obj.name}_layer'}) & seen, (layer.name, seen)
+        # the structure must not occlude the bands it is composited over
+        assert not any(name.startswith('H2O') for name in seen), (layer.name, seen)
+    assert any(name.startswith('H2O') for name in visible(structure_layer)), \
+        visible(structure_layer)
+    assert not shell_collections & visible(structure_layer), visible(structure_layer)
+    # the backdrop keeps neither
+    assert not (shell_collections & visible(base)), visible(base)
+    assert not any(name.startswith('H2O') for name in visible(base)), visible(base)
 
-    # composited weakest first, structure last - so highest value on top
-    from blender_importASE.node_networks.compat import (compositor_tree,
-                                                        alpha_over_sockets)
+    # composited bottom to top: backdrop, weakest .. strongest, structure
     tree = compositor_tree(scene)
     assert tree is not None, 'no compositor'
     assert scene.render.film_transparent, 'the layers cannot be alpha-overed'
@@ -416,7 +425,9 @@ def run_density_shell_layers():
         order.append(foreground.links[0].from_node.layer)
         node = background.links[0].from_node
     order.append(node.layer)
-    expected = [base.name] + [f'{obj.name}_layer' for obj in reversed(shells)]
+    expected = ([structure_layer.name]
+                + [f'{obj.name}_layer' for obj in reversed(shells)]
+                + [base.name])
     assert order == expected, (order, expected)
 
 step('density_shell_layers', run_density_shell_layers)
