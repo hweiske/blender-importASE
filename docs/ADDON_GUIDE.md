@@ -2,7 +2,7 @@
 
 This is a Blender add-on for importing atomistic structures (via [ASE](https://wiki.fysik.dtu.dk/ase/)) and turning them into publication-quality renders: molecules, crystals, coordination polyhedra, electron-density isosurfaces (volume or mesh), partial-charge colorings, and 3D-printable models. This document is the reference for driving it — both from the Blender GUI and from Python scripts. Everything the GUI does calls the same functions you can call directly, so scripting and clicking are interchangeable.
 
-- **Package:** `blender_importASE/` (add-on version 2.5.0, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
+- **Package:** `blender_importASE/` (add-on version 2.5.1, min Blender 4.4; tested on 4.4, 5.1 and 5.2).
 - **Dependencies:** `ase`, plus `scipy` (polyhedra), `scikit-image` (density-as-mesh), `scm.plams` (AMS TAPE41 volumes), `openvdb`/`pyopenvdb` (volumetric density) — none installed automatically; each has its own "Install" button in the add-on preferences. See [§8](#8-dependencies).
 
 ---
@@ -172,28 +172,23 @@ rest of the scene  →  weakest shell … strongest shell  →  structure
 so a stronger value lands on top wherever the two sit in space, and the atoms and bonds sit over the
 contour bands the way such a map is normally drawn. The structure is excluded from the shell passes
 so it cannot occlude the bands it is drawn over, and from the backdrop pass so it is not drawn
-twice; whatever else is in the scene stays on the original view layer at the bottom.
+twice; whatever else is in the scene gets a `<scene>_backdrop` pass at the bottom, added only if
+there is anything left over to draw. The scene's *first* view layer is not used for any of this: it
+keeps showing everything, so the viewport still shows the structure after a layered import, and is
+taken out of the render (`use = False`) instead of being emptied.
 `film_transparent` is switched on, since the layers have to be alpha-overed. Costs one render pass
 per shell plus one for the structure, and the importer returns the list of shell objects (weakest
 first) instead of a single object.
 
-**Seeing the inside** is the shells material's job, with the same trick the outline material uses:
-`Backfacing × Is Camera Ray` picks between a Transparent BSDF and the shaded one, so the **near wall
-of every shell is invisible to the camera** and you look straight through it at the far wall and
-everything nested inside. The shells also stop shadowing each other and stop appearing in
-reflections, which is what turns a nest of closed surfaces from mud into readable contour bands.
+**Seeing the inside** is the compositor's job, not the shader's: with every shell alone on its own
+render pass, no shell can occlude another, so the shells need no transparency and no culling —
+which is why the material is four flat nodes. `layered` is therefore **on by default** for a nest;
+turned off, the shells are opaque surfaces in one pass and the outermost hides the rest.
 
-**Cycles needs headroom for that.** Every shell the camera looks through costs one transparent
-bounce, and a ray that runs out of them is killed and returns **black** — past the default of 8 the
-innermost shells, the ones with the highest values that should be on top, come out as a black hole
-in the middle of the nest. `ensure_transparent_bounces()` raises `transparent_max_bounces` to
-`4·shells + 8` on import (never lowering a scene that already allows more).
-
-That only works if every shell winds outwards, and marching cubes winds its triangles by the
-gradient — which points the other way for the negative lobe. `density_to_mesh_data` measures the
-winding itself (the cross product against the surface's own centroid, the way Blender reads it, not
-the gradient normals skimage returns) and flips the faces where needed. Without it the trick culls
-the far wall of half the shells and that half renders as a solid blob.
+Marching cubes winds its triangles by the gradient, which points the other way for the negative
+lobe, so `density_to_mesh_data` measures the winding itself, and marching cubes winds its triangles by the
+(the cross product against the surface's own centroid, the way Blender reads it, not the gradient
+normals skimage returns) and flips the faces where needed, so every shell faces outwards.
 
 Each shell writes the same number into both channels of its vertices' `density_color`: **how strong
 it is**, 0 for the outermost level and 1 for the innermost. The color channel drives the ramp, so
@@ -210,12 +205,14 @@ included.
 - `'DEFAULT'` → `'density_mesh material'`, red (0.0) → white (0.5) → blue (1.0)
 - `'ELSTAT'` → `'elstat_potential material'`, blue → white → red
 - `'LED'` → `'LED material'`, red (0.8) → green (0.9) → blue (1.0)
-- `'SHELLS'` → `'density_jet material'`, **matplotlib's jet** (its own sRGB stops converted to
-  linear), keyed to how strong each shell is: the innermost, largest isovalue is red and the
-  outermost blue — red → green → blue from the inside out. Shaded by an **Emission**, not a
-  Principled BSDF: a contour map is a color map, not a lit surface, so every band keeps the color
-  the map says it is from any angle and under any lighting. Its transparency comes from mixing
-  against a Transparent BSDF (an Emission has no `Alpha`), driven by the attribute's alpha channel
+- `'SHELLS'` → `'density_jet material'`, the whole shader in four nodes: attribute → ramp →
+  **Emission** → output. The ramp is an **HSV sweep** from blue at 0.1 to red at 1.0 with hue
+  interpolation `FAR`, which walks the long way round the circle — blue, cyan, green, yellow, red,
+  matplotlib's jet without spelling out every stop (`NEAR` would take the short arc, blue straight
+  through magenta). Keyed to how strong each shell is, so the innermost, largest isovalue is red
+  and the outermost blue. Emission rather than a Principled BSDF because a contour map is a color
+  map, not a lit surface: every band keeps the color the map says it is from any angle and under
+  any lighting
 
 To make the isosurface semi-transparent, set the material's Principled BSDF `Alpha` after import:
 ```python
@@ -400,6 +397,20 @@ obj.update_tag()
 - an **Element colors** box: one swatch per element of the structure (see below),
 - a **3D printing** box with **Rebuild 3D-print supports** (`ase.rebuild_supports`) when the collection holds real element meshes,
 - one box per sibling density/geometry modifier.
+
+**Supercell (everything)** (`ase.global_supercell`) repeats the whole structure to one count:
+the atoms and bonds through their `supercell` node group (live sockets), the density **volumes** by
+tiling their grid (`density_supercell`), and the isosurface **meshes** by recomputing them on a
+tiled grid (`density_mesh_supercell`). The last one matters: a repeated *copy* of an isosurface
+mesh would still be closed off at the cell face it was generated in, so the surface has to be
+marched again over the tiled grid — the object, its material, its collection and its render layer
+stay as they are, only the mesh data is swapped, so a shell keeps its place in the compositor. Each
+isosurface remembers the file and the level it came from (`ase_density_file`, `ase_shell_level`) for
+exactly that. Layered shells are found too, although they no longer sit in the structure's
+collection: a view layer can only exclude a collection of the scene's own, so `shell_compositor()`
+moves each shell to a collection at the scene root and stamps it with `ase_structure` (the name of
+the collection it came from), which is how the button finds its way back to them. The button's repeats and offsets default to whatever the structure's own supercell
+modifier is set to, and the panel says how many of each part it will touch.
 
 **Custom bonds** (`ase.add_dotted_bond`, `dotted_bond.add_bond`) draw a bond between two atoms that the distance-based search does not - a partial bond in a transition state, a hydrogen bond, and so on. Select exactly two atoms (vertices) and click *Add custom bond*; the `bond type` dropdown in the redo panel picks the style:
 

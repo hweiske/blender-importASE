@@ -10,7 +10,7 @@ from os.path import join
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.5.0"
+__version__ = "2.5.1"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -18,7 +18,7 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (2, 5, 0),
+    "version": (2, 5, 1),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
@@ -490,9 +490,10 @@ class ImportASEDensityMesh(bpy.types.Operator, ImportHelper):
         name="layer shells by value",
         description="give every shell its own view layer and composite them by "
                     "value, so a stronger value always lands on top of a weaker "
-                    "one even where two lobes overlap in depth. Costs one render "
-                    "pass per shell",
-        default=False,
+                    "one however the two sit in space. Costs one render pass per "
+                    "shell plus one for the structure. Off, the shells are opaque "
+                    "surfaces in a single pass and the outermost hides the rest",
+        default=True,
     )
     shell_spacing: bpy.props.EnumProperty(
         name="shell spacing",

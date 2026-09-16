@@ -300,7 +300,7 @@ def run_density_mesh_shells():
 
     fresh_scene()
     nest = import_density_mesh(f'{SCRATCH}/mo.cube', 'mo.cube', iso_value=0.02,
-                               shells=3, import_atoms=False)
+                               shells=3, import_atoms=False, layered=False)
     colors, alphas = shades(nest)
     # the color channel is the shell's own strength, so the ramp reads as
     # a color map: 0 outermost, 1 innermost, both signs on the same scale
@@ -315,33 +315,26 @@ def run_density_mesh_shells():
     kinds = {n.bl_idname for n in material.node_tree.nodes}
     assert 'ShaderNodeEmission' in kinds, sorted(kinds)
     assert 'ShaderNodeBsdfPrincipled' not in kinds, sorted(kinds)
+    # an HSV sweep from blue to red taking the long way round the hue
+    # circle, so it runs blue - cyan - green - yellow - red
     ramp = material.node_tree.nodes['Color Ramp'].color_ramp
+    assert ramp.color_mode == 'HSV', ramp.color_mode
+    assert ramp.hue_interpolation == 'FAR', ramp.hue_interpolation
     stops = [(round(e.position, 3), tuple(round(c, 3) for c in e.color[:3]))
              for e in ramp.elements]
-    assert stops[0] == (0.0, (0.0, 0.0, 0.214)), stops        # jet's dark blue
-    assert stops[-1] == (1.0, (0.214, 0.0, 0.0)), stops       # ... and dark red
-    assert (0.375, (0.0, 1.0, 1.0)) in stops, stops           # cyan
-    assert (0.625, (1.0, 1.0, 0.0)) in stops, stops           # yellow
-    opacity = material.node_tree.nodes['Shell Opacity']
-    assert opacity.inputs[0].is_linked, 'the shells are opaque'
+    assert stops == [(0.1, (0.0, 0.0, 1.0)), (1.0, (1.0, 0.0, 0.0))], stops
+    middle = tuple(round(c, 2) for c in ramp.evaluate(0.5)[:3])
+    assert middle[1] > 0.5 and middle[0] < 0.5, middle      # green, not magenta
 
-    # the near wall of every shell has to be invisible to the camera, or
-    # the outermost one hides the whole nest: Backfacing x Is Camera Ray
-    # picks between a Transparent BSDF and the shaded one
-    nodes = material.node_tree.nodes
-    assert any(n.bl_idname == 'ShaderNodeLightPath' for n in nodes), 'no light path'
-    assert any(n.bl_idname == 'ShaderNodeBsdfTransparent' for n in nodes), 'no transparent'
-    output = next(n for n in nodes if n.bl_idname == 'ShaderNodeOutputMaterial')
-    surface = output.inputs['Surface'].links[0].from_node
-    assert surface.bl_idname == 'ShaderNodeMixShader', surface.bl_idname
-    facing = surface.inputs[0].links[0].from_node
-    sources = {link.from_node.bl_idname for socket in facing.inputs
-               for link in socket.links}
-    assert sources == {'ShaderNodeNewGeometry', 'ShaderNodeLightPath'}, sources
+    # four nodes and nothing else: attribute, ramp, emission, output
+    assert len(material.node_tree.nodes) == 4, [n.name for n in material.node_tree.nodes]
+    output = next(n for n in material.node_tree.nodes
+                  if n.bl_idname == 'ShaderNodeOutputMaterial')
+    assert output.inputs['Surface'].links[0].from_node.bl_idname \
+        == 'ShaderNodeEmission', 'the surface is not the emission'
 
-    # every shell must wind outwards, or that trick culls the far wall of
-    # half of them and they render as a solid blob (marching cubes winds
-    # by the gradient, which flips between the two signs)
+    # every shell winds outwards - marching cubes winds by the gradient,
+    # which flips between the two signs
     mesh = nest.data
     positions = np.empty(len(mesh.vertices) * 3)
     mesh.vertices.foreach_get('co', positions)
@@ -358,24 +351,11 @@ def run_density_mesh_shells():
                            for p in group])
         assert outward > 0, f'shell {value} winds inwards ({outward:.3f})'
 
-    # Cycles kills a ray that runs out of transparent bounces and returns
-    # black, and every shell the camera looks through costs one: without
-    # this the innermost shells - the highest values - come out as a black
-    # hole in the middle of the nest
-    cycles = bpy.context.scene.cycles
-    assert cycles.transparent_max_bounces >= 4 * 3 + 8, cycles.transparent_max_bounces
-    # ... and a scene that already allows more keeps its own setting
-    cycles.transparent_max_bounces = 128
-    fresh_import = import_density_mesh(f'{SCRATCH}/mo.cube', 'mo.cube',
-                                       iso_value=0.02, shells=2, import_atoms=False)
-    assert bpy.context.scene.cycles.transparent_max_bounces == 128, \
-        bpy.context.scene.cycles.transparent_max_bounces
-    bpy.data.objects.remove(fresh_import, do_unlink=True)
-
     # a density with only one sign uses the whole ramp for its levels
     fresh_scene()
     positive = import_density_mesh(f'{SCRATCH}/water.cube', 'water.cube',
-                                   iso_value=0.05, shells=4, import_atoms=False)
+                                   iso_value=0.05, shells=4, import_atoms=False,
+                                   layered=False)
     colors, alphas = shades(positive)
     assert len(colors) == 4 and colors[0] == 0.0 and colors[-1] == 1.0, colors
     assert alphas == colors, (colors, alphas)
@@ -420,9 +400,12 @@ def run_density_shell_layers():
     assert any(name.startswith('H2O') for name in visible(structure_layer)), \
         visible(structure_layer)
     assert not shell_collections & visible(structure_layer), visible(structure_layer)
-    # the backdrop keeps neither
-    assert not (shell_collections & visible(base)), visible(base)
-    assert not any(name.startswith('H2O') for name in visible(base)), visible(base)
+    # the base layer stays the viewport's: it shows everything, and is kept
+    # out of the render instead of being emptied (else the structure would
+    # vanish from the viewport after a layered import)
+    assert shell_collections <= visible(base), visible(base)
+    assert any(name.startswith('H2O') for name in visible(base)), visible(base)
+    assert not base.use, 'the base layer must not render on its own'
 
     # composited bottom to top: backdrop, weakest .. strongest, structure
     tree = compositor_tree(scene)
@@ -437,12 +420,69 @@ def run_density_shell_layers():
         order.append(foreground.links[0].from_node.layer)
         node = background.links[0].from_node
     order.append(node.layer)
+    # every renderable object here belongs to a pass already, so there is
+    # no separate backdrop pass and the weakest shell is the bottom
     expected = ([structure_layer.name]
-                + [f'{obj.name}_layer' for obj in reversed(shells)]
-                + [base.name])
+                + [f'{obj.name}_layer' for obj in reversed(shells)])
     assert order == expected, (order, expected)
 
 step('density_shell_layers', run_density_shell_layers)
+
+def run_global_supercell():
+    """One supercell for the whole structure: the atoms through their
+    modifier, the density volumes by tiling the grid, and the isosurface
+    meshes by recomputing them on a tiled grid."""
+    from importlib import util
+    if util.find_spec('skimage') is None or (
+            util.find_spec('openvdb') is None and util.find_spec('pyopenvdb') is None):
+        print('scikit-image or openvdb missing - skipping')
+        return
+    import numpy as np
+    from blender_importASE import controls
+    from blender_importASE.density_mesh import import_density_mesh
+    from blender_importASE.node_networks.compat import get_mod_input
+
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/CHGCAR', 'CHGCAR', representation='nodes',
+                        animate=False, read_density=True, outline=False)
+    # the mesh importer has to read a CHGCAR too: ase's VaspChargeDensity
+    # returns no grids at all for this file, which is what the add-on's own
+    # read_vasp_density works around
+    isomesh = import_density_mesh(f'{SCRATCH}/CHGCAR', 'CHGCAR', iso_value=1.0,
+                                  shells=1, import_atoms=False)
+    structure = next(o for o in bpy.data.objects
+                     if o.type == 'MESH' and 'atom_color' in o.data.attributes)
+    bpy.context.view_layer.objects.active = structure
+
+    modifiers, volumes, meshes = controls._supercell_parts(structure)
+    assert modifiers and volumes and meshes, (len(modifiers), len(volumes), len(meshes))
+
+    def span(obj):
+        co = np.array([v.co[:] for v in obj.data.vertices])
+        return co.max(axis=0) - co.min(axis=0)
+
+    before = span(isomesh)
+    assert bpy.ops.ase.global_supercell.poll(), 'not offered on the structure'
+    bpy.ops.ase.global_supercell(repeat_x=2, repeat_y=2, repeat_z=1)
+
+    # the atoms repeat through the node group ...
+    supercell = next(m for m in structure.modifiers
+                     if m.node_group and m.node_group.name.startswith('supercell'))
+    names = {i.name: i.identifier for i in supercell.node_group.interface.items_tree
+             if getattr(i, 'in_out', None) == 'INPUT'}
+    assert [get_mod_input(supercell, names[axis])
+            for axis in ('repeat_x', 'repeat_y', 'repeat_z')] == [2, 2, 1]
+    # ... the volumes by a tiled grid ...
+    for volume in volumes:
+        assert list(volume['ase_density_repeat']) == [2, 2, 1], volume.name
+        assert '2x2x1' in volume.data.filepath, volume.data.filepath
+    # ... and the isosurface by being recomputed, not repeated
+    after = span(isomesh)
+    assert after[0] > 1.8 * before[0] and after[1] > 1.8 * before[1], (before, after)
+    assert abs(after[2] - before[2]) < 0.1, (before, after)
+    assert list(isomesh['ase_density_repeat']) == [2, 2, 1], isomesh['ase_density_repeat'][:]
+
+step('global_supercell', run_global_supercell)
 
 def run_charges():
     fresh_scene()

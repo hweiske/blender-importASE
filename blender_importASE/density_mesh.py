@@ -12,9 +12,8 @@ import os
 import bpy
 import numpy as np
 from ase.io.cube import read_cube
-from ase.calculators.vasp import VaspChargeDensity
 
-from .import_cubefiles import is_vasp_density
+from .import_cubefiles import is_vasp_density, read_vasp_density
 from .node_networks.compat import (compositor_tree, compositor_output,
                                    alpha_over_sockets)
 from .node_networks.electron_density_nodes import newMaterial
@@ -39,25 +38,21 @@ SHADER_PRESETS = {
             [(0.8, (1.0, 0.0, 0.0, 1)),
              (0.9, (0.0, 1.0, 0.0, 1)),
              (1.0, (0.0, 0.0, 1.0, 1))]),
-    # isovalue shells: matplotlib's jet, keyed to how strong the shell is,
-    # so the innermost (largest isovalue) is red and the outermost blue -
-    # red -> green -> blue from the inside out. The stops are jet's own
-    # sRGB values converted to linear, which is what Blender's ramp wants
-    # and what makes it look like the matplotlib map.
+    # isovalue shells: a hue sweep from blue at the outermost (weakest)
+    # level to red at the innermost, which is what an HSV ramp gives with
+    # just these two stops - blue, cyan, green, yellow, red, matplotlib's
+    # jet without having to spell every stop out. Positions start at 0.1
+    # so the outermost shell is solidly blue rather than half-faded.
     'SHELLS': ('density_jet material',
-               [(0.0, (0.0, 0.0, 0.2140, 1)),
-                (0.125, (0.0, 0.0, 1.0, 1)),
-                (0.375, (0.0, 1.0, 1.0, 1)),
-                (0.625, (1.0, 1.0, 0.0, 1)),
-                (0.875, (1.0, 0.0, 0.0, 1)),
-                (1.0, (0.2140, 0.0, 0.0, 1))]),
+               [(0.1, (0.0, 0.0, 1.0, 1)),
+                (1.0, (1.0, 0.0, 0.0, 1))]),
 }
 
-# how solid the shells get: the outermost (weakest) shell at the low end,
-# the innermost at the high end. Seeing into the nest is the job of
-# _see_inside, which culls the near wall of every shell, so this only has
-# to add a little depth cueing - hence the narrow range.
-SHELL_ALPHA = (0.85, 1.0)
+# The shells ramp is an HSV sweep rather than a list of RGB stops, so the
+# hue has to walk the long way round the circle - blue through cyan, green
+# and yellow to red. Blender calls that 'FAR' (NEAR takes the short arc,
+# blue straight through magenta to red).
+SHELL_HUE_PATH = 'FAR'
 
 
 def _ensure_skimage():
@@ -87,7 +82,11 @@ def read_density_grid(filepath):
     (volume, spacing, origin) with spacing as a 3x3 matrix of grid step
     vectors."""
     if is_vasp_density(os.path.basename(filepath)):
-        density = VaspChargeDensity(filepath)
+        # the add-on's own reader, not ase's VaspChargeDensity directly:
+        # that one silently returns no grids at all for perfectly good
+        # files (gzipped ones, or a POTCAR-style species line like 'Fe/'),
+        # which is exactly what read_vasp_density works around
+        density = read_vasp_density(filepath)
         volume = density.chg[-1]
         cell = np.array(density.atoms[-1].get_cell())
         spacing = cell / np.array(volume.shape)[:, None]
@@ -124,7 +123,7 @@ def shell_levels(iso_value, shells, shell_max=None, spacing='LOG', limit=None):
 def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
                          color_min=None, color_max=None, sample_interior=False,
                          shells=1, shell_max=None, shell_spacing='LOG',
-                         per_shell=False):
+                         per_shell=False, repeat=(1, 1, 1)):
     """Run marching cubes on the +/- isosurfaces of a density file.
 
     Returns (vertices, faces, colors): cartesian vertex positions, face
@@ -132,10 +131,11 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
     carries how strong that vertex's shell is (0 outermost, 1 innermost),
     which the 'SHELLS' material turns into transparency.
 
-    per_shell returns a list of those triples instead, one per level
-    (both signs of a level together, since they are equally strong),
-    weakest first - what the compositor router needs to put each shell on
-    its own layer. Without a color file the
+    per_shell returns a list of (vertices, faces, colors, level) instead,
+    one per level (both signs of a level together, since they are equally
+    strong), weakest first - what the compositor router needs to put each
+    shell on its own layer, and what lets a shell be named after the
+    isovalue it stands for. Without a color file the
     positive surface is white and the negative one black; with a color
     file its values are sampled at each vertex (nearest voxel) and
     normalized to a black-to-white gradient.
@@ -145,6 +145,8 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
     comparable between imports. Left equal/unset, the sampled range is
     used.
 
+    repeat: tile the grid first, so the isosurfaces span a supercell.
+
     sample_interior: instead of the color value directly on the surface,
     use the strongest (largest magnitude) value found anywhere along the
     surface normal through the volume - projects features buried inside
@@ -152,6 +154,12 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
     """
     marching_cubes = _ensure_skimage()
     volume, spacing, origin = read_density_grid(filepath)
+    if tuple(repeat) != (1, 1, 1):
+        # the grid of a periodic calculation is periodic itself, so tiling
+        # it is the supercell's density - and the marching cubes then runs
+        # across the interior boundaries instead of closing every copy off
+        # at them, which is what tiling the finished mesh would do
+        volume = np.tile(volume, tuple(int(n) for n in repeat))
 
     # one surface per level per sign. With shells=1 this is the familiar
     # pair at +/- iso_value; beyond that the levels nest inwards, and each
@@ -215,7 +223,7 @@ def density_to_mesh_data(filepath, color_filepath=None, iso_value=0.03,
                                            (len(verts), 1)))
                 shell_offset += len(verts)
             grouped.append((np.vstack(verts_list), np.vstack(faces_list),
-                            np.vstack(colors_list)))
+                            np.vstack(colors_list), levels[index]))
         return grouped
 
     offset = 0
@@ -279,11 +287,13 @@ def _density_mesh_material(preset='DEFAULT'):
     One material per preset; the ramp is only initialized on creation, so
     user edits survive re-imports.
 
-    The shells preset is shaded by an **Emission** rather than a Principled
-    BSDF: a contour map is a color map, not a lit surface, and emission
-    keeps every band the color the map says it is from any angle and under
-    any lighting. Its transparency therefore comes from mixing with a
-    Transparent BSDF instead of an Alpha input.
+    The shells preset is the whole shader in four nodes - attribute, ramp,
+    **Emission**, output. A contour map is a color map, not a lit surface,
+    so emission keeps every band the color the map says it is from any
+    angle and under any lighting, and nothing else is needed: with every
+    shell on its own render pass (see shell_compositor) no shell can
+    occlude another, so there is nothing to see through and no
+    transparency to fade.
     """
     name, stops = SHADER_PRESETS[preset]
     mat = newMaterial(name)
@@ -300,6 +310,9 @@ def _density_mesh_material(preset='DEFAULT'):
         ramp = nodes.new('ShaderNodeValToRGB')
         ramp.name = 'Color Ramp'
         ramp.location = (-300, 200)
+        if preset == 'SHELLS':
+            ramp.color_ramp.color_mode = 'HSV'
+            ramp.color_ramp.hue_interpolation = SHELL_HUE_PATH
         elements = ramp.color_ramp.elements
         elements[0].position, elements[0].color = stops[0]
         elements[1].position, elements[1].color = stops[-1]
@@ -309,7 +322,16 @@ def _density_mesh_material(preset='DEFAULT'):
     links.new(color_attr.outputs['Color'], ramp.inputs['Fac'])
 
     if preset != 'SHELLS':
-        principled = nodes.get('Principled BSDF')
+        principled = next((n for n in nodes
+                           if n.bl_idname == 'ShaderNodeBsdfPrincipled'), None)
+        if principled is None:
+            # use_nodes=True does not reliably leave a Principled behind -
+            # newShader creates one explicitly for the same reason
+            principled = nodes.new('ShaderNodeBsdfPrincipled')
+            principled.location = (-60, 200)
+            output = next(n for n in nodes
+                          if n.bl_idname == 'ShaderNodeOutputMaterial')
+            links.new(principled.outputs['BSDF'], output.inputs['Surface'])
         links.new(ramp.outputs['Color'], principled.inputs['Base Color'])
         return mat
 
@@ -322,106 +344,18 @@ def _density_mesh_material(preset='DEFAULT'):
         emission.name = 'Shell Emission'
         emission.location = (-60, 200)
     links.new(ramp.outputs['Color'], emission.inputs['Color'])
-
-    shaded = emission.outputs['Emission']
-    if nodes.get('Shell Alpha') is None:
-        # the attribute's alpha channel holds how strong each shell is,
-        # mixed against a Transparent BSDF since an Emission has no alpha
-        alpha_range = nodes.new('ShaderNodeMapRange')
-        alpha_range.name = 'Shell Alpha'
-        alpha_range.location = (-300, -100)
-        alpha_range.inputs['To Min'].default_value = SHELL_ALPHA[0]
-        alpha_range.inputs['To Max'].default_value = SHELL_ALPHA[1]
-        links.new(color_attr.outputs['Alpha'], alpha_range.inputs['Value'])
-        see_through = nodes.new('ShaderNodeBsdfTransparent')
-        see_through.name = 'Shell Fade'
-        see_through.location = (-60, 40)
-        fade = nodes.new('ShaderNodeMixShader')
-        fade.name = 'Shell Opacity'
-        fade.location = (160, 160)
-        links.new(alpha_range.outputs['Result'], fade.inputs[0])
-        links.new(see_through.outputs[0], fade.inputs[1])
-        links.new(shaded, fade.inputs[2])
-        shaded = fade.outputs[0]
-        # EEVEE needs to be told to blend; the property moved in 4.2
-        if hasattr(mat, 'surface_render_method'):
-            mat.surface_render_method = 'BLENDED'
-        elif hasattr(mat, 'blend_method'):
-            mat.blend_method = 'BLEND'
-    else:
-        shaded = nodes['Shell Opacity'].outputs[0]
-
-    if not any(n.bl_idname == 'ShaderNodeLightPath' for n in nodes):
-        _see_inside(mat, shaded)
+    output = next(n for n in nodes if n.bl_idname == 'ShaderNodeOutputMaterial')
+    links.new(emission.outputs['Emission'], output.inputs['Surface'])
     return mat
 
 
-def ensure_transparent_bounces(shells, scene=None):
-    """Give Cycles enough transparent bounces for a nest of shells.
+def _isomesh_object(name, verts, faces, colors, shade_smooth, preset,
+                    source=None):
+    """One isosurface mesh object, colored by the density_color attribute.
 
-    Every shell the camera looks through costs one transparent bounce (the
-    near wall _see_inside culls, and the far wall too while its alpha is
-    below 1). Cycles kills a ray that runs out of them and returns
-    **black**, so past the default of 8 the innermost shells - the ones
-    with the highest values, the ones you actually want on top - come out
-    as a black hole in the middle of the nest.
-
-    Only ever raises the limit, never lowers it.
+    `source` records what it was built from - the density file and the
+    level - so a supercell can rebuild it from a tiled grid later.
     """
-    scene = scene or bpy.context.scene
-    cycles = getattr(scene, 'cycles', None)      # absent if the addon is off
-    if cycles is None:
-        return None
-    needed = 4 * shells + 8
-    if cycles.transparent_max_bounces < needed:
-        cycles.transparent_max_bounces = needed
-    return cycles.transparent_max_bounces
-
-
-def _see_inside(mat, shaded):
-    """Make the near side of every shell invisible, so the inside shows.
-
-    `shaded` is the output socket to show on the back faces.
-
-    The same trick the outline material uses: a face is only shaded when
-    it is *backfacing* and the ray comes straight from the camera,
-    otherwise it is a Transparent BSDF. The camera therefore looks
-    through the near wall of each shell and sees the far wall of it and
-    everything nested inside; the shells also stop shadowing each other
-    and stop showing up in reflections, which is what turns a nest of
-    closed surfaces from mud into something readable.
-    """
-    nodes, links = mat.node_tree.nodes, mat.node_tree.links
-    output = next(n for n in nodes if n.bl_idname == 'ShaderNodeOutputMaterial')
-
-    geometry = nodes.new('ShaderNodeNewGeometry')
-    geometry.name = 'Shell Geometry'
-    geometry.location = (-300, -420)
-    light_path = nodes.new('ShaderNodeLightPath')
-    light_path.name = 'Shell Light Path'
-    light_path.location = (-300, -620)
-    facing = nodes.new('ShaderNodeMath')
-    facing.name = 'Shell Facing'
-    facing.operation = 'MULTIPLY'
-    facing.location = (-60, -500)
-    transparent = nodes.new('ShaderNodeBsdfTransparent')
-    transparent.name = 'Shell Transparent'
-    transparent.location = (-60, -300)
-    mix = nodes.new('ShaderNodeMixShader')
-    mix.name = 'Shell See Inside'
-    mix.location = (160, -200)
-
-    links.new(geometry.outputs['Backfacing'], facing.inputs[0])
-    links.new(light_path.outputs['Is Camera Ray'], facing.inputs[1])
-    links.new(facing.outputs[0], mix.inputs[0])
-    links.new(transparent.outputs[0], mix.inputs[1])   # front faces: see through
-    links.new(shaded, mix.inputs[2])                   # back faces, camera only
-    links.new(mix.outputs[0], output.inputs['Surface'])
-    return mix
-
-
-def _isomesh_object(name, verts, faces, colors, shade_smooth, preset):
-    """One isosurface mesh object, colored by the density_color attribute."""
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts.tolist(), [], faces.tolist())
     attr = mesh.color_attributes.new(name=COLOR_ATTRIBUTE,
@@ -434,7 +368,53 @@ def _isomesh_object(name, verts, faces, colors, shade_smooth, preset):
     collection = bpy.context.collection or bpy.context.scene.collection
     collection.objects.link(obj)
     obj.data.materials.append(_density_mesh_material(preset))
+    for key, value in (source or {}).items():
+        obj[key] = value
     return obj
+
+
+def density_mesh_supercell(mesh_obj, repeat=(1, 1, 1)):
+    """Rebuild an isosurface mesh with its grid tiled into a supercell.
+
+    The surface has to be recomputed rather than the mesh repeated: a copy
+    of the mesh would still be closed off at the cell face it was
+    generated in, while marching cubes over the tiled grid runs straight
+    through. The object, its material, its collection and its render layer
+    all stay as they are - only the mesh data is replaced - so a shell
+    keeps its place in the compositor.
+    """
+    path = mesh_obj.get('ase_density_file')
+    level = mesh_obj.get('ase_shell_level')
+    if path is None or level is None:
+        raise ValueError(f'{mesh_obj.name} was not imported as an ASE density mesh')
+    path = bpy.path.abspath(path)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f'the density file {path} is gone - re-import it')
+
+    groups = density_to_mesh_data(path, iso_value=level, shells=1,
+                                  per_shell=True, repeat=repeat)
+    verts, faces, colors, _level = groups[0]
+    if 'ase_shell_color' in mesh_obj:
+        # one shell of a nest: it is one flat color, the level it stands for
+        colors = np.tile([mesh_obj['ase_shell_color']] * 3
+                         + [mesh_obj['ase_shell_alpha']], (len(verts), 1))
+
+    old_mesh = mesh_obj.data
+    smooth = bool(old_mesh.polygons and old_mesh.polygons[0].use_smooth)
+    mesh = bpy.data.meshes.new(old_mesh.name)
+    mesh.from_pydata(verts.tolist(), [], faces.tolist())
+    attr = mesh.color_attributes.new(name=COLOR_ATTRIBUTE,
+                                     type='FLOAT_COLOR', domain='POINT')
+    attr.data.foreach_set('color', np.ascontiguousarray(colors).ravel())
+    if smooth:
+        mesh.polygons.foreach_set('use_smooth', [True] * len(mesh.polygons))
+    mesh.update()
+    for material in old_mesh.materials:
+        mesh.materials.append(material)
+    mesh_obj.data = mesh
+    bpy.data.meshes.remove(old_mesh)
+    mesh_obj['ase_density_repeat'] = [int(n) for n in repeat]
+    return mesh_obj
 
 
 def shell_compositor(shell_objects, scene=None, structure_on_top=True):
@@ -481,6 +461,13 @@ def shell_compositor(shell_objects, scene=None, structure_on_top=True):
     # the view layer's root and cannot be excluded from anything
     structure_collections = [c for c in dict.fromkeys(origins)
                              if c not in shell_collections and c is not master]
+    # the shell collections sit at the scene root, not inside the
+    # structure's collection, because a nested one cannot be excluded from
+    # a view layer on its own. This says which structure they belong to,
+    # so a supercell can find them again.
+    for collection in shell_collections:
+        collection['ase_structure'] = (structure_collections[0].name
+                                       if structure_collections else '')
 
     def isolate(view_layer, keep):
         """Leave only the collections in `keep` of the ones this router
@@ -492,18 +479,32 @@ def shell_compositor(shell_objects, scene=None, structure_on_top=True):
 
     def layer_for(name, keep):
         view_layer = scene.view_layers.get(name) or scene.view_layers.new(name)
+        view_layer.use = True
         isolate(view_layer, keep)
         return view_layer.name
 
-    # the backdrop: the original layer, with everything this router owns
-    # taken out of it
-    order = [layer_for(scene.view_layers[0].name, [])]
-    order += [layer_for(collection.name, [collection])
-              for collection in shell_collections]
+    # the scene's first view layer is what the viewport shows and what you
+    # work in, so it keeps showing everything - isolating passes there
+    # would empty the viewport of the very structure being imported. It is
+    # taken out of the render instead, or its contents would render twice.
+    base = scene.view_layers[0]
+    for child in base.layer_collection.children:
+        child.exclude = False
+    base.use = False
+
+    order = [layer_for(collection.name, [collection])
+             for collection in shell_collections]
     if structure_collections:
         structure_layer = layer_for(f'{structure_collections[0].name}_structure',
                                     structure_collections)
-        order.insert(0 if not structure_on_top else len(order), structure_layer)
+        order.insert(len(order) if structure_on_top else 0, structure_layer)
+    # a backdrop pass, but only when there is anything else to render
+    owned = shell_collections + structure_collections
+    rest = [ob for ob in scene.objects
+            if ob.type in {'MESH', 'VOLUME', 'CURVE', 'SURFACE', 'META', 'FONT'}
+            and not any(coll in owned for coll in ob.users_collection)]
+    if rest:
+        order.insert(0, layer_for(f'{scene.name}_backdrop', []))
 
     # alpha over needs something to composite onto
     scene.render.film_transparent = True
@@ -537,31 +538,29 @@ def import_density_mesh(filepath, filename, color_filepath=None,
                         iso_value=0.03, shade_smooth=True, preset='DEFAULT',
                         import_atoms=True, color_min=None, color_max=None,
                         sample_interior=False, outline=True, shells=1,
-                        shell_max=None, shell_spacing='LOG', layered=False,
+                        shell_max=None, shell_spacing='LOG', layered=True,
                         **kwargs):
     """Import a density isosurface as a mesh.
 
     shells > 1 imports a nest of isosurfaces instead of one, each colored
     by the isovalue it stands for - a density colored by its own value.
-    The near wall of every shell is invisible to the camera (see
-    _see_inside), so the nest reads as contour bands, ordered by value:
-    the shell with the highest value sits on top, the weakest outermost.
-    Cycles needs enough transparent bounces for that - see
-    ensure_transparent_bounces, which this raises for you. The levels run from
-    iso_value inwards to shell_max (see shell_levels), and a nest defaults
-    to the 'SHELLS' preset since the other ramps are opaque.
+    Each shell is flat-shaded by its own color from the map, and the
+    ordering - strongest on top - comes from putting every shell on its
+    own render pass, which is what layered does and why it defaults to on
+    for a nest. The levels run from iso_value inwards to shell_max (see
+    shell_levels), and a nest defaults to the 'SHELLS' preset, the only
+    one built as a color map.
 
-    layered=True puts every shell on its own view layer and composites
-    them by value (shell_compositor), so a stronger value lands on top of
-    a weaker one even when the two sit in lobes that overlap in depth. It
+    layered (on by default for a nest) puts every shell on its own view
+    layer and composites them by value (shell_compositor), so a stronger
+    value lands on top of a weaker one however the two sit in space. It
     returns the list of shell objects, weakest first, instead of a single
-    object - and costs one render pass per shell.
+    object - and costs one render pass per shell plus one for the
+    structure. Turned off, the shells are opaque surfaces in one pass, so
+    the outermost hides the rest.
     """
     if shells > 1 and preset == 'DEFAULT':
         preset = 'SHELLS'
-    if shells > 1:
-        # or the innermost shells render as a black hole, see the docstring
-        ensure_transparent_bounces(shells)
     if import_atoms:
         # the structure from the same file, as the nodes representation;
         # this also creates the collection the isomesh is linked into
@@ -575,9 +574,15 @@ def import_density_mesh(filepath, filename, color_filepath=None,
         groups = density_to_mesh_data(
             filepath, iso_value=iso_value, shells=shells, shell_max=shell_max,
             shell_spacing=shell_spacing, per_shell=True)
-        objects = [_isomesh_object(f'{name}_shell_{index}', verts, faces, colors,
-                                   shade_smooth, preset)
-                   for index, (verts, faces, colors) in enumerate(groups, start=1)]
+        # named after the isovalue each one stands for, so the outliner,
+        # the collections and the render layers all say which level they are
+        objects = [_isomesh_object(f'{name}_shell_{level:.4g}', verts, faces,
+                                   colors, shade_smooth, preset,
+                                   source={'ase_density_file': filepath,
+                                           'ase_shell_level': float(level),
+                                           'ase_shell_color': float(colors[0][0]),
+                                           'ase_shell_alpha': float(colors[0][3])})
+                   for verts, faces, colors, level in groups]
         print(f'density mesh: {shells} shells on their own render layers, '
               f'{sum(len(o.data.vertices) for o in objects)} verts')
         shell_compositor(objects)
@@ -590,4 +595,6 @@ def import_density_mesh(filepath, filename, color_filepath=None,
         shell_spacing=shell_spacing)
     print(f'density mesh: {len(verts)} verts, {len(faces)} faces'
           + (f', {shells} shells' if shells > 1 else ''))
-    return _isomesh_object(name, verts, faces, colors, shade_smooth, preset)
+    return _isomesh_object(name, verts, faces, colors, shade_smooth, preset,
+                           source={'ase_density_file': filepath,
+                                   'ase_shell_level': float(iso_value)})

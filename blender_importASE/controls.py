@@ -247,6 +247,103 @@ def _density_nodes_outdated(density_obj):
     return False
 
 
+def _supercell_parts(obj):
+    """Everything of this structure a supercell has to touch: the geometry
+    nodes that repeat the atoms, the density volumes whose grid has to be
+    tiled, and the isosurface meshes that have to be recomputed."""
+    collections = obj.users_collection or []
+    objects = {ob for coll in collections for ob in coll.all_objects} | {obj}
+    # isosurface shells live in collections of their own at the scene root
+    # (see shell_compositor), tagged with the structure they belong to
+    names = {coll.name for coll in collections}
+    for coll in bpy.data.collections:
+        if coll.get('ase_structure') in names:
+            objects |= set(coll.all_objects)
+    modifiers, volumes, meshes = [], [], []
+    for ob in sorted(objects, key=lambda o: o.name):
+        for mod in ob.modifiers:
+            if (mod.type == 'NODES' and mod.node_group is not None
+                    and mod.node_group.name.startswith('supercell')):
+                modifiers.append(mod)
+        if ob.type == 'VOLUME' and ob.get('ase_base_vdb'):
+            volumes.append(ob)
+        elif ob.type == 'MESH' and ob.get('ase_density_file'):
+            meshes.append(ob)
+    return modifiers, volumes, meshes
+
+
+class ASE_OT_global_supercell(bpy.types.Operator):
+    """Repeat the whole structure as a supercell: the atoms and bonds, the
+    density volumes and the isosurface meshes, all to the same count"""
+    bl_idname = 'ase.global_supercell'
+    bl_label = 'Supercell (everything)'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    repeat_x: bpy.props.IntProperty(name='repeat x', default=1, min=1, soft_max=6)
+    repeat_y: bpy.props.IntProperty(name='repeat y', default=1, min=1, soft_max=6)
+    repeat_z: bpy.props.IntProperty(name='repeat z', default=1, min=1, soft_max=6)
+    offset_x: bpy.props.IntProperty(name='offset a', default=0)
+    offset_y: bpy.props.IntProperty(name='offset b', default=0)
+    offset_z: bpy.props.IntProperty(name='offset c', default=0)
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and any(_supercell_parts(obj))
+
+    def invoke(self, context, event):
+        repeats, offsets = _supercell_settings(context.active_object)
+        self.repeat_x, self.repeat_y, self.repeat_z = repeats
+        self.offset_x, self.offset_y, self.offset_z = offsets
+        return self.execute(context)
+
+    def execute(self, context):
+        from .import_cubefiles import density_supercell
+        from .density_mesh import density_mesh_supercell
+        repeat = (self.repeat_x, self.repeat_y, self.repeat_z)
+        offset = (self.offset_x, self.offset_y, self.offset_z)
+        modifiers, volumes, meshes = _supercell_parts(context.active_object)
+
+        for mod in modifiers:
+            names = _socket_identifiers(mod)
+            for axis, value in zip(('repeat_x', 'repeat_y', 'repeat_z'), repeat):
+                if axis in names:
+                    set_mod_input(mod, names[axis], value)
+            for axis, value in zip(('Offset_x', 'Offset_y', 'Offset_z'), offset):
+                if axis in names:
+                    set_mod_input(mod, names[axis], value)
+
+        done = [f'{len(modifiers)} modifier(s)']
+        for volume in volumes:
+            try:
+                density_supercell(volume, repeat)
+            except Exception as exc:
+                self.report({'ERROR'}, f'{volume.name}: {exc}')
+                return {'CANCELLED'}
+            for mod in volume.modifiers:
+                if (mod.type == 'NODES' and mod.node_group is not None
+                        and mod.node_group.name.startswith('visualize_edensity')):
+                    names = _socket_identifiers(mod)
+                    for axis, value in zip('abc', offset):
+                        if f'offset {axis}' in names:
+                            set_mod_input(mod, names[f'offset {axis}'], value)
+        if volumes:
+            done.append(f'{len(volumes)} volume(s)')
+
+        for mesh_obj in meshes:
+            try:
+                density_mesh_supercell(mesh_obj, repeat)
+            except Exception as exc:
+                self.report({'ERROR'}, f'{mesh_obj.name}: {exc}')
+                return {'CANCELLED'}
+        if meshes:
+            done.append(f'{len(meshes)} isosurface(s)')
+
+        self.report({'INFO'}, f'{"x".join(str(n) for n in repeat)}: '
+                              f'{", ".join(done)}')
+        return {'FINISHED'}
+
+
 class ASE_OT_upgrade_density_nodes(bpy.types.Operator):
     """Rebuild this structure's density modifiers with the current node
     group, keeping their settings - gives densities imported by an older
@@ -533,6 +630,19 @@ class ASE_PT_controls(bpy.types.Panel):
             if mod.node_group.name.startswith('visualize_edensity'):
                 self.draw_density_supercell(obj, box)
 
+        # one supercell for the whole structure: atoms, density volumes
+        # and isosurface meshes, which each need a different treatment
+        modifiers, volumes, meshes = _supercell_parts(obj)
+        if any((modifiers, volumes, meshes)):
+            box = self.layout.box()
+            box.label(text='Supercell')
+            box.operator('ase.global_supercell', icon='MOD_ARRAY')
+            parts = [f'{len(modifiers)} modifier' if modifiers else '',
+                     f'{len(volumes)} volume' if volumes else '',
+                     f'{len(meshes)} isosurface' if meshes else '']
+            box.label(text='applies to ' + ', '.join(p for p in parts if p),
+                      icon='INFO')
+
         # per-element colors: the atom materials plus the 'atom_color'
         # attribute the colored bonds read (see element_colors.py)
         draw_element_colors(self.layout, obj)
@@ -639,8 +749,8 @@ class ASE_PT_controls(bpy.types.Panel):
 
 
 classes = (ASE_OT_toggle_pair_cut, ASE_OT_set_radius_mode,
-           ASE_OT_upgrade_density_nodes, ASE_OT_density_supercell,
-           ASE_OT_rebuild_supports,
+           ASE_OT_global_supercell, ASE_OT_upgrade_density_nodes,
+           ASE_OT_density_supercell, ASE_OT_rebuild_supports,
            ASE_OT_add_custom_bond, ASE_OT_reset_custom_bonds, ASE_PT_controls)
 
 
