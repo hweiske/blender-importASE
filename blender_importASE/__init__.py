@@ -10,7 +10,7 @@ from os.path import join
 
 __author__ = "Hendrik Weiske"
 __credits__ = ["Franz Thiemann"]
-__version__ = "2.5.1"
+__version__ = "2.6.0"
 __maintainer__ = "Hendrik Weiske"
 __email__ = "hendrik.weiske@uni-leipzig.de"
 
@@ -18,11 +18,27 @@ bl_info = {
     "name": "ASE Importer",
     "description": "Import molecules using ASE",
     "author": "Hendrik Weiske",
-    "version": (2, 5, 1),
+    "version": (2, 6, 0),
     "blender": (4, 4, 0),
     "location": "File > Import",
     "category": "Import-Export",
 }
+
+ADPS_DESCRIPTION = (
+    "draw the atoms as thermal ellipsoids with principal-axis rings when the "
+    "file carries anisotropic displacement parameters (CIF "
+    "_atom_site_aniso_U/B/beta, SHELX .res / .ins); files without them import "
+    "as usual. Atoms with only an isotropic value become spheres of that "
+    "size. Switchable afterwards with the 'adps' modifier input")
+ADP_PROBABILITY_DESCRIPTION = (
+    "probability of finding the atom inside its ellipsoid (50 % is the usual "
+    "ORTEP level)")
+HYDROGEN_ADPS_DESCRIPTION = (
+    "draw hydrogens as displacement ellipsoids too. Off keeps them as the "
+    "usual small spheres without rings (riding hydrogens only have an "
+    "isotropic value, which at 50 % draws them larger than the atoms they sit "
+    "on). Switchable afterwards with the 'hydrogen_adps' modifier input")
+
 
 class ImportASEMolecule(bpy.types.Operator, ImportHelper):
     bl_idname = "import_mesh.ase"
@@ -126,6 +142,24 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         description='add supercell modifier when PBC',
         default=True
     )
+    adps: bpy.props.BoolProperty(
+        name='ADPs',
+        description=ADPS_DESCRIPTION + " (nodes representation only)",
+        default=True,
+    )
+    adp_probability: bpy.props.FloatProperty(
+        name='ADP probability',
+        description=ADP_PROBABILITY_DESCRIPTION,
+        default=0.5,
+        min=0.01,
+        max=0.99,
+        subtype='FACTOR',
+    )
+    hydrogen_adps: bpy.props.BoolProperty(
+        name='hydrogen ADPs',
+        description=HYDROGEN_ADPS_DESCRIPTION,
+        default=False,
+    )
     files: bpy.props.CollectionProperty(
         type=bpy.types.OperatorFileListElement,
         options={'HIDDEN', 'SKIP_SAVE'},
@@ -155,6 +189,11 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'overwrite')
         layout.prop(self,'imageslice')
         layout.prop(self,'frame_interpolation')
+        if self.representation == 'nodes':
+            layout.prop(self, 'adps')
+            if self.adps:
+                layout.prop(self, 'adp_probability')
+                layout.prop(self, 'hydrogen_adps')
 
     def execute(self, context):
         # When invoked from the GUI file dialog, ImportHelper populates
@@ -187,6 +226,8 @@ class ImportASEMolecule(bpy.types.Operator, ImportHelper):
                     frame_interpolation=self.frame_interpolation,
                     animate=self.animate, outline=self.outline,
                     overwrite=self.overwrite, add_supercell=self.add_supercell,
+                    adps=self.adps, adp_probability=self.adp_probability,
+                    hydrogen_adps=self.hydrogen_adps,
                 )
             except ValueError as exc:
                 self.report({'ERROR'}, str(exc))
@@ -210,8 +251,6 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         name="expansion cutoff",
         description="covalent-radius multiplier for the plain image expansion (used when complete molecules is off): pulls in the periodic neighbor images that close polyhedra at the cell boundary",
         default=1.2,
-        min=0.5,
-        soft_max=2.0,
     )
     complete_molecules: bpy.props.BoolProperty(
         name="complete molecules",
@@ -233,8 +272,6 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
                     "if a long bond is missed, lower it if separate molecules "
                     "come out joined",
         default=1.3,
-        min=0.5,
-        soft_max=2.0,
     )
     all_images: bpy.props.BoolProperty(
         name="all molecule images",
@@ -253,8 +290,6 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
                     "enough to close their coordination polyhedra at the "
                     "boundary, 0 cuts at the cell",
         default=1,
-        min=0,
-        soft_max=3,
     )
     cell_margin: bpy.props.FloatProperty(
         name="molecule margin",
@@ -263,29 +298,22 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
                     "that close to the cell are imported as well. 0 imports the "
                     "molecules reaching into the cell itself",
         default=0.0,
-        min=0.0,
-        soft_max=10.0,
         unit='LENGTH',
     )
     trim_cutoff: bpy.props.FloatProperty(
         name="trim cutoff",
         description="covalent-radius multiplier below which expanded atoms without neighbors are removed again",
         default=1.0,
-        min=0.5,
-        soft_max=2.0,
     )
     poly_cutoff: bpy.props.FloatProperty(
         name="polyhedra cutoff",
         description="covalent-radius multiplier defining the neighbor shell that forms a polyhedron",
         default=1.1,
-        min=0.5,
-        soft_max=2.0,
     )
     min_neighbors: bpy.props.IntProperty(
         name="min neighbors",
         description="minimum number of neighbors an atom needs to get a coordination polyhedron",
         default=4,
-        min=4,
     )
     include_hydrogen: bpy.props.BoolProperty(
         name="include hydrogen",
@@ -315,15 +343,11 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         name="bond distance",
         description="bond distance criterion passed to the atoms_and_bonds node group",
         default=0.66,
-        min=0.0,
-        soft_max=2.0,
     )
     bond_radius: bpy.props.FloatProperty(
         name="bond radius",
         description="bond cylinder radius",
         default=0.1,
-        min=0.0,
-        soft_max=1.0,
     )
     outline: bpy.props.BoolProperty(
         name='outline',
@@ -333,6 +357,22 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
     unit_cell: bpy.props.BoolProperty(
         name='import unit cell',
         description='draw the unit cell as flat black edges (periodic structures only)',
+        default=False,
+    )
+    adps: bpy.props.BoolProperty(
+        name='ADPs',
+        description=ADPS_DESCRIPTION,
+        default=True,
+    )
+    adp_probability: bpy.props.FloatProperty(
+        name='ADP probability',
+        description=ADP_PROBABILITY_DESCRIPTION,
+        default=0.5,
+        subtype='FACTOR',
+    )
+    hydrogen_adps: bpy.props.BoolProperty(
+        name='hydrogen ADPs',
+        description=HYDROGEN_ADPS_DESCRIPTION,
         default=False,
     )
     files: bpy.props.CollectionProperty(
@@ -369,6 +409,10 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
         layout.prop(self, 'bond_radius')
         layout.prop(self, 'outline')
         layout.prop(self, 'unit_cell')
+        layout.prop(self, 'adps')
+        if self.adps:
+            layout.prop(self, 'adp_probability')
+            layout.prop(self, 'hydrogen_adps')
 
     def execute(self, context):
         if self.files:
@@ -383,26 +427,33 @@ class ImportASEPolyhedra(bpy.types.Operator, ImportHelper):
 
         from .polyhedra import import_polyhedra
         for name in names:
-            import_polyhedra(
-                join(directory, name), name,
-                expand_cutoff=self.expand_cutoff,
-                trim_cutoff=self.trim_cutoff,
-                poly_cutoff=self.poly_cutoff,
-                min_neighbors=self.min_neighbors,
-                include_hydrogen=self.include_hydrogen,
-                single_element_corners=self.single_element_corners,
-                complete_molecules=self.complete_molecules,
-                bond_cutoff=self.bond_cutoff,
-                cell_margin=self.cell_margin,
-                all_images=self.all_images,
-                framework_shells=self.framework_shells,
-                resolution=self.resolution,
-                colorbonds=self.colorbonds,
-                bond_distance=self.bond_distance,
-                bond_radius=self.bond_radius,
-                outline=self.outline,
-                unit_cell=self.unit_cell,
-            )
+            try:
+                import_polyhedra(
+                    join(directory, name), name,
+                    expand_cutoff=self.expand_cutoff,
+                    trim_cutoff=self.trim_cutoff,
+                    poly_cutoff=self.poly_cutoff,
+                    min_neighbors=self.min_neighbors,
+                    include_hydrogen=self.include_hydrogen,
+                    single_element_corners=self.single_element_corners,
+                    complete_molecules=self.complete_molecules,
+                    bond_cutoff=self.bond_cutoff,
+                    cell_margin=self.cell_margin,
+                    all_images=self.all_images,
+                    framework_shells=self.framework_shells,
+                    resolution=self.resolution,
+                    colorbonds=self.colorbonds,
+                    bond_distance=self.bond_distance,
+                    bond_radius=self.bond_radius,
+                    outline=self.outline,
+                    unit_cell=self.unit_cell,
+                    adps=self.adps,
+                    adp_probability=self.adp_probability,
+                    hydrogen_adps=self.hydrogen_adps,
+                )
+            except ValueError as exc:
+                self.report({'ERROR'}, str(exc))
+                return {'CANCELLED'}
         return {"FINISHED"}
 
     def invoke(self, context, event):

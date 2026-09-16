@@ -1,6 +1,4 @@
 import bpy
-import ase
-import ase.io
 from ase import Atoms
 from .import_cubefiles import (cube2vol, chgcar2vol, is_vasp_density, read_vasp_density,
                                is_ams_tape41, read_tape41, tape41_import)
@@ -14,6 +12,8 @@ from .node_networks.outline import outline_objects
 from .node_networks.bond_node import make_bonds
 from .node_networks.compat import set_mod_input
 from .node_networks.hide_atoms import hide_atoms
+from .node_networks.adp_nodes import store_adps, setup_adp_inputs, add_adp_rings
+from .adp import read_atoms, anisotropic_adps
 import time
 
 
@@ -22,7 +22,13 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
                         representation="Balls'n'Sticks",
                         read_density=True, shift_cell=False,
                         imageslice=1, frame_interpolation=1,
-                        animate = True, outline = True, **kwargs):
+                        animate = True, outline = True,
+                        adps=True, adp_probability=0.5, hydrogen_adps=False, **kwargs):
+    """adps: with the nodes representation, draw the atoms as thermal
+    ellipsoids with principal-axis rings when the file carries anisotropic
+    displacement parameters (CIF, SHELX .res / .ins; see adp.py) - ignored
+    for files without them. adp_probability sets the ellipsoid level,
+    hydrogen_adps whether hydrogens get one too."""
     # Read in the structure
     start=time.time()
     modifier_counter = 0
@@ -40,7 +46,8 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         tape41_atoms, tape41_volumes = read_tape41(filepath)
         atoms = [tape41_atoms]
     else:
-        atoms = ase.io.read(filepath,index = ':')
+        # ase.io.read, plus SHELX files, keeping a CIF's atom-site tags
+        atoms = read_atoms(filepath, index=':')
     end_read=time.time()
     print('Time to read file: ',end_read-start)
     
@@ -111,6 +118,11 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
             obj,mesh=read_structure(TRAJECTORY[::imageslice],atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=True,frame_interpolation=frame_interpolation)
         else:
             obj,mesh=read_structure(atoms,atoms.get_chemical_formula() + '_' + filename.split('.')[0],animate=False)
+        # ellipsoids for a static structure whose file has an anisotropic
+        # displacement table; nothing changes for any other file
+        U = None if (animate and trajectory) or not adps else anisotropic_adps(atoms)
+        if U is not None:
+            store_adps(mesh, U)
         print(f'add hide modifier to GeometryNodes{modifier_chosen}')
         hide_atoms(obj,atoms,modifier='GeometryNodes'+modifier_chosen)
         modifier_counter += 1
@@ -125,13 +137,16 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
         elements_name='_'.join(list(set(atoms.get_chemical_symbols())))
         bondmat=create_bondmat(colorbonds=colorbonds,name=elements_name)
         print(f'add atoms_and_bonds modifier to GeometryNodes{modifier_chosen}')
-        atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen,bondmat=bondmat)
+        atoms_from_verts = atoms_and_bonds(obj,atoms,'GeometryNodes'+modifier_chosen,bondmat=bondmat,
+                                           with_adps=U is not None)
        
         mod = bpy.context.object.modifiers['GeometryNodes'+modifier_chosen]
         mod.node_group = atoms_from_verts
         set_mod_input(mod, "Socket_2", 0.66)
         set_mod_input(mod, "Socket_3", 0.1)
         set_mod_input(mod, "Socket_4", resolution)
+        if U is not None:
+            setup_adp_inputs(mod, adp_probability, hydrogen_adps)
         modifier_counter += 1
         modifier_chosen=f'.00{modifier_counter}'
         
@@ -206,6 +221,9 @@ def import_ase_molecule(filepath, filename, overwrite=True, add_supercell=True, 
             
         if representation == 'nodes':
             outline_objects([obj],modifier='GeometryNodes'+modifier_chosen)
+    if representation == 'nodes' and U is not None:
+        # last on the stack: sweep the ADP ring curves past the outline
+        add_adp_rings(obj)
         if representation == 'VDW':
             outline_objects(list_of_atoms,modifier='GeometryNodes'+modifier_chosen)
             modifier_counter += 1

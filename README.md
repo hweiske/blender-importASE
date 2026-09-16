@@ -43,8 +43,12 @@ Import molecules, crystals, trajectories, and volumetric data (electron densitie
     </td>
   </tr>
   <tr>
-    <td align="center" colspan="2">
-      <img src="docs/images/print_supports.jpg" alt="Molecule with generated resin supports" width="480"/><br/>
+    <td align="center" width="50%">
+      <img src="docs/images/adps.jpg" alt="Urea from neutron data with thermal ellipsoids"/><br/>
+      <b>Thermal ellipsoids</b> — anisotropic displacement parameters from CIF or SHELX .res/.ins, with principal-axis rings
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/print_supports.jpg" alt="Molecule with generated resin supports"/><br/>
       <b>3D printing</b> — atoms and bonds with generated resin supports, exported as per-element STLs in one zip
     </td>
   </tr>
@@ -88,6 +92,37 @@ with a node-based isosurface (adjustable isovalue and directional cutoffs):
 
 Note that densities are shown in e/A^3 (ASE convention), so isovalues from
 tools that use the raw CHGCAR values (e.g. VESTA) do not transfer directly.
+
+### Thermal ellipsoids (ADPs) and SHELX files
+
+Structures from single-crystal refinements can be drawn with their anisotropic
+displacement parameters as thermal ellipsoids, ORTEP style: each atom becomes
+the ellipsoid holding it with a chosen probability (50 % by default), with
+black rings along its three principal sections.
+
+* **Automatic.** The "ADPs" option is on by default in both the regular import
+  (nodes representation) and the polyhedra import. It only takes effect when
+  the file actually carries an anisotropic displacement table; every other
+  file imports exactly as before.
+* **Sources.** CIF files (`_atom_site_aniso_U_ij`, `B_ij` or `beta_ij`) and
+  SHELX `.res` / `.ins` files. Atoms with only an isotropic value become
+  spheres of that size; riding hydrogens in a SHELX file get their multiple of
+  the parent atom's U_eq. Symmetry-generated atoms get the tensor rotated by
+  the operation that generated them.
+* **Hydrogens.** Riding hydrogens only carry an isotropic value, which at 50 %
+  draws them larger than the atoms they sit on - so they stay the usual small
+  spheres unless "hydrogen ADPs" is ticked (e.g. for neutron data with
+  anisotropic hydrogens, as in the urea above).
+* **Afterwards.** The modifier inputs `adps` (ellipsoids / normal spheres),
+  `hydrogen_adps` and `adp_scale` (the probability level, 1.538 = 50 %) switch
+  things live; the last modifier, `adp_rings`, sets the ring thickness and
+  their material (a black emission). Supercell and per-element hiding work on
+  the ellipsoids as on normal atoms.
+
+SHELX `.res` / `.ins` files can be imported in general - with or without
+ADPs - since ASE itself has no reader for them: cell, symmetry (LATT/SYMM),
+SFAC, free variables and riding hydrogens are read, the difference-map Q peaks
+of a `.res` are skipped.
 
 ### ASE panel
 

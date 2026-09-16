@@ -258,7 +258,7 @@ def set_atoms_node_group():
     return set_atoms
 
 #initialize atoms_from_verts node group
-def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_charges=False):
+def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_charges=False, with_adps=False):
 
     atoms_and_bonds = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = f"atoms_and_bonds_{atoms.get_chemical_formula()}")
 
@@ -2127,7 +2127,23 @@ def atoms_and_bonds(obj, atoms, modifier='GeometryNodes',bondmat=None, with_char
 
     atoms_and_bonds.links.new(group_input_at_atoms.outputs[0], reroute_001.inputs[0])
 
-    atoms_and_bonds.links.new(join_geometry_atoms.outputs[0], join_geometry_001.inputs[0])
+    atoms_geometry = join_geometry_atoms.outputs[0]
+    if with_adps:
+        # thermal ellipsoids (see adp_nodes.py): the atom instances get the
+        # tensors' rotation and semi-axes, and the principal-axis rings leave
+        # the tree as curves next to the finished mesh - swept into tubes by
+        # the adp_rings modifier after the outline
+        from .adp_nodes import add_adp_nodes
+        atoms_geometry, adp_rings = add_adp_nodes(
+            atoms_and_bonds, atoms_geometry, group_input_at_atoms.outputs[0])
+        join_adp_rings = atoms_and_bonds.nodes.new("GeometryNodeJoinGeometry")
+        join_adp_rings.name = "Join ADP Rings"
+        join_adp_rings.location = (5085.0, 350.0)
+        atoms_and_bonds.links.new(adp_rings, join_adp_rings.inputs[0])
+        atoms_and_bonds.links.new(set_material_index.outputs[0], join_adp_rings.inputs[0])
+        atoms_and_bonds.links.new(join_adp_rings.outputs[0], group_output.inputs[0])
+
+    atoms_and_bonds.links.new(atoms_geometry, join_geometry_001.inputs[0])
 
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj

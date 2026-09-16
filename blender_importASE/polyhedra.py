@@ -14,15 +14,53 @@ from ase import Atoms
 from ase.neighborlist import NeighborList
 from ase.data import covalent_radii
 
+from .adp import read_atoms, anisotropic_adps
 from .utils import atomcolors
 from .drawobjects import draw_unit_cell
 from .node_networks.nodes_atoms_and_bonds import set_atoms_node_group, atoms_and_bonds, read_structure
 from .node_networks.bond_mat import create_bondmat
 from .node_networks.electron_density_nodes import newMaterial
 from .node_networks.outline import outline_objects
-from .node_networks.compat import set_mod_input
+from .node_networks.adp_nodes import store_adps, setup_adp_inputs, add_adp_rings
+from .node_networks.compat import set_mod_input, get_mod_input, mod_input_path
+from .node_networks.hide_atoms import hide_atoms
+from .node_networks.supercell import make_supercell
 
 POLYHEDRA_MATERIAL = 'polyhedra material'
+
+
+def _next_modifier_name(obj):
+    """Name bpy.ops.object.modifier_add gives the next geometry-nodes
+    modifier on obj."""
+    names = {mod.name for mod in obj.modifiers}
+    name, n = 'GeometryNodes', 0
+    while name in names:
+        n += 1
+        name = f'GeometryNodes.{n:03d}'
+    return name
+
+
+def _follow_supercell(poly_obj, structure, supercell):
+    """Give the polyhedra faces the structure's supercell: the same node
+    group, with every input driven by the structure's modifier, so the faces
+    repeat along whenever the atoms do. (The ASE panel's 'Supercell
+    (everything)' sets both modifiers anyway.)"""
+    mod = poly_obj.modifiers.new(name=supercell.name, type='NODES')
+    mod.node_group = supercell.node_group
+    for item in supercell.node_group.interface.items_tree:
+        if (getattr(item, 'in_out', None) != 'INPUT'
+                or item.socket_type == 'NodeSocketGeometry'):
+            continue
+        set_mod_input(mod, item.identifier,
+                      get_mod_input(supercell, item.identifier, item.default_value))
+        fcurve = poly_obj.driver_add(mod_input_path(mod, item.identifier))
+        driver = fcurve.driver
+        driver.type = 'AVERAGE'
+        variable = driver.variables.new()
+        variable.name = 'value'
+        variable.type = 'SINGLE_PROP'
+        variable.targets[0].id = structure
+        variable.targets[0].data_path = mod_input_path(supercell, item.identifier)
 
 
 def _polyhedra_material():
@@ -292,6 +330,7 @@ def select_complete_molecules(atoms, bond_cutoff=1.3, cell_margin=0.0,
                                  for index, offset in keep])
     new_atoms.pbc = False
     new_atoms.cell = None
+    new_atoms.new_array('source_index', np.array([index for index, _ in keep], dtype=int))
     return new_atoms, trimmable
 
 
@@ -306,7 +345,8 @@ def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
 
     Returns (new_atoms, faces): a non-periodic Atoms object whose
     positions are the mesh vertices, and the polyhedra faces as vertex
-    index lists.
+    index lists. Its 'source_index' array names the atom of `atoms` every
+    vertex is an image of (the ADPs follow it).
 
     complete_molecules: import whole molecules -- grow each one shell by
                     shell out of the periodic cell, so a molecule the cell
@@ -360,12 +400,14 @@ def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
         new_atoms = Atoms()
         new_atoms.pbc = False
         seen = set()
+        source_index = []
 
         def append_image(index, offset):
             key = (index, tuple(int(o) for o in offset))
             if key in seen:
                 return
             seen.add(key)
+            source_index.append(index)
             new_atoms.append(atoms[index])
             new_atoms[-1].position = positions[index] + np.dot(offset, cell)
 
@@ -375,6 +417,7 @@ def build_polyhedra_atoms(atoms, expand_cutoff=1.2, trim_cutoff=1.0,
             for j, offset in zip(indices, offsets):
                 if j >= i:
                     append_image(j, offset)
+        new_atoms.new_array('source_index', np.array(source_index, dtype=int))
         trimmable = [True] * len(new_atoms)
 
     # drop expanded atoms that ended up without any neighbor
@@ -430,9 +473,17 @@ def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
                      bond_radius=0.1, outline=False, single_element_corners=True,
                      complete_molecules=True, bond_cutoff=1.3, cell_margin=0.0,
                      all_images=True, framework_shells=1, unit_cell=False,
-                     **kwargs):
-    import ase.io
-    atoms = ase.io.read(filepath)
+                     adps=True, adp_probability=0.5, hydrogen_adps=False, **kwargs):
+    """adps: draw the atoms as thermal ellipsoids with principal-axis
+    rings when the file carries anisotropic displacement parameters (a CIF
+    or SHELX .res / .ins file, see adp.py, shelx.py; ignored otherwise), at
+    the `adp_probability` level (hydrogen_adps=False keeps hydrogens as the
+    usual small spheres). Atoms with only an isotropic value become
+    spheres of that size; atoms without any, or with a tensor that is not
+    positive definite, keep their normal sphere."""
+    atoms = read_atoms(filepath, index=-1)
+    U = anisotropic_adps(atoms) if adps else None
+    adps = U is not None
 
     new_atoms, faces = build_polyhedra_atoms(
         atoms, expand_cutoff=expand_cutoff, trim_cutoff=trim_cutoff,
@@ -454,15 +505,30 @@ def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
 
     name = atoms.get_chemical_formula() + '_polyhedra_' + filename.split('.')[0]
     obj, mesh = read_structure(new_atoms, name, animate=False)
+    if adps:
+        store_adps(mesh, U[new_atoms.arrays['source_index']])
+
+    # modifier stack as in the nodes representation of the main importer:
+    # hide atoms -> supercell (periodic input only) -> atoms_and_bonds
+    # -> outline
+    hide_atoms(obj, new_atoms, modifier=_next_modifier_name(obj))
+    supercell = None
+    if make_supercell([obj], atoms, _next_modifier_name(obj)):
+        supercell = obj.modifiers[-1]
 
     set_atoms_node_group()
     elements_name = '_'.join(list(set(new_atoms.get_chemical_symbols())))
     bondmat = create_bondmat(colorbonds=colorbonds, name=elements_name)
-    atoms_from_verts = atoms_and_bonds(obj, new_atoms, 'GeometryNodes', bondmat=bondmat)
-    obj.modifiers['GeometryNodes'].node_group = atoms_from_verts
-    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_2", bond_distance)
-    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_3", bond_radius)
-    set_mod_input(obj.modifiers['GeometryNodes'], "Socket_4", resolution)
+    atoms_mod_name = _next_modifier_name(obj)
+    atoms_from_verts = atoms_and_bonds(obj, new_atoms, atoms_mod_name, bondmat=bondmat,
+                                       with_adps=adps)
+    atoms_mod = obj.modifiers[atoms_mod_name]
+    atoms_mod.node_group = atoms_from_verts
+    set_mod_input(atoms_mod, "Socket_2", bond_distance)
+    set_mod_input(atoms_mod, "Socket_3", bond_radius)
+    set_mod_input(atoms_mod, "Socket_4", resolution)
+    if adps:
+        setup_adp_inputs(atoms_mod, adp_probability, hydrogen_adps)
 
     # the polyhedra faces live in their own object, so modifiers on the
     # structure (like the outline) never touch them. The material reads
@@ -487,10 +553,16 @@ def import_polyhedra(filepath, filename, expand_cutoff=1.2, trim_cutoff=1.0,
     poly_mesh.update()
     poly_obj = bpy.data.objects.new(poly_mesh.name, poly_mesh)
     my_coll.objects.link(poly_obj)
+    if supercell is not None:
+        _follow_supercell(poly_obj, obj, supercell)
 
     if outline:
         # atoms and bonds only - the polyhedra object stays outline-free
-        outline_objects([obj], modifier='GeometryNodes.001')
+        outline_objects([obj], modifier=_next_modifier_name(obj))
+
+    if adps:
+        # last: sweep the ring curves, which passed the outline unshelled
+        add_adp_rings(obj)
 
     if unit_cell and atoms.cell.rank == 3:
         # into this structure's collection, and after the outline pass so

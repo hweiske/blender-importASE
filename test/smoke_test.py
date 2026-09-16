@@ -117,12 +117,54 @@ def run_polyhedra():
                               ('ShaderNodeBsdfGlass', 'Color')):
         node = next(n for n in material.node_tree.nodes if n.bl_idname == node_type)
         assert node.inputs[socket].is_linked, f'{node_type} is not tinted by atom_color'
-    assert not faces_obj.modifiers, 'polyhedra faces must stay modifier-free'
     structure = next(o for o in bpy.data.objects
                      if 'polyhedra' in o.name and o.type == 'MESH'
                      and not o.name.endswith(('_faces', '_table')))
     names = [m.node_group.name for m in structure.modifiers if m.node_group]
-    assert any(n.startswith('outline') for n in names), names
+    # the stack of the nodes representation: hide, supercell, atoms, outline
+    kinds = [n.split('_')[0].split('.')[0].split(' ')[0] for n in names]
+    assert kinds == ['hide', 'supercell', 'atoms', 'outline'], names
+    # the faces only get the structure's supercell, never the outline
+    assert [m.node_group.name for m in faces_obj.modifiers] == [names[1]], \
+        [m.node_group.name for m in faces_obj.modifiers]
+
+    def evaluated(obj, attr='vertices'):
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        mesh = obj.evaluated_get(depsgraph).to_mesh()
+        count = len(getattr(mesh, attr))
+        obj.evaluated_get(depsgraph).to_mesh_clear()
+        return count
+
+    from blender_importASE.node_networks.compat import set_mod_input
+    faces_before = evaluated(faces_obj, 'polygons')
+    assert faces_before == len(faces_obj.data.polygons), faces_before
+
+    # hiding an element takes its atoms out of the structure
+    hide = structure.modifiers[0]
+    hide_na = next(i.identifier for i in hide.node_group.interface.items_tree
+                   if i.name == 'cutoff_Na')
+    atoms_before = evaluated(structure)
+    set_mod_input(hide, hide_na, True)
+    assert evaluated(structure) < atoms_before, 'hiding Na removed nothing'
+    set_mod_input(hide, hide_na, False)
+
+    # repeating the structure's supercell drives the faces along
+    supercell = structure.modifiers[1]
+    repeat_x = next(i.identifier for i in supercell.node_group.interface.items_tree
+                    if i.name == 'repeat_x')
+    set_mod_input(supercell, repeat_x, 2)
+    # the supercell merges by distance, so polyhedra that coincide across
+    # the cell boundary collapse into one: more faces, but no doubles
+    import numpy as np
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    mesh = faces_obj.evaluated_get(depsgraph).to_mesh()
+    co = np.empty(len(mesh.vertices) * 3)
+    mesh.vertices.foreach_get('co', co)
+    co = np.round(co.reshape(-1, 3), 3)
+    polygons = [tuple(sorted(map(tuple, co[list(p.vertices)]))) for p in mesh.polygons]
+    faces_obj.evaluated_get(depsgraph).to_mesh_clear()
+    assert faces_before < len(polygons) <= 2 * faces_before, (len(polygons), faces_before)
+    assert len(set(polygons)) == len(polygons), 'duplicate polyhedra faces'
 
 step('polyhedra', run_polyhedra)
 
@@ -242,6 +284,225 @@ def run_polyhedra_molecules():
     assert not [o for o in bpy.data.objects if 'unitcell' in o.name], 'cell drawn without a cell'
 
 step('polyhedra_molecules', run_polyhedra_molecules)
+
+def run_polyhedra_adps():
+    """Thermal ellipsoids: the tensor math against the U_eq a refinement
+    writes, the drawn ellipsoid size against a known tensor, and the adps
+    switch and ring material in the node tree."""
+    import numpy as np
+    from blender_importASE.adp import atom_adps, ellipsoids, probability_scale
+    from blender_importASE.polyhedra import import_polyhedra
+
+    assert abs(probability_scale(0.5) - 1.5382) < 1e-4
+
+    # every symmetry copy of a site keeps the site's U_eq (the trace is
+    # invariant under rotation, the CIF's U_eq is not computed by us); the
+    # benzoic acid is monoclinic in a nonstandard P21/n setting with riding
+    # Uiso hydrogens, the neutron urea has anisotropic H on special positions
+    for fixture, tolerance in (('benzoic_acid_cod7252065.cif', 1.5e-4),
+                               ('urea_neutron_cod1008775.cif', None)):
+        atoms = ase.io.read(f'{SCRATCH}/{fixture}', store_tags=True)
+        U = atom_adps(atoms)
+        kinds = atoms.arrays['spacegroup_kinds']
+        _, axes, valid = ellipsoids(U)
+        assert valid.all(), f'{fixture}: {(~valid).sum()} invalid tensors'
+        for site, ueq in enumerate(atoms.info['_atom_site_u_iso_or_equiv']
+                                   if tolerance else []):
+            traces = np.trace(U[kinds == site], axis1=1, axis2=2) / 3
+            assert np.allclose(traces, float(ueq), atol=tolerance), (fixture, site, traces, ueq)
+        # symmetry copies share the eigenvalues
+        for site in set(kinds):
+            spread = np.ptp(axes[kinds == site], axis=0).max()
+            assert spread < 1e-9, (fixture, site, spread)
+
+    # one atom with an axis-aligned tensor: the evaluated mesh spans the
+    # ellipsoid's semi-axes (+ the ring tube) at 50 % probability
+    single = f'{SCRATCH}/adp_single.cif'
+    with open(single, 'w') as fh:
+        fh.write("data_single\n_cell_length_a 10\n_cell_length_b 10\n"
+                 "_cell_length_c 10\n_cell_angle_alpha 90\n_cell_angle_beta 90\n"
+                 "_cell_angle_gamma 90\n_symmetry_space_group_name_H-M 'P 1'\n"
+                 "loop_\n_atom_site_label\n_atom_site_type_symbol\n"
+                 "_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n"
+                 "C1 C 0.5 0.5 0.5\nloop_\n_atom_site_aniso_label\n"
+                 "_atom_site_aniso_U_11\n_atom_site_aniso_U_22\n"
+                 "_atom_site_aniso_U_33\n_atom_site_aniso_U_12\n"
+                 "_atom_site_aniso_U_13\n_atom_site_aniso_U_23\n"
+                 "C1 0.01 0.04 0.09 0 0 0\n")
+    fresh_scene()
+    obj = import_polyhedra(single, 'adp_single.cif', adps=True, outline=False)
+    from blender_importASE.controls import find_ase_modifier
+    atoms_mod, _ = find_ase_modifier(obj)
+    kinds = [m.node_group.name.split('_')[0].split('.')[0] for m in obj.modifiers]
+    assert kinds == ['hide atoms', 'supercell', 'atoms', 'adp'], kinds
+    ring = obj.modifiers['adp_rings'].node_group.interface.items_tree['ring_radius']
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    mesh = obj.evaluated_get(depsgraph).to_mesh()
+    coords = np.empty(len(mesh.vertices) * 3)
+    mesh.vertices.foreach_get('co', coords)
+    coords = coords.reshape(-1, 3)
+    extent = (coords.max(axis=0) - coords.min(axis=0)) / 2
+    expected = 1.5382 * np.sqrt([0.01, 0.04, 0.09]) + ring.default_value
+    assert np.allclose(extent, expected, rtol=0.02), (extent, expected)
+    slots = [m.name for m in obj.data.materials]
+    assert slots[-1] == 'adp_rings', slots
+    # the materials the faces actually resolve to on the evaluated mesh (an
+    # empty material slipping in at slot 0 shifts them all by one)
+    face_slots = np.empty(len(mesh.polygons), dtype=np.int32)
+    mesh.polygons.foreach_get('material_index', face_slots)
+    used = {mesh.materials[i].name if mesh.materials[i] else None
+            for i in set(face_slots.tolist())}
+    assert used == {'C', 'adp_rings'}, used
+    obj.evaluated_get(depsgraph).to_mesh_clear()
+
+    # the adps switch brings back the plain sphere and drops the rings
+    from blender_importASE.node_networks.compat import set_mod_input
+    switch = atoms_mod.node_group.interface.items_tree['adps']
+    set_mod_input(atoms_mod, switch.identifier, False)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    mesh = obj.evaluated_get(depsgraph).to_mesh()
+    coords = np.empty(len(mesh.vertices) * 3)
+    mesh.vertices.foreach_get('co', coords)
+    extent = np.ptp(coords.reshape(-1, 3), axis=0) / 2
+    assert np.allclose(extent, extent[0], rtol=0.02), f'not a sphere: {extent}'
+    obj.evaluated_get(depsgraph).to_mesh_clear()
+
+    # the rings are a flat black emission
+    ring_material = bpy.data.materials['adp_rings']
+    ring_nodes = {n.bl_idname for n in ring_material.node_tree.nodes}
+    assert ring_nodes == {'ShaderNodeEmission', 'ShaderNodeOutputMaterial'}, ring_nodes
+
+    def ring_faces(obj):
+        """(faces on the ring material, materials the faces resolve to)"""
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        mesh = obj.evaluated_get(depsgraph).to_mesh()
+        face_slots = np.empty(len(mesh.polygons), dtype=np.int32)
+        mesh.polygons.foreach_get('material_index', face_slots)
+        names = [m.name if m else None for m in mesh.materials]
+        used = {names[i] for i in set(face_slots.tolist())}
+        count = int(sum(1 for i in face_slots if names[i] == 'adp_rings'))
+        obj.evaluated_get(depsgraph).to_mesh_clear()
+        return count, used
+
+    # real structures import with the house-style outline, every face still
+    # on its own element / bond / ring material; the rings pass the outline
+    # as curves, so it neither shells nor doubles them
+    for fixture in ('benzoic_acid_cod7252065.cif', 'urea_neutron_cod1008775.cif'):
+        counts = {}
+        for outline in (False, True):
+            fresh_scene()
+            obj = import_polyhedra(f'{SCRATCH}/{fixture}', fixture, adps=True, outline=outline)
+            counts[outline], used = ring_faces(obj)
+        symbols = set(ase.io.read(f'{SCRATCH}/{fixture}').get_chemical_symbols())
+        assert symbols | {'adp_rings', 'outline_color'} <= used, used
+        assert any(name and name.startswith('BOND') for name in used), used
+        assert None not in used, used
+        assert counts[True] == counts[False] > 0, counts
+
+        # hydrogens are spheres by default; hydrogen_adps gives them rings
+        atoms_mod, _ = find_ase_modifier(obj)
+        switch = atoms_mod.node_group.interface.items_tree['hydrogen_adps']
+        set_mod_input(atoms_mod, switch.identifier, True)
+        with_h, _ = ring_faces(obj)
+        assert with_h > counts[True] > 0, (with_h, counts[True])
+
+    # SHELX: the .res SHELXL wrote into the benzoic acid CIF gives the same
+    # structure and tensors (to the CIF's rounding), riding H included
+    from blender_importASE.shelx import read_shelx
+    from ase.spacegroup import crystal
+    res = read_shelx(f'{SCRATCH}/benzoic_acid_cod7252065.res')
+    cif = ase.io.read(f'{SCRATCH}/benzoic_acid_cod7252065.cif', store_tags=True)
+    distance = np.linalg.norm(res.positions[:, None] - cif.positions[None], axis=2)
+    match = distance.argmin(axis=1)
+    assert len(res) == len(cif) == len(set(match.tolist())), (len(res), len(cif))
+    assert distance.min(axis=1).max() < 2e-3
+    assert res.get_chemical_symbols() == [cif.get_chemical_symbols()[i] for i in match]
+    assert np.abs(atom_adps(res) - atom_adps(cif)[match]).max() < 1e-3
+
+    # the less common parts of the format on a synthetic Cc (LATT -7):
+    # long-form SFAC, a fixed coordinate (10 + p), continuation lines, a
+    # label repeated in a second residue, a riding hydrogen
+    with open(f'{SCRATCH}/adp_synthetic.ins', 'w') as fh:
+        fh.write("TITL synthetic in Cc\nCELL 0.71073 7.1 8.3 9.2 90 101 90\n"
+                 "ZERR 4 0.001 0.001 0.001 0 0.01 0\nLATT -7\nSYMM X, -Y, 1/2+Z\n"
+                 "SFAC C 2.3100 20.8439 1.0200 10.2075 1.5886 0.5687 0.8650 51.6512 =\n"
+                 "   0.2156 0.0033 0.0016 1.1500 0.7700 12.0110\nSFAC H\n"
+                 "UNIT 8 4\nFVAR 1.0 0.6\nRESI 1 MOL\n"
+                 "C1 1 0.1234 0.2345 10.34560 11.0 0.02 0.03 0.04 =\n"
+                 "   0.002 -0.003 0.004\nH1 2 0.2 0.3 0.4 11.0 -1.2\n"
+                 "RESI 2 MOL\nC1 1 0.6234 0.1345 0.1456 21.0 0.025 ! a comment\n"
+                 "HKLF 4\nEND\nQ1 1 0.5 0.5 0.5 11.0 0.05 0.3\n")
+    synthetic = read_shelx(f'{SCRATCH}/adp_synthetic.ins')
+    reference = crystal(['C', 'H', 'C'], [[0.1234, 0.2345, 0.3456], [0.2, 0.3, 0.4],
+                                          [0.6234, 0.1345, 0.1456]],
+                        spacegroup=9, cellpar=(7.1, 8.3, 9.2, 90, 101, 90))
+    assert len(synthetic) == len(reference) == 12, len(synthetic)
+    assert synthetic.info['_atom_site_label'] == ['C1', 'H1', 'C1#2']
+    U = atom_adps(synthetic)
+    kinds = synthetic.arrays['spacegroup_kinds']
+    ueq_c1 = np.trace(U[kinds == 0][0]) / 3
+    assert np.isclose(np.trace(U[kinds == 1][0]) / 3, 1.2 * ueq_c1), 'riding H'
+    assert np.isclose(np.trace(U[kinds == 2][0]) / 3, 0.025)
+    assert ellipsoids(U)[2].all()
+
+    # and the importer takes the .res directly
+    fresh_scene()
+    obj = import_polyhedra(f'{SCRATCH}/benzoic_acid_cod7252065.res',
+                           'benzoic_acid_cod7252065.res', adps=True, outline=True)
+    count, used = ring_faces(obj)
+    assert count > 0 and {'C', 'H', 'O', 'adp_rings'} <= used, (count, used)
+
+    # a file without displacement parameters imports as usual with adps on
+    fresh_scene()
+    obj = import_polyhedra(f'{SCRATCH}/nacl.extxyz', 'nacl.extxyz', adps=True)
+    assert 'adp_rings' not in obj.modifiers, [m.name for m in obj.modifiers]
+
+step('polyhedra_adps', run_polyhedra_adps)
+
+def run_import_adps():
+    """The regular importer: ellipsoids by default when the file carries an
+    anisotropic table (nodes representation), nothing otherwise, and SHELX
+    files read directly."""
+    from blender_importASE.controls import find_ase_modifier
+
+    def structure():
+        return next(o for o in bpy.data.objects if o.type == 'MESH'
+                    and find_ase_modifier(o)[0] is not None)
+
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/crystal.cif', 'crystal.cif',
+                        representation='nodes', animate=False, read_density=False)
+    obj = structure()
+    assert obj.modifiers[-1].name == 'adp_rings', [m.name for m in obj.modifiers]
+    atoms_mod, names = find_ase_modifier(obj)
+    assert {'adps', 'hydrogen_adps', 'adp_scale'} <= set(names), names
+    assert obj.data.attributes['adp_valid'].data[0].value
+
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/crystal.cif', 'crystal.cif', adps=False,
+                        representation='nodes', animate=False, read_density=False)
+    obj = structure()
+    assert 'adp_rings' not in obj.modifiers and 'adp_valid' not in obj.data.attributes
+
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/water.xyz', 'water.xyz',
+                        representation='nodes', animate=False, read_density=False)
+    assert 'adp_rings' not in structure().modifiers
+
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/benzoic_acid_cod7252065.res', 'benzoic_acid_cod7252065.res',
+                        representation='nodes', animate=False, read_density=False)
+    obj = structure()
+    assert len(obj.data.vertices) == 64, len(obj.data.vertices)
+    assert obj.modifiers[-1].name == 'adp_rings', [m.name for m in obj.modifiers]
+
+    # other representations draw objects of their own - ADPs do not apply
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/crystal.cif', 'crystal.cif',
+                        representation="Balls'n'Sticks", animate=False, read_density=False)
+    assert not any(m.name == 'adp_rings' for o in bpy.data.objects for m in o.modifiers)
+
+step('import_adps', run_import_adps)
 
 def run_density_mesh():
     from importlib import util
@@ -817,7 +1078,7 @@ def run_structure_sweep():
     nodes representation - drop new structures there to extend the set."""
     failures = []
     for fname in sorted(os.listdir(SCRATCH)):
-        if os.path.splitext(fname)[1].lower() not in ('.xyz', '.extxyz', '.cif'):
+        if os.path.splitext(fname)[1].lower() not in ('.xyz', '.extxyz', '.cif', '.res', '.ins'):
             continue
         if fname == 'roundtrip.xyz':
             continue

@@ -57,6 +57,15 @@ def get_mod_input(mod, identifier, default=None):
     return mod.get(identifier, default)
 
 
+def mod_input_path(mod, identifier):
+    """Data path of a geometry-nodes modifier input, relative to its object
+    (for drivers and keyframes), on any Blender version."""
+    name = mod.name.replace('"', '\\"')
+    if bpy.app.version >= (5, 2, 0):
+        return f'modifiers["{name}"].properties.inputs.{identifier}.value'
+    return f'modifiers["{name}"]["{identifier}"]'
+
+
 def mod_input_keys(mod):
     """Socket identifiers a geometry-nodes modifier holds values for."""
     if bpy.app.version >= (5, 2, 0):

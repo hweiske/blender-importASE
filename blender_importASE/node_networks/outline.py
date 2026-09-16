@@ -135,10 +135,16 @@ def outline_node_group(mat=None):
 
     # group_input_001.Geometry -> set_shade_smooth.Geometry
     outline.links.new(group_input_001.outputs[0], set_shade_smooth.inputs[0])
+    # only the mesh gets the offset shell: curves (e.g. the ADP rings, swept
+    # into tubes by a later modifier) pass through once, unshelled
+    separate_components = outline.nodes.new("GeometryNodeSeparateComponents")
+    separate_components.name = "Separate Components"
+    separate_components.location = (96.3, -620.0)
+    outline.links.new(set_shade_smooth.outputs[0], separate_components.inputs[0])
     # vector_math.Vector -> set_position.Offset
     outline.links.new(vector_math.outputs[0], set_position.inputs[3])
-    # set_shade_smooth.Geometry -> set_position.Geometry
-    outline.links.new(set_shade_smooth.outputs[0], set_position.inputs[0])
+    # separate_components.Mesh -> set_position.Geometry
+    outline.links.new(separate_components.outputs['Mesh'], set_position.inputs[0])
     # normal.Normal -> vector_math.Vector
     outline.links.new(normal.outputs[0], vector_math.inputs[0])
     # join_geometry_001.Geometry -> group_output_001.Geometry
