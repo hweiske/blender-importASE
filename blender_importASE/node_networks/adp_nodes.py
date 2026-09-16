@@ -69,7 +69,7 @@ def add_adp_nodes(tree, atoms_geometry, points_geometry):
         name="adp_scale", in_out='INPUT', socket_type='NodeSocketFloat')
     scale_socket.description = ("RMS displacement to ellipsoid semi-axis: "
                                 "1.538 draws 50 % probability ellipsoids")
-    scale_socket.default_value = 1.5382
+    scale_socket.default_value = 1.53817
     scale_socket.min_value = 0.0
     scale_socket.max_value = 10.0
 
