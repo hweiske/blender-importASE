@@ -15,41 +15,41 @@ Import molecules, crystals, trajectories, and volumetric data (electron densitie
   <tr>
     <td align="center" width="50%">
       <img src="docs/images/molecule.jpg" alt="Molecules adsorbed on a germanium surface"/><br/>
-      <b>Molecules and surfaces</b> — geometry-nodes atoms and bonds, periodic slabs grown shell by shell past the cell
+      <b>Molecules and surfaces</b> — render molecules, crystals and surfaces, including PBC
     </td>
     <td align="center" width="50%">
       <img src="docs/images/polyhedra.jpg" alt="Crystal with coordination polyhedra"/><br/>
-      <b>Coordination polyhedra</b> — convex hulls of coordination shells as solid faces
+      <b>Coordination polyhedra</b> — render coordination polyhedra using a convex hull algorithm
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
       <img src="docs/images/orbital_volume.jpg" alt="Molecular orbital isosurface"/><br/>
-      <b>Molecular orbitals &amp; densities</b> — .cube / VASP volumes with node-based isosurfaces
+      <b>Molecular orbitals &amp; densities</b> — automatic import from .cube files, VASP density files and AMS .t41 files
     </td>
     <td align="center" width="50%">
       <img src="docs/images/density_mesh.jpg" alt="Density isosurface as mesh, colored by a second density"/><br/>
-      <b>Density as mesh</b> — marching-cubes isosurfaces, optionally colored by a second density file
+      <b>Density as mesh</b> — import densities as a mesh using marching cubes, optionally colored by another density (LED or ESP)
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
       <img src="docs/images/charges.jpg" alt="Molecule colored by partial charges"/><br/>
-      <b>Partial charges</b> — per-atom charges from a csv file, red-white-blue on atoms and bonds
+      <b>Partial charges</b> — import partial charges, or any other float you want to attach to atoms, to color them accordingly
     </td>
     <td align="center" width="50%">
       <img src="docs/images/trajectory.gif" alt="Animated trajectory"/><br/>
-      <b>Trajectories</b> — any ASE-readable trajectory, animated frame by frame (including varying atom counts)
+      <b>Trajectories</b> — import trajectories from MDs, optimizations or NEBs; NEB images can also be interpolated in Blender
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
       <img src="docs/images/adps.jpg" alt="Urea from neutron data with thermal ellipsoids"/><br/>
-      <b>Thermal ellipsoids</b> — anisotropic displacement parameters from CIF or SHELX .res/.ins, with principal-axis rings
+      <b>Thermal ellipsoids</b> — automatic parsing of crystallographic data types and creation of ADPs
     </td>
     <td align="center" width="50%">
       <img src="docs/images/print_supports.jpg" alt="Molecule with generated resin supports"/><br/>
-      <b>3D printing</b> — atoms and bonds with generated resin supports, exported as per-element STLs in one zip
+      <b>3D printing</b> — optimized setup for multicolor printing of molecular structures (WIP)
     </td>
   </tr>
 </table>
