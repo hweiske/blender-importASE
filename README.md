@@ -14,8 +14,8 @@ Import molecules, crystals, trajectories, and volumetric data (electron densitie
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/images/molecule.jpg" alt="Molecule with colored bonds"/><br/>
-      <b>Molecules</b> — geometry-nodes atoms with gray or element-colored bonds
+      <img src="docs/images/molecule.jpg" alt="Molecules adsorbed on a germanium surface"/><br/>
+      <b>Molecules and surfaces</b> — geometry-nodes atoms and bonds, periodic slabs grown shell by shell past the cell
     </td>
     <td align="center" width="50%">
       <img src="docs/images/polyhedra.jpg" alt="Crystal with coordination polyhedra"/><br/>
