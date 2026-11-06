@@ -33,6 +33,15 @@ ADPS_DESCRIPTION = (
 ADP_PROBABILITY_DESCRIPTION = (
     "probability of finding the atom inside its ellipsoid (50 % is the usual "
     "ORTEP level)")
+MAX_ANGLE_DESCRIPTION = (
+    "steepest a support pillar may lean from vertical to get around the "
+    "other atoms. Steeper pillars would need support themselves, so atoms "
+    "only reachable that way get none (the console reports how many)")
+PILLAR_MATERIAL_DESCRIPTION = (
+    "make each support pillar out of the material of the atom it holds up, "
+    "so it prints in that atom's filament and is less visible (the pillars "
+    "go into atoms_<element>.stl); only the base plate stays in the "
+    "support material")
 HYDROGEN_ADPS_DESCRIPTION = (
     "draw hydrogens as displacement ellipsoids too. Off keeps them as the "
     "usual small spheres without rings (riding hydrogens only have an "
@@ -788,6 +797,26 @@ class ExportASEXyz(bpy.types.Operator, ExportHelper):
         return {'FINISHED'}
 
 
+def apply_support_params(op, params, only_unset=False):
+    """Set a support operator's properties from stored build_supports
+    parameters (from exports.stored_support_params; None leaves them).
+
+    invoke() sets them all, so the dialog / redo panel shows the
+    supports as they are. execute() passes only_unset, filling just the
+    ones the caller did not set: invoke is skipped in background mode
+    and for scripted calls, which would otherwise rebuild the supports
+    with the defaults."""
+    if not params:
+        return
+    for key, value in params.items():
+        prop = 'plate_gap' if key == 'pillar_length' else key
+        if only_unset and op.properties.is_property_set(prop):
+            continue
+        if hasattr(op, prop):
+            # ID properties may hand a bool back as an int
+            setattr(op, prop, type(getattr(op, prop))(value))
+
+
 class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
     """Export the active structure's collection for 3D printing: one STL
     per element (atoms joined), the bonds, and resin supports, zipped
@@ -800,7 +829,7 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
 
     generate_supports: bpy.props.BoolProperty(
         name="generate supports",
-        description="generate supports (with the parameters below) only if none exist yet; existing supports - e.g. from 'Rebuild 3D-print supports' in the ASE panel - are always exported as-is. Turn off to export without supports when none exist",
+        description="build the supports with the parameters below (they start at the values of the existing supports): supports with the same settings are exported as they are, otherwise rebuilt. Supports you made yourself are always exported as-is. Off exports the existing supports unchanged, or none",
         default=True,
     )
     base_radius: bpy.props.FloatProperty(
@@ -816,13 +845,6 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         default=0.1,
         min=0.01,
         soft_max=1.0,
-    )
-    support_layer: bpy.props.FloatProperty(
-        name="support drop",
-        description="minimum height a bonded/touching neighbor must sit below an atom to hold it up; atoms without such a lower neighbor (islands, horizontal or upward-only branches) get their own pillar. Larger values add more pillars",
-        default=0.3,
-        min=0.0,
-        soft_max=5.0,
     )
     plate_thickness: bpy.props.FloatProperty(
         name="plate thickness",
@@ -843,32 +865,62 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         min=0.0,
         soft_max=10.0,
     )
+    pillar_material: bpy.props.BoolProperty(
+        name="pillars in atom material",
+        description=PILLAR_MATERIAL_DESCRIPTION,
+        default=False,
+    )
+    max_angle: bpy.props.FloatProperty(
+        name="max pillar angle",
+        description=MAX_ANGLE_DESCRIPTION,
+        subtype='ANGLE',
+        default=0.5235987755982988,  # 30 degrees
+        min=0.0,
+        max=1.5690308719637473,  # 89.9 degrees
+    )
+    print_scale: bpy.props.FloatProperty(
+        name="print scale (mm/\u00c5)",
+        description="size of the print: millimetres per Angstrom. STL has no units and slicers read it as mm, so at 1 a molecule is only a few mm across. All files get the same scale and are placed together (centered, plate on z=0)",
+        default=10.0,
+        min=0.01,
+        soft_max=50.0,
+    )
 
     @classmethod
     def poll(cls, context):
         return context.active_object is not None
+
+    def invoke(self, context, event):
+        from .exports import stored_support_params
+        apply_support_params(self, stored_support_params(context))
+        return super().invoke(context, event)
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'generate_supports')
         layout.prop(self, 'base_radius')
         layout.prop(self, 'tip_radius')
-        layout.prop(self, 'support_layer')
         layout.prop(self, 'plate_thickness')
         layout.prop(self, 'plate_holes')
         layout.prop(self, 'plate_gap')
+        layout.prop(self, 'max_angle')
+        layout.prop(self, 'pillar_material')
+        layout.prop(self, 'print_scale')
 
     def execute(self, context):
-        from .exports import export_3dprint
+        from .exports import export_3dprint, stored_support_params
+        apply_support_params(self, stored_support_params(context), only_unset=True)
         try:
             files = export_3dprint(context, self.filepath,
                                    generate_supports=self.generate_supports,
                                    base_radius=self.base_radius,
                                    tip_radius=self.tip_radius,
-                                   support_layer=self.support_layer,
                                    plate_thickness=self.plate_thickness,
                                    plate_holes=self.plate_holes,
-                                   plate_gap=self.plate_gap)
+                                   plate_gap=self.plate_gap,
+                                   print_scale=self.print_scale,
+                                   pillar_material=self.pillar_material,
+                                   max_angle=self.max_angle)
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}

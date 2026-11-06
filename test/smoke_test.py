@@ -1043,19 +1043,220 @@ def run_export_3dprint():
     reference = ase.io.read(f'{SCRATCH}/crystal.cif')
     import_ase_molecule(f'{SCRATCH}/crystal.cif', 'crystal.cif',
                         representation='3D_print', animate=False,
-                        read_density=False, outline=False, add_supercell=False)
-    atom = next(o for o in bpy.data.objects
-                if o.name.split('.')[0] in chemical_symbols and o.type == 'MESH')
-    bpy.context.view_layer.objects.active = atom
+                        read_density=False, outline=True, add_supercell=False)
+    atoms = [o for o in bpy.data.objects
+             if o.name.split('.')[0] in chemical_symbols and o.type == 'MESH']
+    bpy.context.view_layer.objects.active = atoms[0]
     zip_path = f'{SCRATCH}/print_export.zip'
     bpy.ops.export_mesh.ase_3dprint(filepath=zip_path)
     with zipfile.ZipFile(zip_path) as z:
         names = set(z.namelist())
+        # the outline is render-only: it must not add a second, larger
+        # shell to the printed spheres, so each atom STL holds exactly
+        # the triangles of the plain sphere meshes
+        for el in set(reference.get_chemical_symbols()):
+            n_stl = int.from_bytes(z.read(f'atoms_{el}.stl')[80:84], 'little')
+            n_mesh = 0
+            for o in atoms:
+                if o.name.split('.')[0] == el:
+                    o.data.calc_loop_triangles()
+                    n_mesh += len(o.data.loop_triangles)
+            assert n_stl == n_mesh, f'{el}: {n_stl} STL triangles, {n_mesh} in the meshes'
     expected = {f'atoms_{el}.stl' for el in set(reference.get_chemical_symbols())}
     expected |= {'bonds.stl', 'supports.stl'}
     assert names == expected, (names, expected)
+    assert all(m.show_viewport and m.show_render for o in atoms for m in o.modifiers), \
+        'export left a modifier switched off'
+
+    # with the atoms rotated (e.g. the molecule turned for printing) every
+    # pillar tip must still end inside an atom - a rotated object's
+    # bounding box overstates the sphere, and the pillars stopped short
+    import numpy as np
+    from blender_importASE.exports import _STL_DTYPE
+    for o in atoms:
+        o.rotation_euler = (0.7, 0.3, -0.4)
+    for o in list(bpy.data.objects):
+        if o.get('ase_auto_supports'):
+            bpy.data.objects.remove(o, do_unlink=True)
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path)
+    spheres = []
+    for o in atoms:
+        co = np.array([(o.matrix_world @ v.co)[:] for v in o.data.vertices])
+        lo, hi = co.min(axis=0), co.max(axis=0)
+        spheres.append(((lo + hi) / 2, (hi[2] - lo[2]) / 2))
+    sup = next(o for o in bpy.data.objects if o.get('ase_auto_supports'))
+    sv = np.array([(sup.matrix_world @ v.co)[:] for v in sup.data.vertices])
+    plate_top = sup['ase_support_params']['plate_thickness']  # tops sit above the plate
+    plate_top = sv[:, 2].min() + plate_top + 1e-4
+    tips = sv[sv[:, 2] > plate_top]
+    assert len(tips), 'no pillars to check'
+    for t in tips:
+        assert any(np.linalg.norm(t - c) < r for c, r in spheres), \
+            f'pillar tip {t} ends outside every atom'
+    # back to the unrotated export the checks below compare against
+    for o in atoms:
+        o.rotation_euler = (0, 0, 0)
+    for o in list(bpy.data.objects):
+        if o.get('ase_auto_supports'):
+            bpy.data.objects.remove(o, do_unlink=True)
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path)
+
+    # applying the atoms' transforms (a usual step before printing) moves
+    # every object origin to the world origin; the joints and supports
+    # must still sit at the atoms, so the export must not change
+    def tri_counts(path):
+        with zipfile.ZipFile(path) as z:
+            return {n: int.from_bytes(z.read(n)[80:84], 'little') for n in z.namelist()}
+    before = tri_counts(zip_path)
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in atoms:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for o in list(bpy.data.objects):
+        if o.get('ase_auto_supports'):
+            bpy.data.objects.remove(o, do_unlink=True)
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path)
+    after = tri_counts(zip_path)
+    assert after == before, f'applied transforms changed the export: {before} -> {after}'
+
+    # all files share one frame for the slicer: centered, plate on z=0,
+    # print_scale (default 10 mm/A) applied to every file alike
+    with zipfile.ZipFile(zip_path) as z:
+        boxes = {}
+        for n in z.namelist():
+            raw = z.read(n)
+            count = int.from_bytes(raw[80:84], 'little')
+            v = np.frombuffer(raw[84:84 + 50 * count], dtype=_STL_DTYPE)['verts'].reshape(-1, 3)
+            boxes[n] = (v.min(axis=0), v.max(axis=0))
+    lo = np.min([b[0] for b in boxes.values()], axis=0)
+    hi = np.max([b[1] for b in boxes.values()], axis=0)
+    assert abs(lo[2]) < 1e-3, f'print not on z=0: {lo[2]}'
+    assert np.allclose((lo[:2] + hi[:2]) / 2, 0, atol=1e-3), f'print not centered: {lo}, {hi}'
+    el = reference.get_chemical_symbols()[0]
+    o = next(o for o in atoms if o.name.split('.')[0] == el)
+    size = boxes[f'atoms_{el}.stl'][1] - boxes[f'atoms_{el}.stl'][0]
+    assert size[2] >= 10 * o.dimensions.z - 1e-2, f'{el} not scaled to mm: {size} vs {o.dimensions}'
+
+    # support settings of the export apply to existing automatic supports:
+    # a changed setting rebuilds them, the same settings keep them as-is
+    from blender_importASE.exports import stored_support_params
+    def auto_supports():
+        return [o for o in bpy.data.objects if o.get('ase_auto_supports')]
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path, plate_thickness=1.2)
+    assert len(auto_supports()) == 1, auto_supports()
+    params = stored_support_params(bpy.context)
+    assert abs(params['plate_thickness'] - 1.2) < 1e-6, params
+    kept = auto_supports()[0].name
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path, plate_thickness=1.2)
+    assert [o.name for o in auto_supports()] == [kept], 'same settings rebuilt the supports'
+    # settings not given start from the existing supports, not the defaults
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path)
+    assert [o.name for o in auto_supports()] == [kept], 'unset settings rebuilt the supports'
+    # the rebuild operator starts from the existing supports' settings
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.ase.rebuild_supports('INVOKE_DEFAULT')
+    params = stored_support_params(bpy.context)
+    assert abs(params['plate_thickness'] - 1.2) < 1e-6, f'rebuild fell back to defaults: {params}'
+
+    # pillar_material: pillars per element, in the atom's material and
+    # exported with those atoms; supports.stl keeps only the plate
+    bpy.context.view_layer.objects.active = atoms[0]
+    bpy.ops.export_mesh.ase_3dprint(filepath=zip_path, pillar_material=True)
+    pillar_objs = [o for o in auto_supports() if 'ase_support_element' in o]
+    plate_objs = [o for o in auto_supports() if 'ase_support_element' not in o]
+    assert pillar_objs and len(plate_objs) == 1, auto_supports()
+    def ntri(ob):
+        ob.data.calc_loop_triangles()
+        return len(ob.data.loop_triangles)
+    counts = tri_counts(zip_path)
+    assert counts['supports.stl'] == ntri(plate_objs[0]), counts
+    for p in pillar_objs:
+        el = p['ase_support_element']
+        same = [o for o in atoms if o.name.split('.')[0] == el]
+        assert p.active_material == same[0].active_material, (p.name, p.active_material)
+        expected = sum(ntri(o) for o in same) + ntri(p)
+        assert counts[f'atoms_{el}.stl'] == expected, (el, counts, expected)
 
 step('export_3dprint', run_export_3dprint)
+
+def run_supports_every_free_atom():
+    """Atoms are spheres: a bond does not hold one up, so every atom whose
+    underside is free (its lowest point is not inside another sphere)
+    gets its own pillar - water: one per atom, H included."""
+    import numpy as np
+    from ase.data import chemical_symbols
+    from blender_importASE.exports import rebuild_supports
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/water.xyz', 'water.xyz', representation='3D_print',
+                        animate=False, read_density=False, add_supercell=False)
+    atoms = [o for o in bpy.data.objects
+             if o.name.split('.')[0] in chemical_symbols and o.type == 'MESH']
+    assert len(atoms) == 3, atoms
+    bpy.context.view_layer.objects.active = atoms[0]
+    sup = rebuild_supports(bpy.context, pillar_material=True)
+    pillars = {o['ase_support_element']: o for o in sup if 'ase_support_element' in o}
+    assert sorted(pillars) == ['H', 'O'], [o.name for o in sup]
+    held = []
+    for o in atoms:
+        co = np.array([(o.matrix_world @ v.co)[:] for v in o.data.vertices])
+        lo, hi = co.min(axis=0), co.max(axis=0)
+        c, r = (lo + hi) / 2, (hi[2] - lo[2]) / 2
+        p = pillars[o.name.split('.')[0]]
+        pv = np.array([(p.matrix_world @ v.co)[:] for v in p.data.vertices])
+        held.append(bool((np.linalg.norm(pv - c, axis=1) < r).any()))
+    assert all(held), f'atoms without a pillar: {[a.name for a, h in zip(atoms, held) if not h]}'
+    n_pillars = sum(len(p.data.polygons) for p in pillars.values()) // 14  # 12 sides + 2 caps
+    assert n_pillars == 3, f'{n_pillars} pillars for 3 free atoms'
+
+step('supports_every_free_atom', run_supports_every_free_atom)
+
+def run_supports_max_angle():
+    """No pillar leans further from vertical than max_angle: steeper ones
+    would need support themselves. Two carbons stacked almost on top of
+    each other: the upper one's pillar has to lean around the lower atom
+    (about 43 deg unlimited), is re-routed within 30 deg (grazing the bond
+    instead), and is left out at 20 deg."""
+    import math
+    import numpy as np
+    from ase import Atoms
+    from ase.data import chemical_symbols
+    from blender_importASE.exports import rebuild_supports
+    fresh_scene()
+    path = f'{SCRATCH}/stacked.xyz'
+    ase.io.write(path, Atoms('C2', positions=[(0, 0, 0), (0.3, 0, 2.5)]))
+    import_ase_molecule(path, 'stacked.xyz', representation='3D_print',
+                        animate=False, read_density=False, add_supercell=False)
+    atom = next(o for o in bpy.data.objects
+                if o.name.split('.')[0] in chemical_symbols and o.type == 'MESH')
+    bpy.context.view_layer.objects.active = atom
+
+    def tilts(limit):
+        out = []
+        for ob in rebuild_supports(bpy.context, pillar_material=True,
+                                   max_angle=math.radians(limit)):
+            if 'ase_support_element' not in ob:
+                continue
+            v = np.array([(ob.matrix_world @ p.co)[:] for p in ob.data.vertices])
+            for k in range(0, len(v), 24):  # a pillar: bottom ring, then top ring
+                d = v[k + 12:k + 24].mean(axis=0) - v[k:k + 12].mean(axis=0)
+                out.append(math.degrees(math.atan2(math.hypot(d[0], d[1]), d[2])))
+        return out
+
+    free = tilts(89)
+    assert len(free) == 2 and max(free) > 35, f'expected one steep pillar: {free}'
+    limited = tilts(30)
+    assert len(limited) == 2 and max(limited) <= 30.5, f'not re-routed within 30 deg: {limited}'
+    strict = tilts(20)
+    assert len(strict) == 1 and max(strict) <= 20.5, f'steep pillar not left out at 20 deg: {strict}'
+
+step('supports_max_angle', run_supports_max_angle)
 
 def run_export_xyz():
     fresh_scene()

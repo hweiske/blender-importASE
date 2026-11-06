@@ -1121,11 +1121,12 @@ def create_bonds_geometry_node_group():
     setup_merge_by_distance(merge_geometry, distance=0.001)
     merge_geometry.location = (3500, -1165.5565185546875)
 
-    # icosphere joints at every atom position (collection instances sit at
-    # the atom object origins), so tubes fuse into a printable solid
-    joint_points = bonds.nodes.new("GeometryNodeInstancesToPoints")
-    joint_points.name = "Joint Points"
-    joint_points.location = (3050, -1400)
+    # icosphere joints at every atom position, so tubes fuse into a
+    # printable solid. The positions are the atom centers the bonds are
+    # built from (bounding-box centers), not the instance origins: once the
+    # atom objects' transforms are applied (a usual step before printing)
+    # every origin sits at the world origin, and all joints would collapse
+    # into one stray sphere there.
     joint_sphere = bonds.nodes.new("GeometryNodeMeshIcoSphere")
     joint_sphere.name = "Joint Ico Sphere"
     joint_sphere.inputs['Subdivisions'].default_value = 3
@@ -1144,9 +1145,8 @@ def create_bonds_geometry_node_group():
     group_input_joint.hide = True
     group_input_joint.location = (2870, -1560)
 
-    bonds.links.new(collection_info.outputs[0], joint_points.inputs[0])
     bonds.links.new(group_input_joint.outputs['joint radius'], joint_sphere.inputs['Radius'])
-    bonds.links.new(joint_points.outputs[0], joint_instance.inputs[0])
+    bonds.links.new(realize_instances_001.outputs[0], joint_instance.inputs[0])
     bonds.links.new(joint_sphere.outputs[0], joint_instance.inputs[2])
     bonds.links.new(joint_instance.outputs[0], joint_realize.inputs[0])
     bonds.links.new(joint_realize.outputs[0], join_joints.inputs[0])
