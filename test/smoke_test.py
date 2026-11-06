@@ -1186,6 +1186,78 @@ def run_export_3dprint():
 
 step('export_3dprint', run_export_3dprint)
 
+def run_supports_every_free_atom():
+    """Atoms are spheres: a bond does not hold one up, so every atom whose
+    underside is free (its lowest point is not inside another sphere)
+    gets its own pillar - water: one per atom, H included."""
+    import numpy as np
+    from ase.data import chemical_symbols
+    from blender_importASE.exports import rebuild_supports
+    fresh_scene()
+    import_ase_molecule(f'{SCRATCH}/water.xyz', 'water.xyz', representation='3D_print',
+                        animate=False, read_density=False, add_supercell=False)
+    atoms = [o for o in bpy.data.objects
+             if o.name.split('.')[0] in chemical_symbols and o.type == 'MESH']
+    assert len(atoms) == 3, atoms
+    bpy.context.view_layer.objects.active = atoms[0]
+    sup = rebuild_supports(bpy.context, pillar_material=True)
+    pillars = {o['ase_support_element']: o for o in sup if 'ase_support_element' in o}
+    assert sorted(pillars) == ['H', 'O'], [o.name for o in sup]
+    held = []
+    for o in atoms:
+        co = np.array([(o.matrix_world @ v.co)[:] for v in o.data.vertices])
+        lo, hi = co.min(axis=0), co.max(axis=0)
+        c, r = (lo + hi) / 2, (hi[2] - lo[2]) / 2
+        p = pillars[o.name.split('.')[0]]
+        pv = np.array([(p.matrix_world @ v.co)[:] for v in p.data.vertices])
+        held.append(bool((np.linalg.norm(pv - c, axis=1) < r).any()))
+    assert all(held), f'atoms without a pillar: {[a.name for a, h in zip(atoms, held) if not h]}'
+    n_pillars = sum(len(p.data.polygons) for p in pillars.values()) // 14  # 12 sides + 2 caps
+    assert n_pillars == 3, f'{n_pillars} pillars for 3 free atoms'
+
+step('supports_every_free_atom', run_supports_every_free_atom)
+
+def run_supports_max_angle():
+    """No pillar leans further from vertical than max_angle: steeper ones
+    would need support themselves. Two carbons stacked almost on top of
+    each other: the upper one's pillar has to lean around the lower atom
+    (about 43 deg unlimited), is re-routed within 30 deg (grazing the bond
+    instead), and is left out at 20 deg."""
+    import math
+    import numpy as np
+    from ase import Atoms
+    from ase.data import chemical_symbols
+    from blender_importASE.exports import rebuild_supports
+    fresh_scene()
+    path = f'{SCRATCH}/stacked.xyz'
+    ase.io.write(path, Atoms('C2', positions=[(0, 0, 0), (0.3, 0, 2.5)]))
+    import_ase_molecule(path, 'stacked.xyz', representation='3D_print',
+                        animate=False, read_density=False, add_supercell=False)
+    atom = next(o for o in bpy.data.objects
+                if o.name.split('.')[0] in chemical_symbols and o.type == 'MESH')
+    bpy.context.view_layer.objects.active = atom
+
+    def tilts(limit):
+        out = []
+        for ob in rebuild_supports(bpy.context, pillar_material=True,
+                                   max_angle=math.radians(limit)):
+            if 'ase_support_element' not in ob:
+                continue
+            v = np.array([(ob.matrix_world @ p.co)[:] for p in ob.data.vertices])
+            for k in range(0, len(v), 24):  # a pillar: bottom ring, then top ring
+                d = v[k + 12:k + 24].mean(axis=0) - v[k:k + 12].mean(axis=0)
+                out.append(math.degrees(math.atan2(math.hypot(d[0], d[1]), d[2])))
+        return out
+
+    free = tilts(89)
+    assert len(free) == 2 and max(free) > 35, f'expected one steep pillar: {free}'
+    limited = tilts(30)
+    assert len(limited) == 2 and max(limited) <= 30.5, f'not re-routed within 30 deg: {limited}'
+    strict = tilts(20)
+    assert len(strict) == 1 and max(strict) <= 20.5, f'steep pillar not left out at 20 deg: {strict}'
+
+step('supports_max_angle', run_supports_max_angle)
+
 def run_export_xyz():
     fresh_scene()
     reference = ase.io.read(f'{SCRATCH}/crystal.cif')

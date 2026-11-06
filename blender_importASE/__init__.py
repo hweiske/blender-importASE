@@ -33,6 +33,10 @@ ADPS_DESCRIPTION = (
 ADP_PROBABILITY_DESCRIPTION = (
     "probability of finding the atom inside its ellipsoid (50 % is the usual "
     "ORTEP level)")
+MAX_ANGLE_DESCRIPTION = (
+    "steepest a support pillar may lean from vertical to get around the "
+    "other atoms. Steeper pillars would need support themselves, so atoms "
+    "only reachable that way get none (the console reports how many)")
 PILLAR_MATERIAL_DESCRIPTION = (
     "make each support pillar out of the material of the atom it holds up, "
     "so it prints in that atom's filament and is less visible (the pillars "
@@ -842,13 +846,6 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         min=0.01,
         soft_max=1.0,
     )
-    support_layer: bpy.props.FloatProperty(
-        name="support drop",
-        description="minimum height a bonded/touching neighbor must sit below an atom to hold it up; atoms without such a lower neighbor (islands, horizontal or upward-only branches) get their own pillar. Larger values add more pillars",
-        default=0.3,
-        min=0.0,
-        soft_max=5.0,
-    )
     plate_thickness: bpy.props.FloatProperty(
         name="plate thickness",
         description="thickness of the base plate",
@@ -873,6 +870,14 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         description=PILLAR_MATERIAL_DESCRIPTION,
         default=False,
     )
+    max_angle: bpy.props.FloatProperty(
+        name="max pillar angle",
+        description=MAX_ANGLE_DESCRIPTION,
+        subtype='ANGLE',
+        default=0.5235987755982988,  # 30 degrees
+        min=0.0,
+        max=1.5690308719637473,  # 89.9 degrees
+    )
     print_scale: bpy.props.FloatProperty(
         name="print scale (mm/\u00c5)",
         description="size of the print: millimetres per Angstrom. STL has no units and slicers read it as mm, so at 1 a molecule is only a few mm across. All files get the same scale and are placed together (centered, plate on z=0)",
@@ -895,10 +900,10 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
         layout.prop(self, 'generate_supports')
         layout.prop(self, 'base_radius')
         layout.prop(self, 'tip_radius')
-        layout.prop(self, 'support_layer')
         layout.prop(self, 'plate_thickness')
         layout.prop(self, 'plate_holes')
         layout.prop(self, 'plate_gap')
+        layout.prop(self, 'max_angle')
         layout.prop(self, 'pillar_material')
         layout.prop(self, 'print_scale')
 
@@ -910,12 +915,12 @@ class ExportASE3DPrint(bpy.types.Operator, ExportHelper):
                                    generate_supports=self.generate_supports,
                                    base_radius=self.base_radius,
                                    tip_radius=self.tip_radius,
-                                   support_layer=self.support_layer,
                                    plate_thickness=self.plate_thickness,
                                    plate_holes=self.plate_holes,
                                    plate_gap=self.plate_gap,
                                    print_scale=self.print_scale,
-                                   pillar_material=self.pillar_material)
+                                   pillar_material=self.pillar_material,
+                                   max_angle=self.max_angle)
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}

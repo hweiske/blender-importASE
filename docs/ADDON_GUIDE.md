@@ -446,7 +446,7 @@ sync_atom_color_attributes(['Sb', 'C'])                    # attributes from the
 
 Colors are **linear**, the way Blender reads a base color or a FLOAT_COLOR attribute; the hex codes noted in `utils.atomcolors.color_dict` are their sRGB equivalents, i.e. what the color picker shows. `utils.default_element_color(symbol)` gives the add-on's default (jmol colors for elements the scheme doesn't cover), `ase.reset_element_colors` puts the structure's elements back to it, and `ase.sync_element_colors` runs the sync pass on demand. An element material that already exists in the file keeps its color when another structure is imported, so a re-import never resets a picked color.
 
-`ase.rebuild_supports` is live-adjustable in the F9 redo panel: `base_radius` (0.25), `tip_radius`/"contact radius" (0.1), `support_layer`/"support drop" (0.3), `plate_thickness` (0.6), `plate_holes` (True), `plate_gap` (2.0). It removes existing auto-supports and rebuilds via `exports.build_supports`.
+`ase.rebuild_supports` is live-adjustable in the F9 redo panel: `base_radius` (0.25), `tip_radius`/"contact radius" (0.1), `plate_thickness` (0.6), `plate_holes` (True), `plate_gap` (2.0), `pillar_material` (False), `max_angle`/"max pillar angle" (30°). It removes existing auto-supports and rebuilds via `exports.build_supports`.
 
 ---
 
@@ -456,8 +456,9 @@ Import with `representation='3D_print'` (real spheres + fused node bonds with ic
 
 ```python
 exports.export_3dprint(context, filepath, generate_supports=True,
-    base_radius=0.25, tip_radius=0.1, support_layer=0.8, plate_thickness=0.6,
-    plate_holes=True, plate_gap=2.0, print_scale=10.0)
+    base_radius=0.25, tip_radius=0.1, plate_thickness=0.6,
+    plate_holes=True, plate_gap=2.0, print_scale=10.0, pillar_material=False,
+    max_angle=math.radians(30))
 ```
 Writes one STL per element + `bonds.stl` + `supports.stl` and zips them. All files share one frame (`place_for_print`): `print_scale` mm per Å (STL has no units and slicers read mm, so unscaled a molecule is only a few mm and slicers offer unit conversions file by file), centered on the origin with the plate on z=0. In the slicer, load all files at once as **one multi-part object** so they stay aligned; each part can then get its own filament.
 
@@ -465,9 +466,11 @@ The outline modifier is a render effect and is switched off while exporting (`ou
 
 **Support behavior to know:** `build_supports` records its parameters on the supports object (`ase_support_params`, next to the `ase_auto_supports` mark). The export dialog and the N-panel **Rebuild supports** operator both start from those values (`exports.stored_support_params`), so they show the supports as they are. On export, automatic supports built with the same settings are exported unchanged (exactly what you see); changed settings rebuild them first. Supports from before this was recorded count as changed, so they are rebuilt with the dialog values. Supports you made yourself (no `ase_auto_supports` mark) are always exported as-is, with no automatic ones added. `generate_supports=False` exports whatever exists, unchanged.
 
-**Pillars in atom material** (`pillar_material=True`, in the export dialog and the Rebuild operator): the pillars are built as one object per element of the atom they hold up (`supports_<element>`, marked `ase_support_element`, with that element's material) and exported inside `atoms_<element>.stl`, so they print in the atom's filament and blend in; `supports.stl` then holds only the base plate. `build_supports` returns its objects as a list, plate first. Support generation uses a BVH of the real drawn bond geometry as the single source of truth for connectivity and obstacle avoidance (never skewers an atom; may graze bonds), with bottom-up island grounding and an optional holed base plate.
+**Pillars in atom material** (`pillar_material=True`, in the export dialog and the Rebuild operator): the pillars are built as one object per element of the atom they hold up (`supports_<element>`, marked `ase_support_element`, with that element's material) and exported inside `atoms_<element>.stl`, so they print in the atom's filament and blend in; `supports.stl` then holds only the base plate. `build_supports` returns its objects as a list, plate first.
 
-`exports.build_supports(atom_objects, collection, ...)` is the underlying builder (defaults differ slightly: `support_layer=0.8`); pass `bond_objects=` the bond meshes so it can avoid them.
+**Which atoms get a pillar:** atoms are spheres, so a bond never holds one up: the bottom of the sphere still hangs free. An atom rests on another only when its lowest point lies inside that atom's sphere; every other atom gets a pillar to its lowest point, regardless of element or bonds. Pillars are tapered, and the clearance check uses the pillar's radius at each height, so the thin tip fits past a neighbor beside the atom's underside. A pillar never runs through another atom; it is tilted around atoms and, where possible, around the drawn bonds (a BVH of the evaluated bond meshes). `max_angle` (radians; "max pillar angle" in the dialogs, default 30°) caps that tilt from vertical, since a steeper pillar would itself print as an overhang: within the limit the pillar may graze a bond rather than lean further, and an atom no pillar within the limit can reach is left out with a printed note. A pillar whose foot would land on a plate hole is moved off it only in a direction that stays within the limit, otherwise dropped. The base plate optionally has a grid of holes.
+
+`exports.build_supports(atom_objects, collection, ...)` is the underlying builder; pass `bond_objects=` the bond meshes so it can avoid them.
 
 ---
 

@@ -437,9 +437,6 @@ class ASE_OT_rebuild_supports(bpy.types.Operator):
     tip_radius: bpy.props.FloatProperty(
         name="contact radius", default=0.1, min=0.01, soft_max=1.0,
         description="pillar radius at the atom contact point")
-    support_layer: bpy.props.FloatProperty(
-        name="support drop", default=0.3, min=0.0, soft_max=5.0,
-        description="minimum height a bonded/touching neighbor must sit below an atom to hold it up; larger adds more pillars")
     plate_thickness: bpy.props.FloatProperty(
         name="plate thickness", default=0.6, min=0.1, soft_max=3.0)
     plate_holes: bpy.props.BoolProperty(
@@ -451,6 +448,10 @@ class ASE_OT_rebuild_supports(bpy.types.Operator):
     pillar_material: bpy.props.BoolProperty(
         name="pillars in atom material", default=False,
         description="make each pillar out of the material of the atom it holds up, so it prints in that atom's filament")
+    max_angle: bpy.props.FloatProperty(
+        name="max pillar angle", subtype='ANGLE',
+        default=0.5235987755982988, min=0.0, max=1.5690308719637473,  # 30, 89.9 deg
+        description="steepest a pillar may lean from vertical; atoms only reachable by steeper pillars get none")
 
     def invoke(self, context, event):
         # start from the supports as they are, not the defaults
@@ -466,11 +467,11 @@ class ASE_OT_rebuild_supports(bpy.types.Operator):
         try:
             rebuild_supports(context, base_radius=self.base_radius,
                              tip_radius=self.tip_radius,
-                             support_layer=self.support_layer,
                              plate_thickness=self.plate_thickness,
                              plate_holes=self.plate_holes,
                              pillar_length=self.plate_gap,
-                             pillar_material=self.pillar_material)
+                             pillar_material=self.pillar_material,
+                             max_angle=self.max_angle)
         except ValueError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}

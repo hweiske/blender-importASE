@@ -44,37 +44,39 @@ def export_xyz(obj, filepath):
 
 
 def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
-                   support_layer=0.8, plate_thickness=0.6, plate_holes=True,
+                   plate_thickness=0.6, plate_holes=True,
                    plate_margin=1.0, pillar_length=2.0, segments=12,
-                   bond_radius=0.15, bond_objects=None, pillar_material=False):
+                   bond_objects=None, pillar_material=False,
+                   max_angle=math.radians(30)):
     """Resin supports: a base plate below the model and tapered pillars up
-    to every atom that would print as an island.
+    to the underside of every atom that does not rest on another one.
 
-    Working bottom-up, an atom counts as supported when it is bonded
-    (covalent radii * 1.2) to an already-supported atom at most
-    'support_layer' higher - everything else gets a pillar, so floating
-    fragments and upward-only branches are supported too.
+    Atoms are spheres, so a bond does not hold one up: the bottom of the
+    sphere still hangs free and prints as an overhang. An atom only rests
+    on another when its lowest point lies inside that atom's sphere;
+    every other atom gets a pillar to its lowest point, whatever its
+    element and whatever it is bonded to.
 
     A pillar never runs through another atom sphere or bond cylinder
     (they would fuse on the print): its base is offset sideways so the
     tapered pillar routes around any obstacle up to the target atom's
-    underside. With plate_holes, a regular grid of square holes is
-    punched into the plate to save material; pillars that would land on
-    a hole are moved onto material.
+    underside. An atom no pillar can reach that way is left out (and
+    counted in a printed note). With plate_holes, a regular grid of
+    square holes is punched into the plate to save material; pillars
+    that would land on a hole are moved onto material.
 
     base_radius/tip_radius: pillar radius at the plate and at the atom
-    contact point. support_layer: minimum height a bonded/touching
-    neighbor must sit below an atom to hold it up - larger values treat
-    shallower bonds as overhangs and add more pillars.
+    contact point. max_angle: steepest tilt of a pillar from vertical
+    (radians); a pillar that would have to lean further to get around
+    the other atoms would itself print as an overhang, so that atom is
+    left out instead.
 
     pillar_material: build the pillars as one object per element of the
     atom they hold up (marked 'ase_support_element', with that element's
     material), so they print in the atom's filament and blend in; the
     plate stays its own object. Returns the created objects, plate first.
     """
-    from ase.data import covalent_radii, atomic_numbers
-
-    centers, sphere_radii, bond_radii, symbols = [], [], [], []
+    centers, sphere_radii, symbols = [], [], []
     for ob in atom_objects:
         # measured on the sphere's own vertices in world space: the object
         # origin is not the center once the transforms are applied, and the
@@ -88,20 +90,12 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         lo, hi = co.min(axis=0), co.max(axis=0)
         centers.append((lo + hi) / 2)
         sphere_radii.append((hi[2] - lo[2]) / 2)
-        symbol = ob.name.split('.')[0]
-        symbols.append(symbol)
-        bond_radii.append(covalent_radii[atomic_numbers.get(symbol, 6)])
+        symbols.append(ob.name.split('.')[0])
     centers = np.array(centers)
     sphere_radii = np.array(sphere_radii)
-    bond_radii = np.array(bond_radii)
     n = len(centers)
 
-    distances = np.linalg.norm(centers[:, None, :] - centers[None, :, :], axis=2)
-
-    # A BVH of the actually drawn bond meshes is the ground truth for both
-    # connectivity and obstacle avoidance - no covalent-radius guess can
-    # match the node tree's bonds across ionic (no Na-Na) and cluster
-    # (B-B) cases at once.
+    # the drawn bond meshes are obstacles the pillars route around
     from mathutils.bvhtree import BVHTree
     bond_bvh = None
     if bond_objects:
@@ -118,42 +112,12 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         if bpolys:
             bond_bvh = BVHTree.FromPolygons(bverts, bpolys)
 
-    def bond_between(a, b):
-        """True if a drawn bond tube runs between atoms a and b (sampled
-        points along the center line lie on/inside the bond geometry)."""
-        pa, pb = Vector(centers[a]), Vector(centers[b])
-        hits = 0
-        for t in (0.35, 0.5, 0.65):
-            loc, _, _, d = bond_bvh.find_nearest(pa.lerp(pb, t), bond_radius + 0.4)
-            if loc is not None and d < bond_radius + 0.25:
-                hits += 1
-        return hits >= 2
-
-    if bond_bvh is not None:
-        bonded = np.zeros((n, n), dtype=bool)
-        for a in range(n):
-            for b in range(a + 1, n):
-                if distances[a, b] < 3.6 and bond_between(a, b):
-                    bonded[a, b] = bonded[b, a] = True
-    else:  # fallback when no bond geometry is available
-        bonded = distances < 1.2 * (bond_radii[:, None] + bond_radii[None, :])
-    touching = distances < (sphere_radii[:, None] + sphere_radii[None, :] + 0.3)
-    holds = (bonded | touching) & ~np.eye(n, dtype=bool)
-
-    # bottom-up island analysis: an atom is grounded only if it rests on a
-    # grounded neighbor that is genuinely BELOW it (support_layer). A
-    # neighbor at the same height or above never counts - those atoms are
-    # printed before their anchor and need their own pillar.
-    order = np.argsort(centers[:, 2])
-    grounded = np.zeros(n, dtype=bool)
-    pillar_atoms = []
-    for i in order:
-        below = centers[:, 2] < centers[i, 2] - support_layer
-        if np.any(below & grounded & holds[i]):
-            grounded[i] = True
-        else:
-            pillar_atoms.append(i)
-            grounded[i] = True
+    # an atom rests on another when its lowest point lies inside that
+    # sphere; every other atom has a free underside and needs a pillar
+    lowest = centers - np.outer(sphere_radii, [0.0, 0.0, 1.0])
+    inside = (np.linalg.norm(lowest[:, None, :] - centers[None, :, :], axis=2)
+              < sphere_radii[None, :]) & ~np.eye(n, dtype=bool)
+    pillar_atoms = [i for i in np.argsort(centers[:, 2]) if not inside[i].any()]
 
     zfloor = float((centers[:, 2] - sphere_radii).min())
     plate_top = zfloor - pillar_length
@@ -166,6 +130,10 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         t = np.clip((pts - a) @ ab / denom, 0.0, 1.0)
         return np.linalg.norm(pts - (a + t[:, None] * ab), axis=1)
 
+    def max_offset(tip):
+        """Furthest a pillar base may sit sideways from below its tip."""
+        return (tip[2] - plate_top) * math.tan(min(max_angle, math.radians(89.9)))
+
     def clear_base(i, tip):
         """Find a base xy so the pillar (plate -> tip) does not skewer any
         other atom. Prefers a base that also clears every drawn bond; if
@@ -173,34 +141,46 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         grazing a bond just fuses with it on the print). Returns None when
         no base avoids the atoms - better to drop the pillar than punch it
         through an atom."""
-        need = sphere_radii + base_radius + 0.15
-        need[i] = -1.0  # ignore the target atom itself
+        others = np.arange(n) != i  # the target atom itself is no obstacle
         target = centers[i]
         skip = sphere_radii[i] + 0.15  # ignore samples inside the target atom
 
         def clearances(bx, by):
-            """(atom_clear, bond_clear): signed clearances of the pillar
-            segment to the nearest other atom and to the drawn bonds."""
+            """(atom_clear, bond_clear): signed clearances of the pillar to
+            the nearest other atom and to the drawn bonds, sampled along
+            it with the pillar's own (tapered) radius at each point - the
+            thin tip fits past a neighbor beside the atom's underside."""
             p0 = np.array([bx, by, plate_top])
-            atom_c = float((seg_point_dists(p0, tip, centers) - need).min())
+            steps = max(2, int(float(np.linalg.norm(tip - p0)) / 0.1))
+            t = np.linspace(0.0, 1.0, steps + 1)
+            pts = p0 + np.outer(t, tip - p0)
+            radius = base_radius + (tip_radius - base_radius) * t
+            # only atoms near the pillar's center line need the sampled check
+            near = others & (seg_point_dists(p0, tip, centers)
+                             < sphere_radii + base_radius + 0.1)
+            atom_c = 1e9
+            if near.any():
+                gaps = (np.linalg.norm(pts[:, None, :] - centers[None, near, :], axis=2)
+                        - sphere_radii[None, near] - radius[:, None])
+                atom_c = float(gaps.min()) - 0.05
             bond_c = 1e9
             if bond_bvh is not None:
-                steps = max(2, int(float(np.linalg.norm(tip - p0)) / 0.15))
-                for s in range(steps + 1):
-                    pt = p0 + (tip - p0) * (s / steps)
+                for pt, rad in zip(pts[::2], radius[::2]):
                     if np.linalg.norm(pt - target) < skip:
                         continue
-                    loc, _, _, d = bond_bvh.find_nearest(Vector(pt), base_radius + 0.3)
+                    loc, _, _, d = bond_bvh.find_nearest(Vector(pt), rad + 0.3)
                     if loc is not None:
-                        bond_c = min(bond_c, d - base_radius - 0.1)
+                        bond_c = min(bond_c, d - rad - 0.1)
             return atom_c, bond_c
 
         atom_c, bond_c = clearances(tip[0], tip[1])
         if atom_c > 0 and bond_c > 0:
             return tip[0], tip[1]
-        # spiral outward; keep the best atom-clearing base as a fallback
+        # spiral outward, no further than max_angle allows; keep the best
+        # atom-clearing base as a fallback
         best_atom = (tip[0], tip[1], bond_c) if atom_c > 0 else None
-        max_off = 5 * float(sphere_radii.max()) + 4.0
+        max_off = min(5 * float(sphere_radii.max()) + 4.0,
+                      max_offset(tip))
         r = 0.25
         while r <= max_off:
             for k in range(24):
@@ -225,10 +205,6 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
             skipped += 1
             continue
         pillars.append((base[0], base[1], tip[0], tip[1], tip[2], symbols[i]))
-    if skipped:
-        print(f'supports: {skipped} atom(s) left unsupported (no pillar path '
-              'avoids other atoms)')
-
     verts, faces = [], []  # the plate (and the pillars, unless split)
     pillar_meshes = {}     # element -> (verts, faces) with pillar_material
 
@@ -272,17 +248,21 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
             hy += pitch
         return holes_x, holes_y
 
-    def push_off_holes(x, y, holes_x, holes_y):
-        """Move a pillar base off any hole so it lands on material."""
+    def push_off_holes(x, y, tip, holes_x, holes_y):
+        """Move a pillar base off any hole so it lands on material, through
+        the nearest hole edge that keeps the pillar within max_angle;
+        None when every way off the hole tilts it too far."""
         margin = base_radius + 0.05
         for hx in holes_x:
             for hy in holes_y:
                 if hx - margin < x < hx + hole + margin and hy - margin < y < hy + hole + margin:
-                    # push out through the nearest hole edge
                     moves = [(hx - margin - x, 0), (hx + hole + margin - x, 0),
                              (0, hy - margin - y), (0, hy + hole + margin - y)]
-                    dx, dy = min(moves, key=lambda m: abs(m[0]) + abs(m[1]))
-                    return x + dx, y + dy
+                    for dx, dy in sorted(moves, key=lambda m: abs(m[0]) + abs(m[1])):
+                        if (math.hypot(x + dx - tip[0], y + dy - tip[1])
+                                <= max_offset(tip) + 1e-6):
+                            return x + dx, y + dy
+                    return None
         return x, y
 
     def add_box(bx0, bx1, by0, by1, bz0, bz1):
@@ -303,8 +283,11 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
         if plate_holes:
             holes_x, holes_y = hole_grid()
             for bx, by, tx, ty, tz, symbol in pillars:
-                px, py = push_off_holes(bx, by, holes_x, holes_y)
-                add_pillar(px, py, plate_top, tx, ty, tz, symbol)
+                moved = push_off_holes(bx, by, (tx, ty, tz), holes_x, holes_y)
+                if moved is None:
+                    skipped += 1
+                    continue
+                add_pillar(*moved, plate_top, tx, ty, tz, symbol)
             # full-width strips between the hole rows...
             y_edges = [y0] + [e for hy in holes_y for e in (hy, hy + hole)] + [y1]
             for yA, yB in zip(y_edges[0::2], y_edges[1::2]):
@@ -319,13 +302,17 @@ def build_supports(atom_objects, collection, base_radius=0.25, tip_radius=0.1,
                 add_pillar(bx, by, plate_top, tx, ty, tz, symbol)
             add_box(x0, x1, y0, y1, z0, z1)
 
+    if skipped:
+        print(f'supports: {skipped} atom(s) left unsupported (no pillar within '
+              f'{math.degrees(max_angle):.0f} deg of vertical avoids the other atoms)')
+
     # remembered so the export and the rebuild operator can start from the
     # supports as they are, and tell whether new settings need a rebuild
     params = {
         'base_radius': base_radius, 'tip_radius': tip_radius,
-        'support_layer': support_layer, 'plate_thickness': plate_thickness,
+        'plate_thickness': plate_thickness,
         'plate_holes': plate_holes, 'pillar_length': pillar_length,
-        'pillar_material': pillar_material}
+        'pillar_material': pillar_material, 'max_angle': max_angle}
 
     def make_object(name, verts, faces, symbol=None):
         mesh = bpy.data.meshes.new(name)
@@ -490,9 +477,10 @@ def place_for_print(stl_paths, scale):
 
 
 def export_3dprint(context, filepath, generate_supports=True,
-                   base_radius=0.25, tip_radius=0.1, support_layer=0.8,
+                   base_radius=0.25, tip_radius=0.1,
                    plate_thickness=0.6, plate_holes=True, plate_gap=2.0,
-                   print_scale=10.0, pillar_material=False):
+                   print_scale=10.0, pillar_material=False,
+                   max_angle=math.radians(30)):
     """Export the collection of the active object as per-element STLs,
     the bonds, and supports, zipped into `filepath`.
 
@@ -523,9 +511,9 @@ def export_3dprint(context, filepath, generate_supports=True,
                 ob.scale = (1.0, 1.0, 1.0)
 
     params = dict(base_radius=base_radius, tip_radius=tip_radius,
-                  support_layer=support_layer,
                   plate_thickness=plate_thickness, plate_holes=plate_holes,
-                  pillar_length=plate_gap, pillar_material=pillar_material)
+                  pillar_length=plate_gap, pillar_material=pillar_material,
+                  max_angle=max_angle)
     user_made = [ob for ob in supports if not ob.get('ase_auto_supports')]
     if generate_supports and not user_made and not _same_params(
             stored_support_params(context), params):
